@@ -77,6 +77,12 @@ fun PlayerSheets(
   onDismissRequest: () -> Unit,
 ) {
   when (sheetShown) {
+    Sheets.Metadata -> {
+      xyz.mpv.rex.ui.player.controls.components.sheets.MetadataSheet(
+        viewModel = viewModel,
+        onDismissRequest = onDismissRequest,
+      )
+    }
     Sheets.None -> {}
     Sheets.SubtitleTracks -> {
       val subtitlesPicker =

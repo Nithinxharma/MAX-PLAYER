@@ -1,3 +1,4 @@
+
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" translatable="false">REX Player</string>
     <string name="author_name" translatable="false">Sakhawat</string>
@@ -1493,4 +1494,34 @@
     <string name="field_progress_bar">Progress Bar</string>
     <string name="field_subtitle_indicator">Subtitle Indicator</string>
 
+
+  <string name="pref_enable_local_movies">Enable Local Movies</string>
+  <string name="pref_enable_local_tv_shows">Enable Local TV Shows</string>
+  <string name="pref_enable_online_catalog">Enable Online Catalog</string>
+  <string name="pref_enable_metadata_scraping">Enable Metadata Scraping</string>
+  <string name="pref_enable_artwork_downloads">Enable Artwork Downloads</string>
+  <string name="pref_enable_auto_refresh">Enable Auto Refresh</string>
+  
+  <string name="pref_preferred_metadata_source">Preferred Metadata Source</string>
+  <string name="pref_preferred_artwork_language">Preferred Artwork Language</string>
+  <string name="pref_metadata_cache_duration">Metadata Cache Duration</string>
+  <string name="pref_force_refresh_metadata">Force Refresh Metadata</string>
+  <string name="pref_manual_mappings">Manual Mappings</string>
+  
+  <string name="pref_auto_download_posters">Auto Download Posters</string>
+  <string name="pref_auto_download_backdrops">Auto Download Backdrops</string>
+  <string name="pref_auto_download_logos">Auto Download Logos</string>
+  <string name="pref_preferred_image_quality">Preferred Image Quality</string>
+  
+  <string name="pref_show_metadata_overlay">Show Metadata Overlay</string>
+  <string name="pref_show_cast_information">Show Cast Information</string>
+  <string name="pref_show_runtime">Show Runtime</string>
+  <string name="pref_show_ratings">Show Ratings</string>
+  <string name="pref_show_collections">Show Collections</string>
+  <string name="pref_show_related_titles">Show Related Titles</string>
+  
+  <string name="pref_enable_online_discovery">Enable Online Discovery</string>
+  <string name="pref_trending_content">Trending Content</string>
+  <string name="pref_recommended_content">Recommended Content</string>
+  <string name="pref_region_selection">Region Selection</string>
 </resources>

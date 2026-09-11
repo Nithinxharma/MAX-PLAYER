@@ -18,6 +18,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -1263,7 +1265,48 @@ fun RenderPlayerButton(
       }
     }
 
-    PlayerButton.NONE -> { /* Do nothing */
+    PlayerButton.NONE -> { /* Do nothing */ }
+    PlayerButton.METADATA -> {
+      val isCineHubEnabled = org.koin.compose.koinInject<xyz.mpv.rex.preferences.BrowserPreferences>().enableCineHubIntegration.get()
+      if (isCineHubEnabled) {
+        if (isMoreSheet) {
+          Surface(
+            shape = CircleShape,
+            color = surfaceColor,
+            contentColor = contentColor,
+            border = borderColor,
+            modifier = Modifier
+              .height(buttonSize)
+              .clip(CircleShape)
+              .clickable {
+                clickEvent()
+                onOpenSheet(Sheets.Metadata)
+              }
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller)
+            ) {
+              Icon(
+                PlayerButton.METADATA.icon,
+                contentDescription = "Metadata",
+                modifier = Modifier.size(20.dp)
+              )
+              androidx.compose.foundation.layout.Spacer(Modifier.width(MaterialTheme.spacing.smaller))
+              Text("Metadata", style = MaterialTheme.typography.bodyMedium)
+            }
+          }
+        } else {
+          ControlsButton(
+            icon = PlayerButton.METADATA.icon,
+            onClick = {
+              clickEvent()
+              onOpenSheet(Sheets.Metadata)
+            },
+            modifier = Modifier.size(buttonSize)
+          )
+        }
+      }
     }
   }
 }

@@ -77,6 +77,27 @@ class BrowserPreferences(
   val enableTabPlaylists = preferenceStore.getBoolean("enable_tab_playlists", true)
   val enableTabNetwork = preferenceStore.getBoolean("enable_tab_network", true)
   val playedNetworkLinks = preferenceStore.getString("played_network_links", "")
+  // CineHub Library Sources
+  val enableLocalMovies = preferenceStore.getBoolean("enable_local_movies", true)
+  val enableLocalTvShows = preferenceStore.getBoolean("enable_local_tv_shows", true)
+  val enableOnlineCatalog = preferenceStore.getBoolean("enable_online_catalog", true)
+  val enableMetadataScraping = preferenceStore.getBoolean("enable_metadata_scraping", true)
+  val enableArtworkDownloads = preferenceStore.getBoolean("enable_artwork_downloads", true)
+  val enableAutoRefresh = preferenceStore.getBoolean("enable_auto_refresh", true)
+
+  // CineHub Metadata
+  val preferredMetadataSource = preferenceStore.getString("preferred_metadata_source", "TMDB")
+  val preferredArtworkLanguage = preferenceStore.getString("preferred_artwork_language", "en")
+  
+  // CineHub Playback
+  val showMetadataOverlay = preferenceStore.getBoolean("show_metadata_overlay", true)
+  val showCastInformation = preferenceStore.getBoolean("show_cast_information", true)
+  
+  // CineHub Online
+  val enableOnlineDiscovery = preferenceStore.getBoolean("enable_online_discovery", true)
+  val trendingContent = preferenceStore.getBoolean("trending_content", true)
+  
+  val enableCineHubIntegration = preferenceStore.getBoolean("enable_cinehub_integration", true)
 }
 
 /**

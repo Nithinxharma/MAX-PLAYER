@@ -126,6 +126,7 @@ enum class MPVProfile(
 }
 
 enum class Sheets {
+  Metadata,
   None,
   PlaybackSpeed,
   SubtitleTracks,

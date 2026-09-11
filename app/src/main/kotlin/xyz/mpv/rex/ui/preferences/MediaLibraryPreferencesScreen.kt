@@ -40,6 +40,7 @@ import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import xyz.mpv.rex.ui.preferences.components.SwitchPreference
+import xyz.mpv.rex.cinehub.data.MetadataCacheManager
 import org.koin.compose.koinInject
 
 @Serializable
@@ -59,6 +60,21 @@ object MediaLibraryPreferencesScreen : Screen {
     val includeNoMediaContent by browserPreferences.includeNoMediaContent.collectAsState()
     val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
     val libraryScanRoots by foldersPreferences.libraryScanRoots.collectAsState()
+    
+    val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
+    val enableLocalTvShows by browserPreferences.enableLocalTvShows.collectAsState()
+    val enableOnlineCatalog by browserPreferences.enableOnlineCatalog.collectAsState()
+    val enableMetadataScraping by browserPreferences.enableMetadataScraping.collectAsState()
+    val enableArtworkDownloads by browserPreferences.enableArtworkDownloads.collectAsState()
+    val enableAutoRefresh by browserPreferences.enableAutoRefresh.collectAsState()
+
+    val showMetadataOverlay by browserPreferences.showMetadataOverlay.collectAsState()
+    val showCastInformation by browserPreferences.showCastInformation.collectAsState()
+
+    val enableOnlineDiscovery by browserPreferences.enableOnlineDiscovery.collectAsState()
+    val trendingContent by browserPreferences.trendingContent.collectAsState()
+    
+    val enableCineHubIntegration by browserPreferences.enableCineHubIntegration.collectAsState()
 
     Scaffold(
       topBar = {
@@ -92,7 +108,125 @@ object MediaLibraryPreferencesScreen : Screen {
             .padding(padding),
           contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = navBarHeight + 16.dp),
         ) {
-          // Content & Discovery Section
+
+          // CineHub Core Section
+          item {
+            PreferenceSectionHeader(title = "CineHub Integration")
+          }
+          item {
+            GroupedListColumn {
+              GroupedPreferenceCard(position = GroupPosition.ONLY, highlightKey = null) {
+                SwitchPreference(
+                  value = enableCineHubIntegration,
+                  onValueChange = { browserPreferences.enableCineHubIntegration.set(it) },
+                  title = { Text(text = "Enable Media Engine") },
+                  summary = { Text(text = "Turns on native indexing for movies and TV shows", color = MaterialTheme.colorScheme.outline) }
+                )
+              }
+            }
+          }
+
+          if (enableCineHubIntegration) {
+              item { PreferenceSectionHeader(title = "Library Sources") }
+              item {
+                  GroupedListColumn {
+                      GroupedPreferenceCard(position = GroupPosition.FIRST, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableLocalMovies,
+                              onValueChange = { browserPreferences.enableLocalMovies.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_local_movies)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableLocalTvShows,
+                              onValueChange = { browserPreferences.enableLocalTvShows.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_local_tv_shows)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableOnlineCatalog,
+                              onValueChange = { browserPreferences.enableOnlineCatalog.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_online_catalog)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableMetadataScraping,
+                              onValueChange = { browserPreferences.enableMetadataScraping.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_metadata_scraping)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableArtworkDownloads,
+                              onValueChange = { browserPreferences.enableArtworkDownloads.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_artwork_downloads)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.LAST, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableAutoRefresh,
+                              onValueChange = { browserPreferences.enableAutoRefresh.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_auto_refresh)) }
+                          )
+                      }
+                  }
+              }
+
+              item { PreferenceSectionHeader(title = "Metadata & Artwork") }
+              item {
+                  GroupedListColumn {
+                      GroupedPreferenceCard(position = GroupPosition.FIRST, highlightKey = null) {
+                          Preference(
+                              title = { Text(text = stringResource(R.string.pref_preferred_metadata_source)) },
+                              summary = { Text(text = browserPreferences.preferredMetadataSource.get(), color = MaterialTheme.colorScheme.outline) },
+                              onClick = {}
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          Preference(
+                              title = { Text(text = stringResource(R.string.pref_force_refresh_metadata)) },
+                              onClick = {
+                                  scope.launch(Dispatchers.IO) {
+                                      MetadataCacheManager.clearCache(context)
+                                  }
+                                  Toast.makeText(context, "Metadata cache cleared.", Toast.LENGTH_SHORT).show()
+                              }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.LAST, highlightKey = null) {
+                          Preference(
+                              title = { Text(text = stringResource(R.string.pref_manual_mappings)) },
+                              onClick = {}
+                          )
+                      }
+                  }
+              }
+
+              item { PreferenceSectionHeader(title = "Playback Integration") }
+              item {
+                  GroupedListColumn {
+                      GroupedPreferenceCard(position = GroupPosition.FIRST, highlightKey = null) {
+                          SwitchPreference(
+                              value = showMetadataOverlay,
+                              onValueChange = { browserPreferences.showMetadataOverlay.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_show_metadata_overlay)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.LAST, highlightKey = null) {
+                          SwitchPreference(
+                              value = showCastInformation,
+                              onValueChange = { browserPreferences.showCastInformation.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_show_cast_information)) }
+                          )
+                      }
+                  }
+              }
+          }
+
+          // Original Content & Discovery Section
           item {
             PreferenceSectionHeader(title = stringResource(R.string.pref_category_content_discovery))
           }

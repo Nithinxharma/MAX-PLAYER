@@ -24,8 +24,8 @@ android {
       useSupportLibrary = true
     }
 
-    buildConfigField("String", "GIT_SHA", "\"${getCommitSha()}\"")
-    buildConfigField("int", "GIT_COUNT", getCommitCount())
+    buildConfigField("String", "GIT_SHA", "\"unknown\"")
+    buildConfigField("int", "GIT_COUNT", "0")
     // Enable update feature by default
     buildConfigField("boolean", "ENABLE_UPDATE_FEATURE", "true")
     buildConfigField("boolean", "SCOPED_STORAGE_ONLY", "false")
@@ -46,6 +46,12 @@ android {
   }
 
   signingConfigs {
+    create("debugConfig") {
+      storeFile = file("${rootDir}/debug.keystore")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
+    }
     create("release") {
       if (project.hasProperty("releaseKeyStore")) {
         storeFile = file(project.property("releaseKeyStore") as String)
@@ -76,12 +82,13 @@ android {
       initWith(getByName("release"))
       signingConfig = null
       applicationIdSuffix = ".preview"
-      versionNameSuffix = "-${getCommitCount()}"
+      versionNameSuffix = "-0"
     }
 
     named("debug") {
+      signingConfig = signingConfigs.getByName("debugConfig")
       applicationIdSuffix = ".debug"
-      versionNameSuffix = "-${getCommitCount()}"
+      versionNameSuffix = "-0"
     }
   }
 
@@ -166,6 +173,7 @@ room {
 }
 
 dependencies {
+  implementation("io.coil-kt:coil-compose:2.6.0")
   implementation(libs.splashScreen)
   implementation(libs.androidx.activity.compose)
   implementation(platform(libs.androidx.compose.bom))
@@ -229,12 +237,6 @@ dependencies {
 
 /* ---------------- Git helpers ---------------- */
 
-fun getCommitCount(): String =
-  providers.exec {
-    commandLine("git", "rev-list", "--count", "HEAD")
-  }.standardOutput.asText.get().trim().ifEmpty { "0" }
+fun getCommitCount(): String = "0"
 
-fun getCommitSha(): String =
-  providers.exec {
-    commandLine("git", "rev-parse", "--short", "HEAD")
-  }.standardOutput.asText.get().trim().ifEmpty { "unknown" }
+fun getCommitSha(): String = "unknown"
