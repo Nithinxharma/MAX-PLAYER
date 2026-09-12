@@ -86,10 +86,10 @@ fun FolderCard(
   val hasPoster = !folder.posterPath.isNullOrBlank()
   val displayTitle = folder.mediaTitle?.takeIf { it.isNotBlank() } ?: folder.name
   val effectiveAspectRatio = if (hasPoster) 2f / 3f else thumbnailAspectRatio
-  val effectiveThumbnailSize = if (hasPoster) 54.dp else thumbnailSize
+  val effectiveThumbnailSize = if (hasPoster) 82.dp else thumbnailSize
 
   BaseMediaCard(
-    title = displayTitle,
+    title = if (isGridMode && hasPoster) "" else displayTitle,
     modifier = modifier,
     thumbnail = thumbnail,
     thumbnailAspectRatio = effectiveAspectRatio,
@@ -192,22 +192,8 @@ fun FolderCard(
         }
       }
     },
-    infoContent = {
-      if (isGridMode && (folder.isTvShow || folder.isMovie)) {
-        val typeLabel = if (folder.isTvShow) "TV Series" else "Movie"
-        val subtitle = buildList {
-          add(typeLabel)
-          if (folder.year.isNotBlank()) add(folder.year)
-          if (folder.isTvShow && folder.videoCount > 0) add("${folder.videoCount} Ep")
-        }.joinToString(" • ")
-        Text(
-          text = subtitle,
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-      } else if (!isGridMode && showFolderPath && parentPath.isNotEmpty()) {
+    infoContent = if (isGridMode && hasPoster) null else ({
+      if (!isGridMode && showFolderPath && parentPath.isNotEmpty()) {
         Text(
           parentPath,
           style = MaterialTheme.typography.bodySmall,
@@ -216,23 +202,10 @@ fun FolderCard(
           overflow = TextOverflow.Ellipsis,
         )
       }
-    },
+    }),
     chipsContent = if (isGridMode) null else ({
       if (customChipContent != null) {
         customChipContent()
-      }
-      if (folder.isTvShow) {
-        MediaMetadataChip(
-          text = "TV Series",
-          color = MaterialTheme.colorScheme.primaryContainer,
-          contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-      } else if (folder.isMovie) {
-        MediaMetadataChip(
-          text = "Movie",
-          color = MaterialTheme.colorScheme.secondaryContainer,
-          contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        )
       }
       if (folder.rating > 0.0) {
         MediaMetadataChip(
@@ -247,9 +220,7 @@ fun FolderCard(
       if (folder.genre.isNotBlank()) {
         MediaMetadataChip(text = folder.genre.split(",").first().trim())
       }
-      if (folder.isTvShow && folder.videoCount > 0) {
-        MediaMetadataChip(text = if (folder.videoCount == 1) "1 Episode" else "${folder.videoCount} Episodes")
-      } else if (totalCount > 0) {
+      if (totalCount > 0) {
         MediaMetadataChip(text = countLabel)
       }
       if (uiSettings.showSizeChip && folder.totalSize > 0) {

@@ -326,6 +326,14 @@ object CineCloudRepoClient {
             val platform = parts.getOrNull(2) ?: "nf"
             return@withContext resolveDirectStreamUrl(id, platform) ?: "https://vidsrc.to/embed/movie/$id"
         }
+        if (uri.startsWith("cnc_tv:")) {
+            val parts = uri.split(":")
+            val id = parts.getOrNull(1) ?: ""
+            val platform = parts.getOrNull(2) ?: "hs"
+            val season = parts.getOrNull(3) ?: "1"
+            val episode = parts.getOrNull(4) ?: "1"
+            return@withContext resolveDirectStreamUrl(id, platform) ?: "https://vidsrc.to/embed/tv/$id/$season/$episode"
+        }
         return@withContext uri
     }
 }

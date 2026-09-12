@@ -559,9 +559,17 @@ object CineOnlineScraper {
         return@withContext null
     }
 
-    suspend fun fetchTvShowDetails(tmdbId: String): TMDBTvDetails? = withContext(Dispatchers.IO) {
+    suspend fun fetchTvShowDetails(tmdbId: String, showTitle: String? = null): TMDBTvDetails? = withContext(Dispatchers.IO) {
+        var resolvedId = tmdbId
+        if ((resolvedId.isBlank() || !resolvedId.all { it.isDigit() }) && !showTitle.isNullOrBlank()) {
+            val tv = getOrFetchTvShow(null, showTitle)
+            if (tv != null && tv.tmdbId.isNotBlank() && tv.tmdbId.all { it.isDigit() }) {
+                resolvedId = tv.tmdbId
+            }
+        }
+        if (resolvedId.isBlank() || !resolvedId.all { it.isDigit() }) return@withContext null
         try {
-            val url = "$TMDB_BASE_URL/tv/$tmdbId?api_key=$API_KEY&language=en-US&append_to_response=credits"
+            val url = "$TMDB_BASE_URL/tv/$resolvedId?api_key=$API_KEY&language=en-US&append_to_response=credits"
             val req = Request.Builder().url(url).build()
             client.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
@@ -579,7 +587,15 @@ object CineOnlineScraper {
         seasonNumber: Int = 1,
         showTitle: String? = null
     ): List<EpisodeItem> = withContext(Dispatchers.IO) {
-        val cacheKey = "episodes_${tmdbId}_$seasonNumber"
+        var resolvedId = tmdbId
+        if ((resolvedId.isBlank() || !resolvedId.all { it.isDigit() }) && !showTitle.isNullOrBlank()) {
+            val tv = getOrFetchTvShow(context, showTitle)
+            if (tv != null && tv.tmdbId.isNotBlank() && tv.tmdbId.all { it.isDigit() }) {
+                resolvedId = tv.tmdbId
+            }
+        }
+
+        val cacheKey = "episodes_${resolvedId.ifBlank { showTitle ?: "unknown" }}_$seasonNumber"
         if (context != null) {
             val cached = MetadataCacheManager.loadFromCache<List<EpisodeItem>>(context, cacheKey)
             if (!cached.isNullOrEmpty()) return@withContext cached
@@ -588,9 +604,9 @@ object CineOnlineScraper {
         val resultList = mutableListOf<EpisodeItem>()
 
         // 1. Try TMDB Season API
-        if (tmdbId.isNotBlank() && tmdbId.all { it.isDigit() }) {
+        if (resolvedId.isNotBlank() && resolvedId.all { it.isDigit() }) {
             try {
-                val url = "$TMDB_BASE_URL/tv/$tmdbId/season/$seasonNumber?api_key=$API_KEY&language=en-US"
+                val url = "$TMDB_BASE_URL/tv/$resolvedId/season/$seasonNumber?api_key=$API_KEY&language=en-US"
                 val req = Request.Builder().url(url).build()
                 client.newCall(req).execute().use { res ->
                     if (res.isSuccessful) {
@@ -599,7 +615,7 @@ object CineOnlineScraper {
                         seasonObj.episodes.forEach { ep ->
                             resultList.add(
                                 EpisodeItem(
-                                    videoFilePath = "stream_tv:$tmdbId:$seasonNumber:${ep.episode_number}",
+                                    videoFilePath = "stream_tv:$resolvedId:$seasonNumber:${ep.episode_number}",
                                     title = ep.name ?: "Episode ${ep.episode_number}",
                                     season = seasonNumber,
                                     episode = ep.episode_number,

@@ -43,6 +43,7 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
 import xyz.mpv.rex.R
 import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
+import xyz.mpv.rex.cinehub.data.CineFolderMetadataManager
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
 import xyz.mpv.rex.cinehub.data.KodiMediaScraper
 import xyz.mpv.rex.cinehub.data.NfoScanner
@@ -148,14 +149,20 @@ object CineHubScreen : Screen {
           }
 
           if (enableLocalTvShows) {
+            val scannedTv = CineFolderMetadataManager.getAllLocalTvShows(context).toMutableList()
             val cineRexTvDir = File(extStorage, "CineRex/tvshows")
             val altTvDir = File(extStorage, "TV Shows")
-            val scannedTv = mutableListOf<TvShowItem>()
             if (cineRexTvDir.exists()) {
-              scannedTv.addAll(NfoScanner.scanDirectoryForTvShows(cineRexTvDir))
+              val more = NfoScanner.scanDirectoryForTvShows(cineRexTvDir)
+              for (m in more) {
+                if (scannedTv.none { it.folderPath == m.folderPath }) scannedTv.add(m)
+              }
             }
             if (altTvDir.exists()) {
-              scannedTv.addAll(NfoScanner.scanDirectoryForTvShows(altTvDir))
+              val more = NfoScanner.scanDirectoryForTvShows(altTvDir)
+              for (m in more) {
+                if (scannedTv.none { it.folderPath == m.folderPath }) scannedTv.add(m)
+              }
             }
 
             if (enableMetadataScraping) {
@@ -840,14 +847,14 @@ private fun MediaPosterCard(
 ) {
   Column(
     modifier = Modifier
-      .width(130.dp)
+      .width(140.dp)
       .clickable { onClick() },
   ) {
     Card(
       shape = RoundedCornerShape(16.dp),
       modifier = Modifier
-        .width(130.dp)
-        .height(190.dp),
+        .width(140.dp)
+        .height(205.dp),
     ) {
       Box(modifier = Modifier.fillMaxSize()) {
         if (!posterUrl.isNullOrBlank()) {
@@ -1198,51 +1205,93 @@ private fun CineDetailBottomSheet(
           var availableSeasons by remember { mutableStateOf<List<Int>>(listOf(1)) }
           var seasonEpisodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
           var isLoadingEpisodes by remember { mutableStateOf(true) }
+          var resolvedShowFolder by remember { mutableStateOf<File?>(null) }
+          var resolvedTmdbId by remember { mutableStateOf<String?>(item.tmdbId.takeIf { it.isNotBlank() && it.all { c -> c.isDigit() } }) }
 
-          // Initial scan or season detection
+          // Initial scan and season detection
           LaunchedEffect(item) {
             isLoadingEpisodes = true
             withContext(Dispatchers.IO) {
-              if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
-                val scanned = NfoScanner.scanTvShowEpisodes(File(item.folderPath))
-                allLocalEpisodes = scanned
-                val detected = scanned.map { it.season }.filter { it > 0 }.distinct().sorted()
-                availableSeasons = if (detected.isNotEmpty()) detected else listOf(1)
-                selectedSeason = availableSeasons.firstOrNull() ?: 1
+              // 1. Resolve local folder for this TV show
+              val localFolder: File? = if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
+                File(item.folderPath)
               } else {
-                // Online show: check TMDB for season count
-                val tmdbId = item.tmdbId
-                val seasonsFromTmdb = if (tmdbId.isNotBlank() && tmdbId.all { it.isDigit() }) {
-                  val details = CineOnlineScraper.fetchTvShowDetails(tmdbId)
-                  details?.seasons?.map { it.season_number }?.filter { it > 0 }?.distinct()?.sorted()
-                } else null
+                CineFolderMetadataManager.findLocalShowFolder(context, item.title)
+              }
+              resolvedShowFolder = localFolder
 
-                availableSeasons = seasonsFromTmdb?.takeIf { it.isNotEmpty() } ?: (1..3).toList()
-                selectedSeason = availableSeasons.firstOrNull() ?: 1
+              val localScanned = if (localFolder != null && localFolder.exists()) {
+                NfoScanner.scanTvShowEpisodes(localFolder)
+              } else {
+                emptyList()
+              }
+              allLocalEpisodes = localScanned
+              val localSeasons = localScanned.map { it.season }.filter { it > 0 }.distinct().sorted()
+
+              // 2. Resolve TMDB ID and online season count
+              var tmdbId = resolvedTmdbId
+              if (tmdbId.isNullOrBlank()) {
+                val searched = CineOnlineScraper.getOrFetchTvShow(context, item.title)
+                if (searched != null && searched.tmdbId.isNotBlank() && searched.tmdbId.all { it.isDigit() }) {
+                  tmdbId = searched.tmdbId
+                  resolvedTmdbId = tmdbId
+                }
+              }
+
+              val onlineDetails = if (!tmdbId.isNullOrBlank()) {
+                CineOnlineScraper.fetchTvShowDetails(tmdbId, item.title)
+              } else null
+
+              val onlineSeasons = onlineDetails?.seasons?.map { it.season_number }?.filter { it > 0 }?.distinct()?.sorted().orEmpty()
+
+              val combinedSeasons = (localSeasons + onlineSeasons).distinct().sorted()
+              val finalSeasons = if (combinedSeasons.isNotEmpty()) combinedSeasons else listOf(1)
+
+              withContext(Dispatchers.Main) {
+                availableSeasons = finalSeasons
+                selectedSeason = finalSeasons.firstOrNull() ?: 1
               }
             }
             isLoadingEpisodes = false
           }
 
           // Fetch or filter episodes whenever selectedSeason changes
-          LaunchedEffect(item, selectedSeason, allLocalEpisodes) {
+          LaunchedEffect(item, selectedSeason, resolvedTmdbId, allLocalEpisodes) {
             isLoadingEpisodes = true
             val loaded = withContext(Dispatchers.IO) {
-              if (allLocalEpisodes.isNotEmpty()) {
-                val filtered = allLocalEpisodes.filter { it.season == selectedSeason }
-                if (filtered.isNotEmpty()) filtered else allLocalEpisodes
-              } else if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
-                val scanned = NfoScanner.scanTvShowEpisodes(File(item.folderPath))
-                allLocalEpisodes = scanned
-                val filtered = scanned.filter { it.season == selectedSeason }
-                if (filtered.isNotEmpty()) filtered else scanned
+              val localForSeason = allLocalEpisodes.filter { it.season == selectedSeason }
+
+              // Fetch online episodes for metadata enrichment or fallback
+              val tmdbId = resolvedTmdbId ?: item.tmdbId
+              val onlineList = CineOnlineScraper.fetchTvShowEpisodes(
+                context,
+                tmdbId.ifBlank { item.title },
+                selectedSeason,
+                item.title
+              )
+
+              if (localForSeason.isNotEmpty()) {
+                // Enrich local episodes with online title, plot, and preview still
+                localForSeason.map { localEp ->
+                  val match = onlineList.firstOrNull { it.episode == localEp.episode }
+                  if (match != null) {
+                    localEp.copy(
+                      title = if (localEp.title.startsWith("Episode ") || localEp.title.equals(item.title, ignoreCase = true)) {
+                        match.title
+                      } else localEp.title,
+                      plot = if (localEp.plot.isBlank() || localEp.plot == "Local Media File.") match.plot else localEp.plot,
+                      stillPath = localEp.stillPath ?: match.stillPath,
+                      userRating = if (localEp.userRating > 0.0) localEp.userRating else match.userRating,
+                      aired = localEp.aired.ifBlank { match.aired }
+                    )
+                  } else {
+                    localEp
+                  }
+                }
+              } else if (onlineList.isNotEmpty()) {
+                onlineList
               } else {
-                CineOnlineScraper.fetchTvShowEpisodes(
-                  context,
-                  item.tmdbId.ifBlank { item.title },
-                  selectedSeason,
-                  item.title
-                )
+                emptyList()
               }
             }
             seasonEpisodes = loaded
@@ -1373,6 +1422,29 @@ private fun CineDetailBottomSheet(
               contentAlignment = Alignment.Center
             ) {
               CircularProgressIndicator(modifier = Modifier.size(32.dp))
+            }
+          } else if (seasonEpisodes.isEmpty()) {
+            Card(
+              shape = RoundedCornerShape(14.dp),
+              colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+              ),
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(24.dp),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = "No episodes available for Season $selectedSeason",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
             }
           } else {
             Column(

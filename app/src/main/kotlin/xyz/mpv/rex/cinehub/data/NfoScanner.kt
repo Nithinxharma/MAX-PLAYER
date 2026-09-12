@@ -171,12 +171,14 @@ object NfoScanner {
      */
     fun scanTvShowEpisodes(showFolder: File): List<EpisodeItem> {
         val episodes = mutableListOf<EpisodeItem>()
-        if (!showFolder.exists() || !showFolder.isDirectory) return episodes
+        if (!showFolder.exists()) return episodes
+
+        val targetDir = if (showFolder.isDirectory) showFolder else showFolder.parentFile ?: return episodes
 
         // Collect all video files in show folder and all its subdirectories (Season 1, Season 2, etc.)
         val allVideoFiles = mutableListOf<File>()
         fun collectVideos(dir: File) {
-            dir.listFiles()?.forEach { child ->
+            dir.listFiles()?.sortedBy { it.name.lowercase() }?.forEach { child ->
                 if (isVideoFile(child)) {
                     allVideoFiles.add(child)
                 } else if (child.isDirectory) {
@@ -184,7 +186,12 @@ object NfoScanner {
                 }
             }
         }
-        collectVideos(showFolder)
+        collectVideos(targetDir)
+        if (allVideoFiles.isEmpty() && isVideoFile(showFolder)) {
+            allVideoFiles.add(showFolder)
+        }
+
+        val seasonCounters = mutableMapOf<Int, Int>()
 
         for (videoFile in allVideoFiles) {
             val nfoFile = File(videoFile.parentFile, "${videoFile.nameWithoutExtension}.nfo")
@@ -218,15 +225,24 @@ object NfoScanner {
                 // No NFO exists: extract Season and Episode using Kodi regex
                 val (extractedSeason, extractedEp) = parseSeasonAndEpisodeFromFilename(videoFile.name)
                 val finalSeason = extractedSeason ?: extractSeasonFromFolder(videoFile.parentFile?.name ?: "") ?: 1
-                val finalEpisode = extractedEp ?: 1
+                val currentSeasonCount = (seasonCounters[finalSeason] ?: 0) + 1
+                val finalEpisode = extractedEp ?: currentSeasonCount
+                seasonCounters[finalSeason] = maxOf(currentSeasonCount, finalEpisode)
 
-                val cleanTitle = cleanEpisodeTitle(videoFile.nameWithoutExtension)
+                val showName = targetDir.name
+                val rawClean = cleanEpisodeTitle(videoFile.nameWithoutExtension, showName)
                 val localStill = findLocalStillForEpisode(videoFile)
+
+                val episodeTitle = if (rawClean.isNotBlank() && !rawClean.equals(showName, ignoreCase = true)) {
+                    if (rawClean.startsWith("Episode ", ignoreCase = true)) rawClean else "Episode $finalEpisode: $rawClean"
+                } else {
+                    "Episode $finalEpisode"
+                }
 
                 episodes.add(
                     EpisodeItem(
                         videoFilePath = videoFile.absolutePath,
-                        title = cleanTitle.ifBlank { "Episode $finalEpisode" },
+                        title = episodeTitle,
                         season = finalSeason,
                         episode = finalEpisode,
                         plot = "Local Media File.",
@@ -539,8 +555,17 @@ object NfoScanner {
     }
 
     fun parseSeasonAndEpisodeFromFilename(fileName: String): Pair<Int?, Int?> {
-        // Pattern 1: S01E02 or s1e2
-        val seRegex = Regex("(?i)[sS](\\d{1,2})[eE](\\d{1,3})")
+        // Pattern 1: Season 1 Episode 2 or Season 01 - Episode 02
+        val wordRegex = Regex("(?i)\\b(?:season|series|s)[._\\-\\s]*(\\d{1,2})[._\\-\\s]*(?:episode|ep|e)[._\\-\\s]*(\\d{1,3})\\b")
+        val wordMatch = wordRegex.find(fileName)
+        if (wordMatch != null) {
+            val s = wordMatch.groupValues[1].toIntOrNull()
+            val e = wordMatch.groupValues[2].toIntOrNull()
+            return Pair(s, e)
+        }
+
+        // Pattern 2: S01E02 or s1e2 or S01.E02
+        val seRegex = Regex("(?i)[sS](\\d{1,2})[._\\-\\s]*[eE](\\d{1,3})")
         val seMatch = seRegex.find(fileName)
         if (seMatch != null) {
             val s = seMatch.groupValues[1].toIntOrNull()
@@ -548,7 +573,7 @@ object NfoScanner {
             return Pair(s, e)
         }
 
-        // Pattern 2: 1x02 or 01x02
+        // Pattern 3: 1x02 or 01x02
         val xRegex = Regex("(?i)\\b(\\d{1,2})x(\\d{1,3})\\b")
         val xMatch = xRegex.find(fileName)
         if (xMatch != null) {
@@ -557,12 +582,22 @@ object NfoScanner {
             return Pair(s, e)
         }
 
-        // Pattern 3: Episode 02 or Ep 02
-        val epRegex = Regex("(?i)\\b(?:ep|episode)[._\\-\\s]*(\\d{1,3})\\b")
+        // Pattern 4: Standalone Episode: Episode 02, Ep 02, Ep.02, or E02
+        val epRegex = Regex("(?i)\\b(?:ep|episode|e)[._\\-\\s]*(\\d{1,3})\\b")
         val epMatch = epRegex.find(fileName)
         if (epMatch != null) {
             val e = epMatch.groupValues[1].toIntOrNull()
             return Pair(null, e)
+        }
+
+        // Pattern 5: Numeric episode pattern like " - 02 ", " - 02.", " 02.", "02 - "
+        val numRegex = Regex("(?i)(?:^|[._\\-\\s])0*([1-9]\\d{0,2})(?:[._\\-\\s]|$)(?!\\b(?:1080|720|480|2160|x264|x265|hevc|10bit)\\b)")
+        val numMatch = numRegex.find(fileName)
+        if (numMatch != null) {
+            val e = numMatch.groupValues[1].toIntOrNull()
+            if (e != null && e in 1..999) {
+                return Pair(null, e)
+            }
         }
 
         return Pair(null, null)
@@ -581,12 +616,19 @@ object NfoScanner {
             .trim()
     }
 
-    fun cleanEpisodeTitle(fileName: String): String {
-        return fileName
-            .replace(Regex("(?i)[sS]\\d{1,2}[eE]\\d{1,3}|\\b\\d{1,2}x\\d{1,3}\\b"), "")
-            .replace(Regex("(?i)\\b(1080p|720p|480p|x264|x265|hevc|10bit|dual|audio|hindi|english|web-dl|bluray)\\b.*"), "")
+    fun cleanEpisodeTitle(fileName: String, showTitle: String? = null): String {
+        var clean = fileName
+            .replace(Regex("(?i)\\b(?:season|series|s)[._\\-\\s]*(\\d{1,2})[._\\-\\s]*(?:episode|ep|e)[._\\-\\s]*(\\d{1,3})\\b"), "")
+            .replace(Regex("(?i)[sS]\\d{1,2}[._\\-\\s]*[eE]\\d{1,3}|\\b\\d{1,2}x\\d{1,3}\\b"), "")
+            .replace(Regex("(?i)\\b(?:ep|episode|e)[._\\-\\s]*\\d{1,3}\\b"), "")
+            .replace(Regex("(?i)\\b(1080p|720p|480p|2160p|4k|x264|x265|hevc|10bit|dual|audio|hindi|english|web-dl|bluray|aac|h264|mp4|mkv)\\b.*"), "")
             .replace(Regex("[\\.\\-_]"), " ")
             .trim()
+
+        if (!showTitle.isNullOrBlank()) {
+            clean = clean.replace(Regex("(?i)^\\s*${Regex.escape(showTitle)}\\s*"), "").trim()
+        }
+        return clean
     }
 
     fun getXmlDocument(file: File): Document? {

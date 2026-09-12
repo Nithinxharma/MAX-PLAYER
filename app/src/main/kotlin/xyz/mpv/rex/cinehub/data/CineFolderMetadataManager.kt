@@ -3,6 +3,7 @@ package xyz.mpv.rex.cinehub.data
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import xyz.mpv.rex.cinehub.model.TvShowItem
 import xyz.mpv.rex.domain.media.model.VideoFolder
 import java.io.File
 
@@ -359,5 +360,66 @@ object CineFolderMetadataManager {
             }
         }
         return null
+    }
+
+    /**
+     * Searches standard media locations for a local TV show directory matching the given title.
+     */
+    fun findLocalShowFolder(context: Context?, title: String): File? {
+        if (title.isBlank()) return null
+        val extStorage = android.os.Environment.getExternalStorageDirectory()
+        val candidatePaths = listOf(
+            File(extStorage, "CineRex/tvshows/$title"),
+            File(extStorage, "TV Shows/$title"),
+            File(extStorage, "Download/$title"),
+            File(extStorage, "Movies/$title"),
+            File(extStorage, "CineRex/$title")
+        )
+        for (c in candidatePaths) {
+            if (c.exists() && c.isDirectory) return c
+        }
+
+        val rootDirs = listOf(
+            File(extStorage, "CineRex/tvshows"),
+            File(extStorage, "TV Shows"),
+            File(extStorage, "Download"),
+            File(extStorage, "Movies"),
+            File(extStorage, "CineRex")
+        )
+        for (root in rootDirs) {
+            if (root.exists() && root.isDirectory) {
+                val match = root.listFiles { f -> f.isDirectory && f.name.equals(title, ignoreCase = true) }?.firstOrNull()
+                if (match != null) return match
+            }
+        }
+        return null
+    }
+
+    /**
+     * Discovers all local TV shows across standard device directories.
+     */
+    fun getAllLocalTvShows(context: Context?): List<TvShowItem> {
+        val extStorage = android.os.Environment.getExternalStorageDirectory()
+        val roots = listOf(
+            File(extStorage, "CineRex/tvshows"),
+            File(extStorage, "TV Shows"),
+            File(extStorage, "Download"),
+            File(extStorage, "Movies"),
+            File(extStorage, "CineRex")
+        )
+        val tvShows = mutableListOf<TvShowItem>()
+        val seenPaths = mutableSetOf<String>()
+
+        for (root in roots) {
+            if (root.exists() && root.isDirectory) {
+                val list = NfoScanner.scanDirectoryForTvShows(root)
+                for (show in list) {
+                    if (seenPaths.add(show.folderPath)) {
+                        tvShows.add(show)
+                    }
+                }
+            }
+        }
+        return tvShows
     }
 }
