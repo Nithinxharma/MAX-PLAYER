@@ -49,8 +49,8 @@ jobs:
             STORE_PASS="${{ secrets.SIGNING_STORE_PASSWORD }}"
             KEY_PASS="${{ secrets.KEY_PASSWORD }}"
           else
-            echo "No SIGNING_KEYSTORE secret configured. Falling back to debug.keystore..."
-            cp debug.keystore release.keystore
+            echo "No SIGNING_KEYSTORE secret configured. Generating a temporary debug keystore..."
+            keytool -genkey -v -keystore release.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
             KEY_ALIAS="androiddebugkey"
             STORE_PASS="android"
             KEY_PASS="android"
