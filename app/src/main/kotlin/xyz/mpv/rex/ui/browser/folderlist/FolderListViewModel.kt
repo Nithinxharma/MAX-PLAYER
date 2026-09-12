@@ -118,7 +118,8 @@ class FolderListViewModel(
         browserPreferences.showAudioFiles.changes()
       ) { folders, blacklist, showAudio ->
         folders.filter { folder -> 
-          folder.path !in blacklist && (showAudio || folder.videoCount > 0)
+          folder.path !in blacklist && (showAudio || folder.videoCount > 0) &&
+                  xyz.mpv.rex.cinehub.data.CineFolderMetadataManager.shouldIncludeInHomeScreen(folder)
         }
       }.collectLatest { filteredFolders ->
         // Check if folders became empty after having folders
@@ -182,7 +183,7 @@ class FolderListViewModel(
   private fun serializeFoldersToJson(folders: List<VideoFolder>): String {
     // For now using a simple approach since we only cache basic info
     return folders.joinToString("|") { folder ->
-      "${folder.bucketId};${folder.name};${folder.path};${folder.videoCount};${folder.audioCount};${folder.totalSize};${folder.totalDuration};${folder.lastModified};${folder.newCount}"
+      "${folder.bucketId};${folder.name};${folder.path};${folder.videoCount};${folder.audioCount};${folder.totalSize};${folder.totalDuration};${folder.lastModified};${folder.newCount};${folder.unwatchedVideoCount};${folder.posterPath.orEmpty()};${folder.rating};${folder.year};${folder.genre};${folder.isTvShow};${folder.isMovie};${folder.mediaTitle.orEmpty()}"
     }
   }
 
@@ -200,7 +201,15 @@ class FolderListViewModel(
           totalSize = parts[5].toLong(),
           totalDuration = parts[6].toLong(),
           lastModified = parts[7].toLong(),
-          newCount = if (parts.size > 8) parts[8].toInt() else 0
+          newCount = if (parts.size > 8) parts[8].toInt() else 0,
+          unwatchedVideoCount = if (parts.size > 9) parts[9].toIntOrNull() ?: 0 else 0,
+          posterPath = if (parts.size > 10 && parts[10].isNotBlank()) parts[10] else null,
+          rating = if (parts.size > 11) parts[11].toDoubleOrNull() ?: 0.0 else 0.0,
+          year = if (parts.size > 12) parts[12] else "",
+          genre = if (parts.size > 13) parts[13] else "",
+          isTvShow = if (parts.size > 14) parts[14].toBooleanStrictOrNull() ?: false else false,
+          isMovie = if (parts.size > 15) parts[15].toBooleanStrictOrNull() ?: false else false,
+          mediaTitle = if (parts.size > 16 && parts[16].isNotBlank()) parts[16] else null,
         )
       } catch (e: Exception) {
         null
@@ -258,7 +267,8 @@ class FolderListViewModel(
         val blacklist = foldersPreferences.blacklistedFolders.get()
         val showAudio = browserPreferences.showAudioFiles.get()
         val filteredFolders = folders.filter { folder -> 
-          folder.path !in blacklist && (showAudio || folder.videoCount > 0)
+          folder.path !in blacklist && (showAudio || folder.videoCount > 0) &&
+                  xyz.mpv.rex.cinehub.data.CineFolderMetadataManager.shouldIncludeInHomeScreen(folder)
         }
         _videoFolders.value = filteredFolders
         _foldersWithNewCount.value = filteredFolders.map { 

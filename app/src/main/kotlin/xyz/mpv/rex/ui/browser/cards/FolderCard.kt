@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -79,26 +83,40 @@ fun FolderCard(
   val maxLines = if (uiSettings.unlimitedNameLines) Int.MAX_VALUE else 2
   val parentPath = folder.path.substringBeforeLast("/", folder.path)
 
+  val hasPoster = !folder.posterPath.isNullOrBlank()
+  val displayTitle = folder.mediaTitle?.takeIf { it.isNotBlank() } ?: folder.name
+  val effectiveAspectRatio = if (hasPoster) 2f / 3f else thumbnailAspectRatio
+  val effectiveThumbnailSize = if (hasPoster) 54.dp else thumbnailSize
+
   BaseMediaCard(
-    title = folder.name,
+    title = displayTitle,
     modifier = modifier,
     thumbnail = thumbnail,
-    thumbnailAspectRatio = thumbnailAspectRatio,
-    thumbnailSize = thumbnailSize,
+    thumbnailAspectRatio = effectiveAspectRatio,
+    thumbnailSize = effectiveThumbnailSize,
     titleTextAlign = if (isGridMode) TextAlign.Center else TextAlign.Start,
     thumbnailIcon = {
-      Icon(
-        customIcon ?: Icons.Filled.Folder,
-        contentDescription = "Folder",
-        modifier = if (isGridMode) {
-          Modifier.fillMaxWidth().aspectRatio(thumbnailAspectRatio).scale(1.2f)
-        } else {
-          Modifier.size(thumbnailSize).scale(1.2f)
-        },
-        tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
-      )
+      if (hasPoster) {
+        AsyncImage(
+          model = folder.posterPath,
+          contentDescription = displayTitle,
+          modifier = Modifier.fillMaxSize(),
+          contentScale = ContentScale.Crop,
+        )
+      } else {
+        Icon(
+          customIcon ?: Icons.Filled.Folder,
+          contentDescription = "Folder",
+          modifier = if (isGridMode) {
+            Modifier.fillMaxWidth().aspectRatio(thumbnailAspectRatio).scale(1.2f)
+          } else {
+            Modifier.size(thumbnailSize).scale(1.2f)
+          },
+          tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+        )
+      }
     },
-    showThumbnailBackground = thumbnail != null,
+    showThumbnailBackground = hasPoster || thumbnail != null,
     onClick = onClick,
     onLongClick = onLongClick,
     onThumbClick = onThumbClick,
@@ -109,6 +127,35 @@ fun FolderCard(
     gridColumns = gridColumns,
     maxTitleLines = maxLines,
     overlayContent = {
+      if (folder.rating > 0.0) {
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color.Black.copy(alpha = 0.75f),
+          modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(6.dp),
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+          ) {
+            Icon(
+              imageVector = Icons.Filled.Star,
+              contentDescription = null,
+              tint = Color(0xFFFFB800),
+              modifier = Modifier.size(11.dp),
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            Text(
+              text = String.format(java.util.Locale.US, "%.1f", folder.rating),
+              style = MaterialTheme.typography.labelSmall,
+              color = Color.White,
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold,
+            )
+          }
+        }
+      }
       if (uiSettings.showUnplayedOldVideoLabel && newVideoCount > 0) {
         Surface(
           shape = pillShape,
@@ -146,7 +193,21 @@ fun FolderCard(
       }
     },
     infoContent = {
-      if (!isGridMode && showFolderPath && parentPath.isNotEmpty()) {
+      if (isGridMode && (folder.isTvShow || folder.isMovie)) {
+        val typeLabel = if (folder.isTvShow) "TV Series" else "Movie"
+        val subtitle = buildList {
+          add(typeLabel)
+          if (folder.year.isNotBlank()) add(folder.year)
+          if (folder.isTvShow && folder.videoCount > 0) add("${folder.videoCount} Ep")
+        }.joinToString(" • ")
+        Text(
+          text = subtitle,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      } else if (!isGridMode && showFolderPath && parentPath.isNotEmpty()) {
         Text(
           parentPath,
           style = MaterialTheme.typography.bodySmall,
@@ -160,7 +221,35 @@ fun FolderCard(
       if (customChipContent != null) {
         customChipContent()
       }
-      if (totalCount > 0) {
+      if (folder.isTvShow) {
+        MediaMetadataChip(
+          text = "TV Series",
+          color = MaterialTheme.colorScheme.primaryContainer,
+          contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+      } else if (folder.isMovie) {
+        MediaMetadataChip(
+          text = "Movie",
+          color = MaterialTheme.colorScheme.secondaryContainer,
+          contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+      }
+      if (folder.rating > 0.0) {
+        MediaMetadataChip(
+          text = "★ ${String.format(java.util.Locale.US, "%.1f", folder.rating)}",
+          color = Color(0xFF3E2E00),
+          contentColor = Color(0xFFFFD54F),
+        )
+      }
+      if (folder.year.isNotBlank()) {
+        MediaMetadataChip(text = folder.year)
+      }
+      if (folder.genre.isNotBlank()) {
+        MediaMetadataChip(text = folder.genre.split(",").first().trim())
+      }
+      if (folder.isTvShow && folder.videoCount > 0) {
+        MediaMetadataChip(text = if (folder.videoCount == 1) "1 Episode" else "${folder.videoCount} Episodes")
+      } else if (totalCount > 0) {
         MediaMetadataChip(text = countLabel)
       }
       if (uiSettings.showSizeChip && folder.totalSize > 0) {

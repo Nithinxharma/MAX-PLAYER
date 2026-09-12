@@ -14,4 +14,12 @@ data class VideoFolder(
   val lastModified: Long = 0L,
   val newCount: Int = 0,
   val unwatchedVideoCount: Int = 0,
+  val posterPath: String? = null,
+  val backdropPath: String? = null,
+  val rating: Double = 0.0,
+  val year: String = "",
+  val genre: String = "",
+  val isTvShow: Boolean = false,
+  val isMovie: Boolean = false,
+  val mediaTitle: String? = null,
 )

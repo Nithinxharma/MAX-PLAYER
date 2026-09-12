@@ -329,11 +329,15 @@ class HybridMediaIndexRepository(
     val thresholdMillis = thresholdDays * 24L * 60L * 60L * 1000L
     val now = System.currentTimeMillis()
 
-    items.groupBy { it.parentIdentity }.map { (parent, media) ->
+    items.groupBy { item ->
+      xyz.mpv.rex.cinehub.data.CineFolderMetadataManager.resolveLogicalMediaFolder(item.location).absolutePath
+    }.map { (parent, media) ->
       val counts = presentationCounts(media, stateByIdentity, watchedThreshold, thresholdMillis, now)
+      val folderFile = java.io.File(parent)
+      val folderName = if (folderFile.name.isNotBlank()) folderFile.name else media.first().parentDisplayName
       MediaFolder(
         id = parent,
-        name = media.first().parentDisplayName,
+        name = folderName,
         path = parent,
         videoCount = media.count { !it.isAudio },
         audioCount = media.count { it.isAudio },
@@ -386,9 +390,10 @@ class HybridMediaIndexRepository(
     parentIdentity: String,
     includeNoMedia: Boolean = browserPreferences.includeNoMediaContent.get(),
   ): List<Video> = withContext(Dispatchers.IO) {
+    val prefix = if (parentIdentity.endsWith("/")) parentIdentity else "$parentIdentity/"
     dao.getAvailableMedia(includeNoMedia)
       .asSequence()
-      .filter { it.parentIdentity == parentIdentity }
+      .filter { it.parentIdentity == parentIdentity || it.location.startsWith(prefix) }
       .map { it.toVideo() }
       .sortedBy { it.displayName.lowercase() }
       .toList()

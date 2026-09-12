@@ -360,6 +360,10 @@ object VideoScanUtils {
             for (file in files) {
                 currentCoroutineContext().ensureActive()
                 try {
+                    if (file.isDirectory && !FileFilterUtils.shouldSkipFile(file)) {
+                        scanMediaFromFileSystem(file, videosMap)
+                        continue
+                    }
                     if (!file.isFile || FileFilterUtils.shouldSkipFile(file)) continue
 
                     val isVideo = FileTypeUtils.isVideoFile(file)

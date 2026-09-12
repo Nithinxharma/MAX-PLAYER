@@ -42,7 +42,7 @@ object MediaMetadataOps {
                     thresholdDays = thresholdDays,
                     watchedThreshold = browserPreferences.watchedThreshold.get(),
                 )
-                folders
+                val rawFolders = folders
                     .filter { folder -> 
                         (isAudioEnabled || folder.videoCount > 0) && folder.path !in blacklistedFolders
                     }
@@ -60,6 +60,14 @@ object MediaMetadataOps {
                             unwatchedVideoCount = folder.unwatchedVideoCount
                         )
                     }
+
+                // Enrich folders with Kodi metadata, poster, and name
+                val enrichedFolders = xyz.mpv.rex.cinehub.data.CineFolderMetadataManager.enrichFolders(context, rawFolders)
+
+                // Filter for Home screen: exclude CineRex structural subdirectories, only show folders with media metadata & poster
+                enrichedFolders.filter { folder ->
+                    xyz.mpv.rex.cinehub.data.CineFolderMetadataManager.shouldIncludeInHomeScreen(folder)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error mapping media folders", e)
                 emptyList()

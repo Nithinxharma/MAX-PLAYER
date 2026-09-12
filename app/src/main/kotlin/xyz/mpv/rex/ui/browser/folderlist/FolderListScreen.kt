@@ -661,7 +661,8 @@ object FolderListScreen : Screen {
                 if (selectionManager.isInSelectionMode) {
                   selectionManager.toggle(folder)
                 } else {
-                  backstack.add(xyz.mpv.rex.ui.browser.videolist.VideoListScreen(folder.bucketId, folder.name))
+                  val displayName = folder.mediaTitle?.takeIf { it.isNotBlank() } ?: folder.name
+                  backstack.add(xyz.mpv.rex.ui.browser.videolist.VideoListScreen(folder.bucketId, displayName))
                 }
               },
               onFolderLongClick = { folder ->
