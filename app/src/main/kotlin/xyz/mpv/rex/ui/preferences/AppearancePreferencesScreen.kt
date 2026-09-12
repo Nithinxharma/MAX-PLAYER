@@ -425,7 +425,7 @@ object AppearancePreferencesScreen : Screen {
                             }
 
                             GroupedPreferenceCard(
-                                position = GroupPosition.LAST,
+                                position = GroupPosition.MIDDLE,
                                 highlightKey = R.string.pref_appearance_tab_cinehub_title,
                             ) {
                                 SwitchPreference(
@@ -435,6 +435,40 @@ object AppearancePreferencesScreen : Screen {
                                     summary = {
                                         Text(
                                             text = stringResource(id = R.string.pref_appearance_tab_cinehub_summary),
+                                            color = MaterialTheme.colorScheme.outline,
+                                        )
+                                    }
+                                )
+                            }
+                            
+                            GroupedPreferenceCard(
+                                position = GroupPosition.MIDDLE,
+                                highlightKey = R.string.pref_appearance_tab_cinetube_title,
+                            ) {
+                                SwitchPreference(
+                                    value = browserPreferences.enableTabCineTube.collectAsState().value,
+                                    onValueChange = { browserPreferences.enableTabCineTube.set(it) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinetube_title)) },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_tab_cinetube_summary),
+                                            color = MaterialTheme.colorScheme.outline,
+                                        )
+                                    }
+                                )
+                            }
+
+                            GroupedPreferenceCard(
+                                position = GroupPosition.LAST,
+                                highlightKey = R.string.pref_appearance_tab_cinetv_title,
+                            ) {
+                                SwitchPreference(
+                                    value = browserPreferences.enableTabCineTv.collectAsState().value,
+                                    onValueChange = { browserPreferences.enableTabCineTv.set(it) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinetv_title)) },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_tab_cinetv_summary),
                                             color = MaterialTheme.colorScheme.outline,
                                         )
                                     }

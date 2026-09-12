@@ -411,6 +411,17 @@ class PlayerViewModel(
   private val _mediaTitle = MutableStateFlow("")
   val mediaTitle: StateFlow<String> = _mediaTitle.asStateFlow()
 
+  private val _customMediaPosterUrl = MutableStateFlow<String?>(null)
+  val customMediaPosterUrl: StateFlow<String?> = _customMediaPosterUrl.asStateFlow()
+
+  private val _customMediaSourceType = MutableStateFlow<String?>(null)
+  val customMediaSourceType: StateFlow<String?> = _customMediaSourceType.asStateFlow()
+
+  fun setCustomMetadata(posterUrl: String?, sourceType: String?) {
+    _customMediaPosterUrl.value = posterUrl
+    _customMediaSourceType.value = sourceType
+  }
+
   private val _mediaIdentifier = MutableStateFlow("")
   val mediaIdentifier: StateFlow<String> = _mediaIdentifier.asStateFlow()
 

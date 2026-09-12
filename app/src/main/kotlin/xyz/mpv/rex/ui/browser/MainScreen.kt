@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.SmartDisplay
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -172,11 +174,15 @@ object MainScreen : Screen {
     val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
     val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
     val enableTabCineHub by browserPreferences.enableTabCineHub.collectAsState()
+    val enableTabCineTube by browserPreferences.enableTabCineTube.collectAsState()
+    val enableTabCineTv by browserPreferences.enableTabCineTv.collectAsState()
     val enableCineHubIntegration by browserPreferences.enableCineHubIntegration.collectAsState()
 
     val homeLabel = stringResource(R.string.home)
     val shortsLabel = stringResource(R.string.shorts)
     val cineHubLabel = stringResource(R.string.cinehub)
+    val cineTubeLabel = stringResource(R.string.cinetube)
+    val cineTvLabel = stringResource(R.string.cinetv)
     val recentsLabel = stringResource(R.string.recents)
     val playlistsLabel = stringResource(R.string.playlists)
     val networkLabel = stringResource(R.string.network)
@@ -184,8 +190,8 @@ object MainScreen : Screen {
     val isCineHubTabVisible = enableTabCineHub && enableCineHubIntegration
 
     val visibleTabs = remember(
-      isShortsEnabled, isCineHubTabVisible, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      homeLabel, shortsLabel, cineHubLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, isCineHubTabVisible, enableTabCineTube, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
+      homeLabel, shortsLabel, cineHubLabel, cineTubeLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
         add(
@@ -204,6 +210,53 @@ object MainScreen : Screen {
           add(
             VisibleTab("cinehub", cineHubLabel, Icons.Filled.Movie) {
               CineHubScreen.Content()
+            }
+          )
+        }
+        if (enableTabCineTube) {
+          add(
+            VisibleTab("cinetube", cineTubeLabel, Icons.Filled.SmartDisplay) {
+              xyz.mpv.rex.youtube.ui.YoutubeTabScreen(
+                onPlayRequested = { videoUrl, title, authorThumb ->
+                  val uri = android.net.Uri.parse(videoUrl)
+                  val playerIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                    setClass(context, xyz.mpv.rex.ui.player.PlayerActivity::class.java)
+                    putExtra("internal_launch", true)
+                    putExtra("launch_source", "cinetube")
+                    putExtra("title", title)
+                    putExtra("filename", title)
+                    putExtra("cinetv_source_type", "cinetube")
+                    putExtra("cinetv_poster", authorThumb)
+                    setDataAndType(uri, "video/*")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                  }
+                  context.startActivity(playerIntent)
+                }
+              )
+            }
+          )
+        }
+        if (enableTabCineTv) {
+          add(
+            VisibleTab("cinetv", cineTvLabel, Icons.Filled.Tv) {
+              xyz.mpv.rex.cinetv.ui.LiveTvTabScreen(
+                searchQuery = "",
+                onPlayRequested = { streamUrl, title, meta ->
+                  val uri = android.net.Uri.parse(streamUrl)
+                  val playerIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                    setClass(context, xyz.mpv.rex.ui.player.PlayerActivity::class.java)
+                    putExtra("internal_launch", true)
+                    putExtra("launch_source", "cinetv")
+                    putExtra("title", title)
+                    putExtra("filename", title)
+                    putExtra("cinetv_source_type", meta["SourceType"])
+                    putExtra("cinetv_poster", meta["Logo"])
+                    setDataAndType(uri, "video/*")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                  }
+                  context.startActivity(playerIntent)
+                }
+              )
             }
           )
         }

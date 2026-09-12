@@ -1739,6 +1739,11 @@ class PlayerActivity :
       mediaIdentifier = getMediaIdentifier(intent, fileName)
     }
 
+    // Handle custom CineTV/CineTube metadata
+    val customSourceType = intent.getStringExtra("cinetv_source_type")
+    val customPoster = intent.getStringExtra("cinetv_poster")
+    viewModel.setCustomMetadata(customPoster, customSourceType)
+
     // Start media notification service only when going to background (like stock mpv-android)
     // startBackgroundPlayback() is now deferred to backgrounding lifecycle events
 

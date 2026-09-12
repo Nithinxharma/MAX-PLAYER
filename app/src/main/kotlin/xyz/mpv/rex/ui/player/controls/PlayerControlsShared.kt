@@ -65,6 +65,8 @@ import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.SmartDisplay
+import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -1380,64 +1382,106 @@ fun DynamicMediaInfoRectangle(
     } else null
   }
 
+  val customSourceType by viewModel.customMediaSourceType.collectAsState()
+  val customPoster by viewModel.customMediaPosterUrl.collectAsState()
+
   var activeResolution by remember { mutableStateOf<ActiveMediaResolution?>(null) }
 
   LaunchedEffect(currentFilePath, mediaTitle) {
-    activeResolution = CineOnlineScraper.resolveActiveMedia(
-      context = context,
-      filePath = currentFilePath,
-      mediaTitle = mediaTitle
-    )
+    if (customSourceType == null) {
+      activeResolution = CineOnlineScraper.resolveActiveMedia(
+        context = context,
+        filePath = currentFilePath,
+        mediaTitle = mediaTitle
+      )
+    }
   }
 
-  val effectivePoster = activeResolution?.posterUrl ?: localPosterSync
+  val effectivePoster = customPoster ?: activeResolution?.posterUrl ?: localPosterSync
 
-  // Prominently enlarged cinematic poster button (Poster ONLY)
-  val posterHeight = buttonSize * 5f
-  val posterWidth = posterHeight * (2f / 3f)
-
-  Surface(
-    shape = RoundedCornerShape(10.dp),
-    color = Color.Black.copy(alpha = 0.75f),
-    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.45f)),
-    shadowElevation = 6.dp,
-    modifier = modifier
-      .width(posterWidth)
-      .height(posterHeight)
-      .clip(RoundedCornerShape(10.dp))
-      .clickable { onClick() }
-  ) {
-    Box(
-      modifier = Modifier.fillMaxSize(),
-      contentAlignment = Alignment.Center
+  if (customSourceType == "cinetube" || customSourceType == "cinetv") {
+    // Normal size Info Button for YouTube / Live TV
+    val isCircular = customSourceType == "cinetube"
+    val shape = if (isCircular) CircleShape else RoundedCornerShape(10.dp)
+    Surface(
+      shape = shape,
+      color = Color.Black.copy(alpha = 0.75f),
+      border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.45f)),
+      shadowElevation = 6.dp,
+      modifier = modifier
+        .size(buttonSize)
+        .clip(shape)
+        .clickable { onClick() }
     ) {
-      if (!effectivePoster.isNullOrBlank()) {
-        AsyncImage(
-          model = effectivePoster,
-          contentDescription = "Media Poster",
-          contentScale = ContentScale.Crop,
-          modifier = Modifier.fillMaxSize()
-        )
-      } else {
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .background(
-              Brush.verticalGradient(
-                listOf(Color(0xFF2C3246), Color(0xFF141622))
-              )
-            ),
-          contentAlignment = Alignment.Center
-        ) {
-          Icon(
-            imageVector = when (activeResolution) {
-              is ActiveMediaResolution.TvShow -> Icons.Outlined.Tv
-              else -> Icons.Outlined.Movie
-            },
-            contentDescription = "Media Poster",
-            tint = Color.White.copy(alpha = 0.90f),
-            modifier = Modifier.size(28.dp)
+      Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+      ) {
+        if (!effectivePoster.isNullOrBlank()) {
+          AsyncImage(
+            model = effectivePoster,
+            contentDescription = "Channel Logo",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
           )
+        } else {
+          Icon(
+            imageVector = if (isCircular) Icons.Outlined.SmartDisplay else Icons.Outlined.LiveTv,
+            contentDescription = "Fallback Logo",
+            tint = Color.White.copy(alpha = 0.90f),
+            modifier = Modifier.size(24.dp)
+          )
+        }
+      }
+    }
+  } else {
+    // Prominently enlarged cinematic poster button (Poster ONLY) for movies and tv shows
+    val posterHeight = buttonSize * 5f
+    val posterWidth = posterHeight * (2f / 3f)
+
+    Surface(
+      shape = RoundedCornerShape(10.dp),
+      color = Color.Black.copy(alpha = 0.75f),
+      border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.45f)),
+      shadowElevation = 6.dp,
+      modifier = modifier
+        .width(posterWidth)
+        .height(posterHeight)
+        .clip(RoundedCornerShape(10.dp))
+        .clickable { onClick() }
+    ) {
+      Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+      ) {
+        if (!effectivePoster.isNullOrBlank()) {
+          AsyncImage(
+            model = effectivePoster,
+            contentDescription = "Media Poster",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+          )
+        } else {
+          Box(
+            modifier = Modifier
+              .fillMaxSize()
+              .background(
+                Brush.verticalGradient(
+                  listOf(Color(0xFF2C3246), Color(0xFF141622))
+                )
+              ),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = when (activeResolution) {
+                is ActiveMediaResolution.TvShow -> Icons.Outlined.Tv
+                else -> Icons.Outlined.Movie
+              },
+              contentDescription = "Media Poster",
+              tint = Color.White.copy(alpha = 0.90f),
+              modifier = Modifier.size(28.dp)
+            )
+          }
         }
       }
     }

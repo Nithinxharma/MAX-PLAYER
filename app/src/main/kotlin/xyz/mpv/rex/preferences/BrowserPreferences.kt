@@ -77,6 +77,8 @@ class BrowserPreferences(
   val enableTabPlaylists = preferenceStore.getBoolean("enable_tab_playlists", true)
   val enableTabNetwork = preferenceStore.getBoolean("enable_tab_network", true)
   val enableTabCineHub = preferenceStore.getBoolean("enable_tab_cinehub", true)
+  val enableTabCineTube = preferenceStore.getBoolean("enable_tab_cinetube", true)
+  val enableTabCineTv = preferenceStore.getBoolean("enable_tab_cinetv", true)
   val playedNetworkLinks = preferenceStore.getString("played_network_links", "")
   // CineHub Library Sources
   val enableLocalMovies = preferenceStore.getBoolean("enable_local_movies", true)
