@@ -28,6 +28,11 @@
     <string name="pref_appearance_tab_playlists_summary">Show local custom video playlists</string>
     <string name="pref_appearance_tab_network_title">Network Streaming</string>
     <string name="pref_appearance_tab_network_summary">Access SMB, FTP, and WebDAV drives</string>
+    <string name="cinehub">CineHub</string>
+    <string name="pref_appearance_tab_cinehub_title">CineHub</string>
+    <string name="pref_appearance_tab_cinehub_summary">Movies, TV shows catalog &amp; streaming</string>
+    <string name="pref_cinehub_title">CineHub</string>
+    <string name="pref_cinehub_summary">Media library engine, metadata scraper &amp; catalogs</string>
     <string name="pref_appearance_summary">Dark mode, Material You</string>
     <string name="pref_appearance_category_theme">Theme</string>
     <string name="pref_appearance_darkmode_system">System</string>

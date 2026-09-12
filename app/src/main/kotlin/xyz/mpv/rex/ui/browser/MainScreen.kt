@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -51,6 +52,7 @@ import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.dialogs.CommunityLinksDialog
+import xyz.mpv.rex.ui.browser.cinehub.CineHubScreen
 import xyz.mpv.rex.ui.browser.folderlist.FolderListScreen
 import xyz.mpv.rex.ui.browser.networkstreaming.NetworkStreamingScreen
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
@@ -169,16 +171,21 @@ object MainScreen : Screen {
     val enableTabRecents by browserPreferences.enableTabRecents.collectAsState()
     val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
     val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
+    val enableTabCineHub by browserPreferences.enableTabCineHub.collectAsState()
+    val enableCineHubIntegration by browserPreferences.enableCineHubIntegration.collectAsState()
 
     val homeLabel = stringResource(R.string.home)
     val shortsLabel = stringResource(R.string.shorts)
+    val cineHubLabel = stringResource(R.string.cinehub)
     val recentsLabel = stringResource(R.string.recents)
     val playlistsLabel = stringResource(R.string.playlists)
     val networkLabel = stringResource(R.string.network)
 
+    val isCineHubTabVisible = enableTabCineHub && enableCineHubIntegration
+
     val visibleTabs = remember(
-      isShortsEnabled, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      homeLabel, shortsLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, isCineHubTabVisible, enableTabRecents, enableTabPlaylists, enableTabNetwork,
+      homeLabel, shortsLabel, cineHubLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
         add(
@@ -190,6 +197,13 @@ object MainScreen : Screen {
           add(
             VisibleTab("shorts", shortsLabel, Icons.Outlined.VideoLibrary) {
               ShortsScreen().Content()
+            }
+          )
+        }
+        if (isCineHubTabVisible) {
+          add(
+            VisibleTab("cinehub", cineHubLabel, Icons.Filled.Movie) {
+              CineHubScreen.Content()
             }
           )
         }

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
@@ -236,6 +237,13 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
+                  title = "CineHub",
+                  summary = "Media engine, metadata scraping & catalog",
+                  icon = Icons.Outlined.Movie,
+                  onClick = { backstack.add(CineHubPreferencesScreen) },
+                )
+                PreferenceItem(
+                  position = GroupPosition.MIDDLE,
                   title = "Jellyfin",
                   summary = "External player sync",
                   icon = Icons.Outlined.VideoLibrary,
