@@ -15,6 +15,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
@@ -42,6 +44,7 @@ import org.koin.compose.koinInject
 import xyz.mpv.rex.R
 import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
+import xyz.mpv.rex.cinehub.data.KodiMediaScraper
 import xyz.mpv.rex.cinehub.data.NfoScanner
 import xyz.mpv.rex.cinehub.data.TMDBMovieNode
 import xyz.mpv.rex.cinehub.model.EpisodeItem
@@ -52,6 +55,7 @@ import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
 import xyz.mpv.rex.ui.preferences.MediaLibraryPreferencesScreen
+import xyz.mpv.rex.ui.preferences.PreferencesScreen
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.utils.media.MediaUtils
 import java.io.File
@@ -70,6 +74,8 @@ object CineHubScreen : Screen {
     val enableOnlineCatalog by browserPreferences.enableOnlineCatalog.collectAsState()
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
     val enableLocalTvShows by browserPreferences.enableLocalTvShows.collectAsState()
+    val enableMetadataScraping by browserPreferences.enableMetadataScraping.collectAsState()
+    val enableArtworkDownloads by browserPreferences.enableArtworkDownloads.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = All, 1 = Movies, 2 = TV Shows
     var searchQuery by remember { mutableStateOf("") }
@@ -77,6 +83,13 @@ object CineHubScreen : Screen {
 
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
+
+    var showScraperSheet by remember { mutableStateOf(false) }
+    var isScrapingInProgress by remember { mutableStateOf(false) }
+    var scrapeProgressCurrent by remember { mutableIntStateOf(0) }
+    var scrapeProgressTotal by remember { mutableIntStateOf(0) }
+    var scrapeCurrentItemName by remember { mutableStateOf("") }
+    var scrapeFinishedResult by remember { mutableStateOf<String?>(null) }
 
     var onlineMovies by remember { mutableStateOf<List<MovieItem>>(emptyList()) }
     var onlineTvShows by remember { mutableStateOf<List<TvShowItem>>(emptyList()) }
@@ -116,6 +129,19 @@ object CineHubScreen : Screen {
             if (altMoviesDir.exists()) {
               scanned.addAll(NfoScanner.scanDirectoryForMovies(altMoviesDir))
             }
+
+            if (enableMetadataScraping) {
+              for (i in scanned.indices) {
+                val item = scanned[i]
+                if (item.posterPath.isNullOrBlank() || !item.isMetadataCached) {
+                  runCatching {
+                    val enriched = KodiMediaScraper.scrapeMovie(context, File(item.videoFilePath), downloadArtworkAndNfo = enableArtworkDownloads)
+                    scanned[i] = enriched
+                  }
+                }
+              }
+            }
+
             withContext(Dispatchers.Main) {
               localMovies = scanned
             }
@@ -131,6 +157,19 @@ object CineHubScreen : Screen {
             if (altTvDir.exists()) {
               scannedTv.addAll(NfoScanner.scanDirectoryForTvShows(altTvDir))
             }
+
+            if (enableMetadataScraping) {
+              for (i in scannedTv.indices) {
+                val item = scannedTv[i]
+                if (item.posterPath.isNullOrBlank() || !item.isMetadataCached) {
+                  runCatching {
+                    val enriched = KodiMediaScraper.scrapeTvShow(context, File(item.folderPath), downloadArtworkAndNfo = enableArtworkDownloads)
+                    scannedTv[i] = enriched
+                  }
+                }
+              }
+            }
+
             withContext(Dispatchers.Main) {
               localTvShows = scannedTv
             }
@@ -179,6 +218,18 @@ object CineHubScreen : Screen {
           actions = {
             IconButton(
               onClick = {
+                showScraperSheet = true
+              },
+              modifier = Modifier.testTag("cinehub_kodi_scraper_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.CloudDownload,
+                contentDescription = "Kodi Media Scraper",
+                tint = MaterialTheme.colorScheme.primary,
+              )
+            }
+            IconButton(
+              onClick = {
                 isRefreshing = true
                 loadMedia()
                 Toast.makeText(context, "Refreshing catalog…", Toast.LENGTH_SHORT).show()
@@ -192,13 +243,13 @@ object CineHubScreen : Screen {
             }
             IconButton(
               onClick = {
-                backstack.add(MediaLibraryPreferencesScreen)
+                backstack.add(PreferencesScreen)
               },
               modifier = Modifier.testTag("cinehub_settings_button"),
             ) {
               Icon(
                 imageVector = Icons.Outlined.Settings,
-                contentDescription = "CineHub Settings",
+                contentDescription = "Settings",
               )
             }
           },
@@ -527,6 +578,67 @@ object CineHubScreen : Screen {
             onPlay = {
               playMediaItem(context, item, scope)
             },
+            onRefreshItem = { updated ->
+              selectedDetailItem = updated
+              loadMedia()
+            },
+          )
+        }
+
+        // Kodi Media Scraper Bottom Sheet
+        if (showScraperSheet) {
+          KodiScraperBottomSheet(
+            isScraping = isScrapingInProgress,
+            progressCurrent = scrapeProgressCurrent,
+            progressTotal = scrapeProgressTotal,
+            currentItemName = scrapeCurrentItemName,
+            resultSummary = scrapeFinishedResult,
+            onStartScrape = { dirOption, customPath, downloadArtworkAndNfo ->
+              isScrapingInProgress = true
+              scrapeFinishedResult = null
+              scope.launch(Dispatchers.IO) {
+                val dirToScan = when (dirOption) {
+                  "downloads" -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                  "custom" -> File(customPath)
+                  else -> File(Environment.getExternalStorageDirectory(), "Movies")
+                }
+                val defaultAltDir = if (dirOption == "default") {
+                  File(Environment.getExternalStorageDirectory(), "TV Shows")
+                } else null
+                val defaultCineRexDir = if (dirOption == "default") {
+                  File(Environment.getExternalStorageDirectory(), "CineRex")
+                } else null
+
+                var totalMovies = 0
+                var totalTv = 0
+
+                val dirsToScrape = listOfNotNull(dirToScan, defaultAltDir, defaultCineRexDir).filter { it.exists() }
+                for (dir in dirsToScrape) {
+                  val result = KodiMediaScraper.scrapeDirectory(
+                    context = context,
+                    directory = dir,
+                    downloadArtworkAndNfo = downloadArtworkAndNfo,
+                    onProgress = { cur, tot, item ->
+                      scrapeProgressCurrent = cur
+                      scrapeProgressTotal = tot
+                      scrapeCurrentItemName = item
+                    }
+                  )
+                  totalMovies += result.scrapedMoviesCount
+                  totalTv += result.scrapedTvShowsCount
+                }
+
+                withContext(Dispatchers.Main) {
+                  isScrapingInProgress = false
+                  scrapeFinishedResult = "Scraped $totalMovies movies and $totalTv TV shows with posters and Kodi metadata."
+                  loadMedia()
+                }
+              }
+            },
+            onDismiss = {
+              showScraperSheet = false
+              scrapeFinishedResult = null
+            }
           )
         }
       }
@@ -893,6 +1005,7 @@ private fun CineDetailBottomSheet(
   item: Any,
   onDismiss: () -> Unit,
   onPlay: () -> Unit,
+  onRefreshItem: (Any) -> Unit = {},
 ) {
   val title = when (item) {
     is MovieItem -> item.title
@@ -1012,19 +1125,70 @@ private fun CineDetailBottomSheet(
         }
 
         if (item is MovieItem) {
-          Button(
-            onClick = {
-              onDismiss()
-              onPlay()
-            },
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(50.dp),
-            shape = RoundedCornerShape(16.dp),
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Play Movie", fontWeight = FontWeight.Bold)
+            Button(
+              onClick = {
+                onDismiss()
+                onPlay()
+              },
+              modifier = Modifier
+                .weight(1f)
+                .height(50.dp),
+              shape = RoundedCornerShape(16.dp),
+            ) {
+              Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(text = "Play Movie", fontWeight = FontWeight.Bold)
+            }
+
+            var isScrapingMovie by remember { mutableStateOf(false) }
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+
+            OutlinedButton(
+              onClick = {
+                if (item.videoFilePath.isNotBlank() && File(item.videoFilePath).exists()) {
+                  isScrapingMovie = true
+                  scope.launch(Dispatchers.IO) {
+                    val enriched = KodiMediaScraper.scrapeMovie(
+                      context = context,
+                      videoFile = File(item.videoFilePath),
+                      downloadArtworkAndNfo = true
+                    )
+                    withContext(Dispatchers.Main) {
+                      isScrapingMovie = false
+                      item.title = enriched.title
+                      item.plot = enriched.plot
+                      item.userRating = enriched.userRating
+                      item.posterPath = enriched.posterPath
+                      item.backdropPath = enriched.backdropPath
+                      item.genre = enriched.genre
+                      item.premiered = enriched.premiered
+                      item.director = enriched.director
+                      item.actors = enriched.actors
+                      onRefreshItem(enriched)
+                      Toast.makeText(context, "Scraped metadata & downloaded poster for ${enriched.title}", Toast.LENGTH_SHORT).show()
+                    }
+                  }
+                } else {
+                  Toast.makeText(context, "Media file not found locally to scrape", Toast.LENGTH_SHORT).show()
+                }
+              },
+              modifier = Modifier.height(50.dp),
+              shape = RoundedCornerShape(16.dp),
+              enabled = !isScrapingMovie,
+            ) {
+              if (isScrapingMovie) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+              } else {
+                Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Scrape Online")
+              }
+            }
           }
         } else if (item is TvShowItem) {
           val context = LocalContext.current
@@ -1087,36 +1251,88 @@ private fun CineDetailBottomSheet(
 
           val nextEpisodeToPlay = seasonEpisodes.firstOrNull() ?: allLocalEpisodes.firstOrNull()
 
-          // Top Play Next / Quick Play Button
-          Button(
-            onClick = {
-              if (nextEpisodeToPlay != null) {
-                scope.launch(Dispatchers.IO) {
-                  val playUri = CineCloudRepoClient.resolveMediaUri(nextEpisodeToPlay.videoFilePath)
-                  withContext(Dispatchers.Main) {
-                    onDismiss()
-                    Toast.makeText(context, "Playing ${item.title} - ${nextEpisodeToPlay.title}", Toast.LENGTH_SHORT).show()
-                    MediaUtils.playFile(playUri, context, "cinehub")
-                  }
-                }
-              } else {
-                onDismiss()
-                onPlay()
-              }
-            },
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(50.dp),
-            shape = RoundedCornerShape(16.dp),
+          // Top Play Next / Quick Play & Scrape Buttons
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-              text = if (nextEpisodeToPlay != null) "Play ${nextEpisodeToPlay.title}" else "Play Series",
-              fontWeight = FontWeight.Bold,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
+            Button(
+              onClick = {
+                if (nextEpisodeToPlay != null) {
+                  scope.launch(Dispatchers.IO) {
+                    val playUri = CineCloudRepoClient.resolveMediaUri(nextEpisodeToPlay.videoFilePath)
+                    withContext(Dispatchers.Main) {
+                      onDismiss()
+                      Toast.makeText(context, "Playing ${item.title} - ${nextEpisodeToPlay.title}", Toast.LENGTH_SHORT).show()
+                      MediaUtils.playFile(playUri, context, "cinehub")
+                    }
+                  }
+                } else {
+                  onDismiss()
+                  onPlay()
+                }
+              },
+              modifier = Modifier
+                .weight(1f)
+                .height(50.dp),
+              shape = RoundedCornerShape(16.dp),
+            ) {
+              Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = if (nextEpisodeToPlay != null) "Play ${nextEpisodeToPlay.title}" else "Play Series",
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+
+            var isScrapingTv by remember { mutableStateOf(false) }
+
+            OutlinedButton(
+              onClick = {
+                if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
+                  isScrapingTv = true
+                  scope.launch(Dispatchers.IO) {
+                    val enriched = KodiMediaScraper.scrapeTvShow(
+                      context = context,
+                      showFolder = File(item.folderPath),
+                      downloadArtworkAndNfo = true,
+                    )
+                    val freshEps = NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+                    withContext(Dispatchers.Main) {
+                      isScrapingTv = false
+                      item.title = enriched.title
+                      item.plot = enriched.plot
+                      item.posterPath = enriched.posterPath
+                      item.backdropPath = enriched.backdropPath
+                      item.userRating = enriched.userRating
+                      item.genre = enriched.genre
+                      allLocalEpisodes = freshEps
+                      val detected = freshEps.map { it.season }.filter { it > 0 }.distinct().sorted()
+                      availableSeasons = if (detected.isNotEmpty()) detected else listOf(1)
+                      val filtered = freshEps.filter { it.season == selectedSeason }
+                      seasonEpisodes = if (filtered.isNotEmpty()) filtered else freshEps
+                      onRefreshItem(enriched)
+                      Toast.makeText(context, "Scraped series & episode artwork for ${enriched.title}", Toast.LENGTH_SHORT).show()
+                    }
+                  }
+                } else {
+                  Toast.makeText(context, "Show folder not found locally to scrape", Toast.LENGTH_SHORT).show()
+                }
+              },
+              modifier = Modifier.height(50.dp),
+              shape = RoundedCornerShape(16.dp),
+              enabled = !isScrapingTv,
+            ) {
+              if (isScrapingTv) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+              } else {
+                Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Scrape Online")
+              }
+            }
           }
 
           Spacer(modifier = Modifier.height(20.dp))
@@ -1250,6 +1466,266 @@ private fun CineDetailBottomSheet(
               }
             }
           }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun KodiScraperBottomSheet(
+  isScraping: Boolean,
+  progressCurrent: Int,
+  progressTotal: Int,
+  currentItemName: String,
+  resultSummary: String?,
+  onStartScrape: (dirOption: String, customPath: String, downloadArtworkAndNfo: Boolean) -> Unit,
+  onDismiss: () -> Unit,
+) {
+  var selectedDirOption by remember { mutableStateOf("default") }
+  var customPath by remember {
+    mutableStateOf(
+      Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)?.absolutePath
+        ?: "/storage/emulated/0/Movies"
+    )
+  }
+  var downloadArtworkAndNfo by remember { mutableStateOf(true) }
+
+  ModalBottomSheet(
+    onDismissRequest = {
+      if (!isScraping) onDismiss()
+    },
+    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 24.dp, vertical = 16.dp)
+        .padding(bottom = 32.dp),
+    ) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        Box(
+          modifier = Modifier
+            .size(42.dp)
+            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+          contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+            imageVector = Icons.Outlined.CloudDownload,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+          )
+        }
+        Column {
+          Text(
+            text = "Kodi Media Scraper",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+          )
+          Text(
+            text = "TMDB v4/v3 & TVMaze Online Library Engine",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.height(16.dp))
+
+      if (isScraping) {
+        Card(
+          modifier = Modifier.fillMaxWidth(),
+          colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+          ),
+          shape = RoundedCornerShape(16.dp),
+        ) {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(16.dp),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text(
+                text = "Scraping in progress…",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+              )
+              Text(
+                text = if (progressTotal > 0) "$progressCurrent / $progressTotal" else "",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+              )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val progressFraction = if (progressTotal > 0) progressCurrent.toFloat() / progressTotal.toFloat() else 0f
+            LinearProgressIndicator(
+              progress = { progressFraction.coerceIn(0f, 1f) },
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp)),
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+              text = currentItemName.ifBlank { "Querying TMDB and downloading posters…" },
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = FontWeight.Medium,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+              text = "Matching titles, season episodes, downloading high-res posters, and writing Kodi .nfo files.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.outline,
+              modifier = Modifier.padding(top = 4.dp),
+            )
+          }
+        }
+      } else if (resultSummary != null) {
+        Card(
+          modifier = Modifier.fillMaxWidth(),
+          colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+          ),
+          shape = RoundedCornerShape(16.dp),
+        ) {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+          ) {
+            Icon(
+              imageVector = Icons.Default.CheckCircle,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(40.dp),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+              text = "Scraping Complete",
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold,
+            )
+            Text(
+              text = resultSummary,
+              style = MaterialTheme.typography.bodyMedium,
+              textAlign = TextAlign.Center,
+              modifier = Modifier.padding(top = 6.dp),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+              onClick = onDismiss,
+              modifier = Modifier.fillMaxWidth(),
+              shape = RoundedCornerShape(12.dp),
+            ) {
+              Text(text = "View Scraped Library", fontWeight = FontWeight.Bold)
+            }
+          }
+        }
+      } else {
+        Text(
+          text = "Select Media Location:",
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.SemiBold,
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          FilterChip(
+            selected = selectedDirOption == "default",
+            onClick = { selectedDirOption = "default" },
+            label = { Text("Default (Movies/TV)") },
+            leadingIcon = { Icon(Icons.Outlined.Movie, contentDescription = null, modifier = Modifier.size(16.dp)) },
+          )
+          FilterChip(
+            selected = selectedDirOption == "downloads",
+            onClick = { selectedDirOption = "downloads" },
+            label = { Text("Downloads") },
+            leadingIcon = { Icon(Icons.Outlined.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp)) },
+          )
+          FilterChip(
+            selected = selectedDirOption == "custom",
+            onClick = { selectedDirOption = "custom" },
+            label = { Text("Custom") },
+            leadingIcon = { Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(16.dp)) },
+          )
+        }
+
+        if (selectedDirOption == "custom") {
+          Spacer(modifier = Modifier.height(12.dp))
+          OutlinedTextField(
+            value = customPath,
+            onValueChange = { customPath = it },
+            label = { Text("Custom Directory Path") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+          )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { downloadArtworkAndNfo = !downloadArtworkAndNfo },
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Checkbox(
+            checked = downloadArtworkAndNfo,
+            onCheckedChange = { downloadArtworkAndNfo = it },
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Column {
+            Text(
+              text = "Download Posters & Save Kodi .nfo",
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+              text = "Saves posters, backdrops, and XML metadata locally for offline access.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.outline,
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Button(
+          onClick = {
+            onStartScrape(selectedDirOption, customPath, downloadArtworkAndNfo)
+          },
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp),
+          shape = RoundedCornerShape(14.dp),
+        ) {
+          Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = "Start Kodi Online Scraper",
+            fontWeight = FontWeight.Bold,
+          )
         }
       }
     }
