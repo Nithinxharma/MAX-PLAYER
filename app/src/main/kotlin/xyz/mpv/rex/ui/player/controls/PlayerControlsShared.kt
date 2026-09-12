@@ -1436,7 +1436,7 @@ fun DynamicMediaInfoRectangle(
     }
   } else {
     // Prominently enlarged cinematic poster button (Poster ONLY) for movies and tv shows
-    val posterHeight = buttonSize * 5f
+    val posterHeight = buttonSize * 2.5f
     val posterWidth = posterHeight * (2f / 3f)
 
     Surface(

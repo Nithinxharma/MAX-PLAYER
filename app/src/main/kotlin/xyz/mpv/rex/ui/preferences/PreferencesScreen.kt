@@ -237,6 +237,20 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
+                  title = "CineTube",
+                  summary = "YouTube & YouTube Shorts integration settings",
+                  icon = Icons.Outlined.Movie,
+                  onClick = { backstack.add(CineTubeSettingsScreen) },
+                )
+                PreferenceItem(
+                  position = GroupPosition.MIDDLE,
+                  title = "CineTV",
+                  summary = "Live TV & IPTV integration settings",
+                  icon = Icons.Outlined.VideoLibrary,
+                  onClick = { backstack.add(CineTvSettingsScreen) },
+                )
+                PreferenceItem(
+                  position = GroupPosition.MIDDLE,
                   title = "Jellyfin",
                   summary = "External player sync",
                   icon = Icons.Outlined.VideoLibrary,
