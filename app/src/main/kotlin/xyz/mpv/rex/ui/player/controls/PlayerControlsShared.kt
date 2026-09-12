@@ -12,6 +12,7 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -58,6 +59,9 @@ import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Tv
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -71,7 +75,15 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import coil.compose.AsyncImage
+import xyz.mpv.rex.cinehub.data.ActiveMediaResolution
+import xyz.mpv.rex.cinehub.data.CineOnlineScraper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1269,43 +1281,15 @@ fun RenderPlayerButton(
     PlayerButton.METADATA -> {
       val isCineHubEnabled = org.koin.compose.koinInject<xyz.mpv.rex.preferences.BrowserPreferences>().enableCineHubIntegration.get()
       if (isCineHubEnabled) {
-        if (isMoreSheet) {
-          Surface(
-            shape = CircleShape,
-            color = surfaceColor,
-            contentColor = contentColor,
-            border = borderColor,
-            modifier = Modifier
-              .height(buttonSize)
-              .clip(CircleShape)
-              .clickable {
-                clickEvent()
-                onOpenSheet(Sheets.Metadata)
-              }
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller)
-            ) {
-              Icon(
-                PlayerButton.METADATA.icon,
-                contentDescription = "Metadata",
-                modifier = Modifier.size(20.dp)
-              )
-              androidx.compose.foundation.layout.Spacer(Modifier.width(MaterialTheme.spacing.smaller))
-              Text("Metadata", style = MaterialTheme.typography.bodyMedium)
-            }
-          }
-        } else {
-          ControlsButton(
-            icon = PlayerButton.METADATA.icon,
-            onClick = {
-              clickEvent()
-              onOpenSheet(Sheets.Metadata)
-            },
-            modifier = Modifier.size(buttonSize)
-          )
-        }
+        DynamicMediaInfoRectangle(
+          viewModel = viewModel,
+          onClick = {
+            clickEvent()
+            onOpenSheet(Sheets.Metadata)
+          },
+          isMoreSheet = isMoreSheet,
+          buttonSize = buttonSize
+        )
       }
     }
   }
@@ -1371,5 +1355,133 @@ fun Surface(
         border = finalBorder,
         content = content
     )
+}
+
+@Composable
+fun DynamicMediaInfoRectangle(
+  viewModel: PlayerViewModel,
+  onClick: () -> Unit,
+  isMoreSheet: Boolean = false,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val context = LocalContext.current
+  val currentFilePath = `is`.xyz.mpv.MPVLib.getPropertyString("path") ?: ""
+  val mediaTitle = viewModel.mediaTitle.collectAsState().value ?: ""
+
+  var activeResolution by remember { mutableStateOf<ActiveMediaResolution?>(null) }
+
+  LaunchedEffect(currentFilePath, mediaTitle) {
+    activeResolution = CineOnlineScraper.resolveActiveMedia(
+      context = context,
+      filePath = currentFilePath,
+      mediaTitle = mediaTitle
+    )
+  }
+
+  Surface(
+    shape = RoundedCornerShape(10.dp),
+    color = Color.Black.copy(alpha = 0.55f),
+    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+    modifier = modifier
+      .height(buttonSize)
+      .clip(RoundedCornerShape(10.dp))
+      .clickable { onClick() }
+  ) {
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+      when (val res = activeResolution) {
+        is ActiveMediaResolution.Movie -> {
+          // Dynamic Movie Poster in Rectangle
+          Box(
+            modifier = Modifier
+              .width(20.dp)
+              .height(buttonSize - 12.dp)
+              .clip(RoundedCornerShape(4.dp))
+              .background(Color(0x33FFFFFF)),
+            contentAlignment = Alignment.Center
+          ) {
+            if (!res.movie.posterPath.isNullOrBlank()) {
+              AsyncImage(
+                model = res.movie.posterPath,
+                contentDescription = res.movie.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+              )
+            } else {
+              Icon(
+                imageVector = Icons.Outlined.Movie,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+              )
+            }
+          }
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = if (isMoreSheet) res.movie.title else "Movie",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+        is ActiveMediaResolution.TvShow -> {
+          // Dynamic Series Poster in Rectangle + Episode Badge
+          Box(
+            modifier = Modifier
+              .width(20.dp)
+              .height(buttonSize - 12.dp)
+              .clip(RoundedCornerShape(4.dp))
+              .background(Color(0x33FFFFFF)),
+            contentAlignment = Alignment.Center
+          ) {
+            if (!res.show.posterPath.isNullOrBlank()) {
+              AsyncImage(
+                model = res.show.posterPath,
+                contentDescription = res.show.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+              )
+            } else {
+              Icon(
+                imageVector = Icons.Outlined.Tv,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+              )
+            }
+          }
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = "S${res.season}:E${res.episode}",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1
+          )
+        }
+        else -> {
+          // Normal Media: Info icon in dynamic rectangle
+          Icon(
+            imageVector = Icons.Outlined.Info,
+            contentDescription = "Media Info",
+            tint = Color.White,
+            modifier = Modifier.size(18.dp)
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = "Info",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+          )
+        }
+      }
+    }
+  }
 }
 

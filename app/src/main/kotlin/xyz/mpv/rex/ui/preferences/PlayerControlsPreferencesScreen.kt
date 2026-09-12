@@ -46,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import xyz.mpv.rex.R
 import xyz.mpv.rex.preferences.AppearancePreferences
+import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.PlayerButton
 import xyz.mpv.rex.preferences.allPlayerButtons
 import xyz.mpv.rex.preferences.PlayerPreferences
@@ -83,6 +84,7 @@ object PlayerControlsPreferencesScreen : Screen {
         val backstack = LocalBackStack.current
         val appearancePrefs = koinInject<AppearancePreferences>()
         val playerPrefs = koinInject<PlayerPreferences>()
+        val browserPreferences = koinInject<BrowserPreferences>()
 
         val topRState by appearancePrefs.topRightControls.collectAsState()
         val bottomRState by appearancePrefs.bottomRightControls.collectAsState()
@@ -363,6 +365,43 @@ object PlayerControlsPreferencesScreen : Screen {
                                                 else
                                                     R.string.pref_controls_layout_below_seekbar_summary_false
                                             )
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    // Appearance Section
+                    item {
+                        PreferenceSectionHeader(title = "Media Info & Overlay")
+                    }
+                    item {
+                        val showMetadataOverlay by browserPreferences.showMetadataOverlay.collectAsState()
+                        val showCastInformation by browserPreferences.showCastInformation.collectAsState()
+                        GroupedListColumn {
+                            GroupedPreferenceCard(position = GroupPosition.FIRST) {
+                                SwitchPreference(
+                                    value = showMetadataOverlay,
+                                    onValueChange = { browserPreferences.showMetadataOverlay.set(it) },
+                                    title = { Text(text = "Dynamic Media Poster & Info") },
+                                    summary = {
+                                        Text(
+                                            text = "Display movie/series poster in dynamic rectangle and media info sheet",
+                                            color = MaterialTheme.colorScheme.outline,
+                                        )
+                                    },
+                                )
+                            }
+                            GroupedPreferenceCard(position = GroupPosition.LAST) {
+                                SwitchPreference(
+                                    value = showCastInformation,
+                                    onValueChange = { browserPreferences.showCastInformation.set(it) },
+                                    title = { Text(text = "Show Cast Information") },
+                                    summary = {
+                                        Text(
+                                            text = "Display actor details and characters in media info sheet",
+                                            color = MaterialTheme.colorScheme.outline,
                                         )
                                     },
                                 )

@@ -1,6 +1,9 @@
 package xyz.mpv.rex.ui.player.controls.components.sheets
 
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,8 +13,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Tv
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,10 +33,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import xyz.mpv.rex.cinehub.data.ActiveMediaResolution
+import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
+import xyz.mpv.rex.cinehub.model.EpisodeItem
 import xyz.mpv.rex.cinehub.model.MovieItem
-import xyz.mpv.rex.cinehub.model.TvShowItem
 import xyz.mpv.rex.ui.player.PlayerViewModel
 import java.io.File
 
@@ -41,148 +52,895 @@ fun MetadataSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    
-    // We can infer metadata from the playing file path
-    val currentFilePath = `is`.xyz.mpv.MPVLib.getPropertyString("path") ?: ""
-    val title = viewModel.mediaTitle.collectAsState().value ?: File(currentFilePath).nameWithoutExtension
 
-    var movieData by remember { mutableStateOf<MovieItem?>(null) }
+    val currentFilePath = `is`.xyz.mpv.MPVLib.getPropertyString("path") ?: ""
+    val mediaTitle = viewModel.mediaTitle.collectAsState().value ?: ""
+    val durationSec = try { `is`.xyz.mpv.MPVLib.getPropertyDouble("duration") ?: 0.0 } catch (_: Exception) { 0.0 }
+    val width = `is`.xyz.mpv.MPVLib.getPropertyString("width") ?: ""
+    val height = `is`.xyz.mpv.MPVLib.getPropertyString("height") ?: ""
+    val resolution = if (width.isNotBlank() && height.isNotBlank()) "${width}x${height}" else ""
+    val videoCodec = `is`.xyz.mpv.MPVLib.getPropertyString("video-format") ?: ""
+    val audioCodec = `is`.xyz.mpv.MPVLib.getPropertyString("audio-codec-name") ?: ""
+
+    var resolutionData by remember { mutableStateOf<ActiveMediaResolution?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(currentFilePath) {
+    // For TV Show Season/Episodes in Sheet
+    var selectedSeason by remember { mutableIntStateOf(1) }
+    var tvEpisodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
+    var isLoadingTvEpisodes by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentFilePath, mediaTitle) {
         isLoading = true
-        // Basic resolution logic: use online scraper based on the file name.
-        val fetched = CineOnlineScraper.getOrFetchMovie(context, File(currentFilePath).name)
-        if (fetched != null) {
-            movieData = fetched
+        val resolved = CineOnlineScraper.resolveActiveMedia(
+            context = context,
+            filePath = currentFilePath,
+            mediaTitle = mediaTitle,
+            durationSeconds = durationSec,
+            resolution = resolution,
+            videoCodec = videoCodec,
+            audioCodec = audioCodec
+        )
+        resolutionData = resolved
+        if (resolved is ActiveMediaResolution.TvShow) {
+            selectedSeason = resolved.season
+            tvEpisodes = resolved.episodes
         }
         isLoading = false
+    }
+
+    LaunchedEffect(selectedSeason) {
+        val current = resolutionData
+        if (current is ActiveMediaResolution.TvShow && selectedSeason != current.season) {
+            isLoadingTvEpisodes = true
+            val eps = withContext(Dispatchers.IO) {
+                CineOnlineScraper.fetchTvShowEpisodes(
+                    context,
+                    current.show.tmdbId.ifBlank { current.show.title },
+                    selectedSeason,
+                    current.show.title
+                )
+            }
+            tvEpisodes = eps
+            isLoadingTvEpisodes = false
+        }
     }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = Color(0xF210111A), // Glassmorphic frosted dark container
+        tonalElevation = 8.dp,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(color = Color(0x66FFFFFF))
+        }
     ) {
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (movieData != null) {
-            val movie = movieData!!
-            LazyColumn(modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp)) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().height(240.dp)) {
-                        AsyncImage(
-                            model = movie.backdropPath ?: movie.posterPath,
-                            contentDescription = "Backdrop",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.surface))))
-                        
-                        if (movie.logoPath != null) {
-                            AsyncImage(
-                                model = movie.logoPath,
-                                contentDescription = "Logo",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 16.dp).width(160.dp).height(80.dp)
-                            )
-                        }
-                    }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(260.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
-
-                item {
-                    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                            AsyncImage(
-                                model = movie.posterPath ?: android.R.drawable.ic_menu_gallery,
-                                contentDescription = movie.title,
-                                modifier = Modifier
-                                    .width(110.dp)
-                                    .aspectRatio(2f / 3f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.Gray),
-                                contentScale = ContentScale.Crop
-                            )
-                            Spacer(modifier = Modifier.width(18.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(movie.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                                if (movie.tagline.isNotBlank()) {
-                                    Text("\"${movie.tagline}\"", style = MaterialTheme.typography.bodySmall, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text("★ ${movie.userRating} | ${movie.premiered} | ${movie.runtime} min", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                Text(movie.genre, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                
-                                Spacer(modifier = Modifier.height(12.dp))
-                                OutlinedButton(
-                                    onClick = {
-                                        isLoading = true
-                                        scope.launch {
-                                            val refreshed = CineOnlineScraper.getOrFetchMovie(context, File(currentFilePath).name, movie.tmdbId, forceRefresh = true)
-                                            if (refreshed != null) {
-                                                movieData = refreshed
-                                            }
-                                            isLoading = false
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Refresh Metadata", fontSize = 12.sp)
-                                }
-                            }
-                        }
-
-                        if (movie.actors.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Text("Cast", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                                items(movie.actors) { actor ->
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
-                                        AsyncImage(
-                                            model = actor.thumbUrl, contentDescription = actor.name, contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
-                                        )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(actor.name, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
-                                        if (actor.character.isNotBlank()) {
-                                            Text(actor.character, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.Gray)
-                                        }
+            } else {
+                when (val data = resolutionData) {
+                    is ActiveMediaResolution.TvShow -> {
+                        TvShowGlassmorphismContent(
+                            data = data,
+                            selectedSeason = selectedSeason,
+                            onSeasonSelected = { selectedSeason = it },
+                            episodes = tvEpisodes,
+                            isLoadingEpisodes = isLoadingTvEpisodes,
+                            onPlayEpisode = { ep ->
+                                scope.launch(Dispatchers.IO) {
+                                    val resolvedUri = CineCloudRepoClient.resolveMediaUri(ep.videoFilePath)
+                                    withContext(Dispatchers.Main) {
+                                        onDismissRequest()
+                                        Toast.makeText(context, "Playing ${ep.title}", Toast.LENGTH_SHORT).show()
+                                        `is`.xyz.mpv.MPVLib.command("loadfile", resolvedUri)
                                     }
                                 }
                             }
-                        }
-                        
-                        movie.collection?.let { collection ->
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Box(modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(16.dp))) {
-                                AsyncImage(model = collection.backdropPath, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)))
-                                Column(modifier = Modifier.align(Alignment.Center).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Part of the", color = Color.White, fontSize = 12.sp)
-                                    Text(collection.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        )
+                    }
+                    is ActiveMediaResolution.Movie -> {
+                        MovieGlassmorphismContent(
+                            movie = data.movie,
+                            onRefresh = {
+                                isLoading = true
+                                scope.launch {
+                                    val refreshed = CineOnlineScraper.getOrFetchMovie(
+                                        context,
+                                        File(currentFilePath).name,
+                                        data.movie.tmdbId,
+                                        forceRefresh = true
+                                    )
+                                    if (refreshed != null) {
+                                        resolutionData = ActiveMediaResolution.Movie(refreshed)
+                                    }
+                                    isLoading = false
                                 }
                             }
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text("Plot Overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(movie.plot.ifEmpty { "No description available." }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                        )
+                    }
+                    is ActiveMediaResolution.Normal, null -> {
+                        val normalData = data as? ActiveMediaResolution.Normal
+                        NormalMediaGlassmorphismContent(
+                            title = normalData?.title ?: mediaTitle.ifBlank { File(currentFilePath).nameWithoutExtension },
+                            fileName = normalData?.fileName ?: File(currentFilePath).name,
+                            duration = normalData?.durationFormatted ?: "",
+                            resolution = resolution,
+                            videoCodec = videoCodec,
+                            audioCodec = audioCodec,
+                            filePath = currentFilePath
+                        )
                     }
                 }
             }
-        } else {
-            Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("No metadata found for this media.", style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun TvShowGlassmorphismContent(
+    data: ActiveMediaResolution.TvShow,
+    selectedSeason: Int,
+    onSeasonSelected: (Int) -> Unit,
+    episodes: List<EpisodeItem>,
+    isLoadingEpisodes: Boolean,
+    onPlayEpisode: (EpisodeItem) -> Unit
+) {
+    val show = data.show
+    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+        // Hero Backdrop
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(230.dp)
+            ) {
+                AsyncImage(
+                    model = data.episodeStill ?: show.backdropPath ?: show.posterPath,
+                    contentDescription = show.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color(0x8010111A),
+                                    Color(0xF210111A)
+                                )
+                            )
+                        )
+                )
+
+                // Episode badge pill
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.Black.copy(alpha = 0.65f),
+                    border = BorderStroke(1.dp, Color(0x44FFFFFF)),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 20.dp, top = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Tv,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "TV Series • S${data.season}:E${data.episode}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
+        }
+
+        // Title and Poster Row
+        item {
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(y = (-30).dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    // Dynamic Series Poster Rectangle
+                    Box(
+                        modifier = Modifier
+                            .width(96.dp)
+                            .aspectRatio(2f / 3f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(BorderStroke(1.5.dp, Color(0x55FFFFFF)), RoundedCornerShape(14.dp))
+                            .background(Color(0x33FFFFFF))
+                    ) {
+                        AsyncImage(
+                            model = show.posterPath,
+                            contentDescription = show.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = show.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = data.episodeTitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (show.userRating > 0.0) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFC107),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = String.format("%.1f", show.userRating),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = " • ",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Text(
+                                text = show.premiered.take(4),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                            if (show.genre.isNotBlank()) {
+                                Text(
+                                    text = " • ${show.genre.take(20)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Episode Plot Card in Glassmorphism Style
+                if (data.episodePlot.isNotBlank()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp, bottom = 18.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0x18FFFFFF)),
+                        border = BorderStroke(1.dp, Color(0x20FFFFFF))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Episode Synopsis",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = data.episodePlot,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.88f),
+                                lineHeight = 20.sp
+                            )
+                        }
+                    }
+                }
+
+                // Season Selector
+                Text(
+                    text = "Episode Guide",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    for (s in 1..4) {
+                        FilterChip(
+                            selected = selectedSeason == s,
+                            onClick = { onSeasonSelected(s) },
+                            label = { Text("Season $s", fontWeight = FontWeight.SemiBold) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                containerColor = Color(0x1FFFFFFF),
+                                labelColor = Color.White
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = selectedSeason == s,
+                                borderColor = Color(0x33FFFFFF)
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // Episode Cards List
+        if (isLoadingEpisodes) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                }
+            }
+        } else {
+            items(episodes) { ep ->
+                val isCurrentPlaying = ep.season == data.season && ep.episode == data.episode
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 5.dp)
+                        .clickable { onPlayEpisode(ep) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isCurrentPlaying) Color(0x356366F1) else Color(0x15FFFFFF)
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isCurrentPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else Color(0x22FFFFFF)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Episode Still Image
+                        Box(
+                            modifier = Modifier
+                                .size(width = 86.dp, height = 58.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0x22FFFFFF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!ep.stillPath.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = ep.stillPath,
+                                    contentDescription = ep.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(Color.Black.copy(alpha = 0.65f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Play",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "E${ep.episode}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (isCurrentPlaying) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text(
+                                            text = "PLAYING",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = ep.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (ep.plot.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = ep.plot,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieGlassmorphismContent(
+    movie: MovieItem,
+    onRefresh: () -> Unit
+) {
+    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+        // Hero Backdrop
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(230.dp)
+            ) {
+                AsyncImage(
+                    model = movie.backdropPath ?: movie.posterPath,
+                    contentDescription = movie.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color(0x8010111A),
+                                    Color(0xF210111A)
+                                )
+                            )
+                        )
+                )
+
+                // Movie Badge
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.Black.copy(alpha = 0.65f),
+                    border = BorderStroke(1.dp, Color(0x44FFFFFF)),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 20.dp, top = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Movie,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Feature Film",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Title and Poster Row
+        item {
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(y = (-30).dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    // Movie Poster in Dynamic Rectangle
+                    Box(
+                        modifier = Modifier
+                            .width(100.dp)
+                            .aspectRatio(2f / 3f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(BorderStroke(1.5.dp, Color(0x55FFFFFF)), RoundedCornerShape(14.dp))
+                            .background(Color(0x33FFFFFF))
+                    ) {
+                        AsyncImage(
+                            model = movie.posterPath,
+                            contentDescription = movie.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = movie.title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                        if (movie.tagline.isNotBlank()) {
+                            Text(
+                                text = "\"${movie.tagline}\"",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = Color.White.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (movie.userRating > 0.0) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFC107),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = String.format("%.1f", movie.userRating),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = " • ",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Text(
+                                text = movie.premiered.take(4),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.75f)
+                            )
+                            if (movie.runtime > 0) {
+                                Text(
+                                    text = " • ${movie.runtime}m",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.75f)
+                                )
+                            }
+                        }
+                        if (movie.genre.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = movie.genre,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // Plot Overview Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 18.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0x18FFFFFF)),
+                    border = BorderStroke(1.dp, Color(0x20FFFFFF))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Plot Overview",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = movie.plot.ifEmpty { "No description available." },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.88f),
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+
+                // Cast row
+                if (movie.actors.isNotEmpty()) {
+                    Text(
+                        text = "Cast & Characters",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 10.dp)
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 18.dp)
+                    ) {
+                        items(movie.actors) { actor ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(76.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(CircleShape)
+                                        .border(BorderStroke(1.dp, Color(0x44FFFFFF)), CircleShape)
+                                        .background(Color(0x22FFFFFF))
+                                ) {
+                                    AsyncImage(
+                                        model = actor.thumbUrl,
+                                        contentDescription = actor.name,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = actor.name,
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                                if (actor.character.isNotBlank()) {
+                                    Text(
+                                        text = actor.character,
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Refresh Button
+                OutlinedButton(
+                    onClick = onRefresh,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Refresh Scraped Metadata")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NormalMediaGlassmorphismContent(
+    title: String,
+    fileName: String,
+    duration: String,
+    resolution: String,
+    videoCodec: String,
+    audioCodec: String,
+    filePath: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.Videocam,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = fileName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Technical Specs Cards in Glassmorphism style
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0x18FFFFFF)),
+            border = BorderStroke(1.dp, Color(0x25FFFFFF))
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "Technical Media Properties",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    TechSpecPill(
+                        label = "Resolution",
+                        value = resolution.ifBlank { "Standard" },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TechSpecPill(
+                        label = "Duration",
+                        value = duration.ifBlank { "Live / Stream" },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    TechSpecPill(
+                        label = "Video Codec",
+                        value = videoCodec.ifBlank { "Auto" },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TechSpecPill(
+                        label = "Audio Codec",
+                        value = audioCodec.ifBlank { "Auto" },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        if (filePath.isNotBlank()) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0x10FFFFFF)),
+                border = BorderStroke(1.dp, Color(0x1AFFFFFF))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "Source URI",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = filePath,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TechSpecPill(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0x22000000),
+        border = BorderStroke(1.dp, Color(0x20FFFFFF)),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                color = Color.White.copy(alpha = 0.5f)
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

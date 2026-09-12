@@ -296,4 +296,36 @@ object CineCloudRepoClient {
         } catch (e: Exception) { }
         return@withContext null
     }
+
+    suspend fun resolveMediaUri(uri: String): String = withContext(Dispatchers.IO) {
+        if (uri.startsWith("http://") || uri.startsWith("https://") || uri.startsWith("/") || uri.startsWith("content://")) {
+            return@withContext uri
+        }
+        if (uri.startsWith("stream_tv:")) {
+            val parts = uri.split(":")
+            val tmdbId = parts.getOrNull(1) ?: "tt14674744"
+            val season = parts.getOrNull(2) ?: "1"
+            val episode = parts.getOrNull(3) ?: "1"
+            return@withContext "https://vidsrc.to/embed/tv/$tmdbId/$season/$episode"
+        }
+        if (uri.startsWith("vidsrc_tv:")) {
+            val parts = uri.split(":")
+            val id = parts.getOrNull(1) ?: "tt14674744"
+            val season = parts.getOrNull(2) ?: "1"
+            val episode = parts.getOrNull(3) ?: "1"
+            return@withContext "https://vidsrc.to/embed/tv/$id/$season/$episode"
+        }
+        if (uri.startsWith("vidsrc_movie:")) {
+            val parts = uri.split(":")
+            val id = parts.getOrNull(1) ?: "tt15354916"
+            return@withContext "https://vidsrc.to/embed/movie/$id"
+        }
+        if (uri.startsWith("cnc_stream:")) {
+            val parts = uri.split(":")
+            val id = parts.getOrNull(1) ?: ""
+            val platform = parts.getOrNull(2) ?: "nf"
+            return@withContext resolveDirectStreamUrl(id, platform) ?: "https://vidsrc.to/embed/movie/$id"
+        }
+        return@withContext uri
+    }
 }

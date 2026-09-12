@@ -292,7 +292,7 @@ object NfoScanner {
         return ""
     }
 
-    private fun resolveArtworkLocalFallback(parentDir: File?, targetName: String): String? {
+    fun resolveArtworkLocalFallback(parentDir: File?, targetName: String): String? {
         if (parentDir == null) return null
         return File(parentDir, targetName).takeIf { it.exists() }?.absolutePath
     }

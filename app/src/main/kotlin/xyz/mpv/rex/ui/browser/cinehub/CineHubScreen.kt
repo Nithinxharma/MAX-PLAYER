@@ -44,13 +44,14 @@ import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
 import xyz.mpv.rex.cinehub.data.NfoScanner
 import xyz.mpv.rex.cinehub.data.TMDBMovieNode
+import xyz.mpv.rex.cinehub.model.EpisodeItem
 import xyz.mpv.rex.cinehub.model.MovieItem
 import xyz.mpv.rex.cinehub.model.TvShowItem
 import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
-import xyz.mpv.rex.ui.preferences.CineHubPreferencesScreen
+import xyz.mpv.rex.ui.preferences.MediaLibraryPreferencesScreen
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.utils.media.MediaUtils
 import java.io.File
@@ -191,7 +192,7 @@ object CineHubScreen : Screen {
             }
             IconButton(
               onClick = {
-                backstack.add(CineHubPreferencesScreen)
+                backstack.add(MediaLibraryPreferencesScreen)
               },
               modifier = Modifier.testTag("cinehub_settings_button"),
             ) {
@@ -559,7 +560,25 @@ object CineHubScreen : Screen {
         }
       }
       is TvShowItem -> {
-        Toast.makeText(context, "Opening ${item.title}", Toast.LENGTH_SHORT).show()
+        scope.launch(Dispatchers.IO) {
+          val episodes = if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
+            NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+          } else {
+            CineOnlineScraper.fetchTvShowEpisodes(context, item.tmdbId.ifBlank { item.title }, 1, item.title)
+          }
+          val firstEp = episodes.firstOrNull()
+          if (firstEp != null) {
+            val playUri = CineCloudRepoClient.resolveMediaUri(firstEp.videoFilePath)
+            withContext(Dispatchers.Main) {
+              Toast.makeText(context, "Playing ${item.title} - ${firstEp.title}", Toast.LENGTH_SHORT).show()
+              MediaUtils.playFile(playUri, context, "cinehub")
+            }
+          } else {
+            withContext(Dispatchers.Main) {
+              Toast.makeText(context, "No episodes found for ${item.title}", Toast.LENGTH_SHORT).show()
+            }
+          }
+        }
       }
     }
   }
@@ -992,19 +1011,188 @@ private fun CineDetailBottomSheet(
           )
         }
 
-        Button(
-          onClick = {
-            onDismiss()
-            onPlay()
-          },
-          modifier = Modifier
-            .fillMaxWidth()
-            .height(50.dp),
-          shape = RoundedCornerShape(16.dp),
-        ) {
-          Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-          Spacer(modifier = Modifier.width(8.dp))
-          Text(text = "Play Media", fontWeight = FontWeight.Bold)
+        if (item is MovieItem) {
+          Button(
+            onClick = {
+              onDismiss()
+              onPlay()
+            },
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(50.dp),
+            shape = RoundedCornerShape(16.dp),
+          ) {
+            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = "Play Movie", fontWeight = FontWeight.Bold)
+          }
+        } else if (item is TvShowItem) {
+          val context = LocalContext.current
+          val scope = rememberCoroutineScope()
+          var selectedSeason by remember { mutableIntStateOf(1) }
+          var episodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
+          var isLoadingEpisodes by remember { mutableStateOf(true) }
+
+          LaunchedEffect(item, selectedSeason) {
+            isLoadingEpisodes = true
+            val loaded = withContext(Dispatchers.IO) {
+              if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
+                NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+              } else {
+                CineOnlineScraper.fetchTvShowEpisodes(context, item.tmdbId.ifBlank { item.title }, selectedSeason, item.title)
+              }
+            }
+            episodes = loaded
+            isLoadingEpisodes = false
+          }
+
+          // Top Play Next / S1E1 Quick Button
+          Button(
+            onClick = {
+              onDismiss()
+              onPlay()
+            },
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(50.dp),
+            shape = RoundedCornerShape(16.dp),
+          ) {
+            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = if (episodes.isNotEmpty()) "Play Next (${episodes.first().title})" else "Play Series",
+              fontWeight = FontWeight.Bold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+          }
+
+          Spacer(modifier = Modifier.height(20.dp))
+
+          // Seasons selector
+          Text(
+            text = "Seasons & Episodes",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+          )
+
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            for (s in 1..3) {
+              FilterChip(
+                selected = selectedSeason == s,
+                onClick = { selectedSeason = s },
+                label = { Text("Season $s") },
+                shape = RoundedCornerShape(12.dp)
+              )
+            }
+          }
+
+          if (isLoadingEpisodes) {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              CircularProgressIndicator(modifier = Modifier.size(32.dp))
+            }
+          } else {
+            Column(
+              verticalArrangement = Arrangement.spacedBy(10.dp),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              episodes.forEach { ep ->
+                Card(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                      scope.launch(Dispatchers.IO) {
+                        val playUri = CineCloudRepoClient.resolveMediaUri(ep.videoFilePath)
+                        withContext(Dispatchers.Main) {
+                          onDismiss()
+                          Toast.makeText(context, "Playing ${ep.title}", Toast.LENGTH_SHORT).show()
+                          MediaUtils.playFile(playUri, context, "cinehub")
+                        }
+                      }
+                    },
+                  shape = RoundedCornerShape(14.dp),
+                  colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                  )
+                ) {
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(width = 80.dp, height = 54.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surface),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      if (!ep.stillPath.isNullOrBlank()) {
+                        AsyncImage(
+                          model = ep.stillPath,
+                          contentDescription = ep.title,
+                          contentScale = ContentScale.Crop,
+                          modifier = Modifier.fillMaxSize()
+                        )
+                      }
+                      Box(
+                        modifier = Modifier
+                          .size(28.dp)
+                          .background(Color.Black.copy(alpha = 0.6f), CircleShape),
+                        contentAlignment = Alignment.Center
+                      ) {
+                        Icon(
+                          imageVector = Icons.Default.PlayArrow,
+                          contentDescription = "Play Episode",
+                          tint = Color.White,
+                          modifier = Modifier.size(16.dp)
+                        )
+                      }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text(
+                        text = "S${ep.season} • E${ep.episode}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                      )
+                      Text(
+                        text = ep.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                      )
+                      if (ep.plot.isNotBlank()) {
+                        Text(
+                          text = ep.plot,
+                          style = MaterialTheme.typography.bodySmall,
+                          color = MaterialTheme.colorScheme.outline,
+                          maxLines = 2,
+                          overflow = TextOverflow.Ellipsis
+                        )
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

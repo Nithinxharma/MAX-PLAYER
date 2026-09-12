@@ -237,13 +237,6 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
-                  title = "CineHub",
-                  summary = "Media engine, metadata scraping & catalog",
-                  icon = Icons.Outlined.Movie,
-                  onClick = { backstack.add(CineHubPreferencesScreen) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.MIDDLE,
                   title = "Jellyfin",
                   summary = "External player sync",
                   icon = Icons.Outlined.VideoLibrary,
