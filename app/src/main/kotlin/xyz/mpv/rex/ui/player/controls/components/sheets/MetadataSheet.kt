@@ -39,6 +39,7 @@ import kotlinx.coroutines.withContext
 import xyz.mpv.rex.cinehub.data.ActiveMediaResolution
 import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
+import xyz.mpv.rex.cinehub.data.NfoScanner
 import xyz.mpv.rex.cinehub.model.EpisodeItem
 import xyz.mpv.rex.cinehub.model.MovieItem
 import xyz.mpv.rex.ui.player.PlayerViewModel
@@ -94,12 +95,18 @@ fun MetadataSheet(
         if (current is ActiveMediaResolution.TvShow && selectedSeason != current.season) {
             isLoadingTvEpisodes = true
             val eps = withContext(Dispatchers.IO) {
-                CineOnlineScraper.fetchTvShowEpisodes(
-                    context,
-                    current.show.tmdbId.ifBlank { current.show.title },
-                    selectedSeason,
-                    current.show.title
-                )
+                if (current.show.folderPath.isNotBlank() && File(current.show.folderPath).exists()) {
+                    val allLocal = NfoScanner.scanTvShowEpisodes(File(current.show.folderPath))
+                    val seasonLocal = allLocal.filter { it.season == selectedSeason }
+                    if (seasonLocal.isNotEmpty()) seasonLocal else allLocal
+                } else {
+                    CineOnlineScraper.fetchTvShowEpisodes(
+                        context,
+                        current.show.tmdbId.ifBlank { current.show.title },
+                        selectedSeason,
+                        current.show.title
+                    )
+                }
             }
             tvEpisodes = eps
             isLoadingTvEpisodes = false
@@ -375,13 +382,13 @@ private fun TvShowGlassmorphismContent(
                     modifier = Modifier.padding(bottom = 10.dp)
                 )
 
-                Row(
+                LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    for (s in 1..4) {
+                    items(data.allSeasons) { s ->
                         FilterChip(
                             selected = selectedSeason == s,
                             onClick = { onSeasonSelected(s) },

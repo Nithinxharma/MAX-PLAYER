@@ -11,109 +11,152 @@ import org.w3c.dom.Node
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
+/**
+ * High-performance Kodi / XBMC v17+ / v18+ / v19+ local media scanner and NFO parser.
+ * Accurately extracts TMDB, IMDB, TVDB, TVMaze IDs, poster URLs, fanart, actors,
+ * and recursively scans TV seasons and episodes across all folder structures.
+ */
 object NfoScanner {
 
-    private fun isVideoFile(file: File): Boolean {
-        val extensions = setOf("mp4", "mkv", "avi", "mov", "webm", "flv", "ts")
-        return extensions.contains(file.extension.lowercase())
+    private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "avi", "mov", "webm", "flv", "ts", "m4v", "wmv", "iso")
+
+    fun isVideoFile(file: File): Boolean {
+        return file.isFile && VIDEO_EXTENSIONS.contains(file.extension.lowercase())
     }
 
-    private fun isStrictMoviePath(absolutePath: String): Boolean {
-        val standardizedPath = absolutePath.replace("\\", "/")
-        return standardizedPath.contains("/CineRex/movies/", ignoreCase = true) || 
-               standardizedPath.contains("/Cinerex/movies/", ignoreCase = true)
+    /**
+     * Checks if a directory represents a TV show according to Kodi/XBMC conventions:
+     * - Contains tvshow.nfo
+     * - Or contains Season subdirectories (e.g. "Season 1", "Season 01", "S1", "Specials")
+     * - Or contains video files with SxxExx episode patterns
+     */
+    fun isTvShowDirectory(directory: File): Boolean {
+        if (!directory.exists() || !directory.isDirectory) return false
+        if (File(directory, "tvshow.nfo").exists()) return true
+
+        val children = directory.listFiles() ?: return false
+        val hasSeasonFolder = children.any { child ->
+            child.isDirectory && child.name.matches(Regex("(?i)^(season\\s*\\d+|s\\d+|specials|series\\s*\\d+).*"))
+        }
+        if (hasSeasonFolder) return true
+
+        val hasEpisodeFiles = children.any { child ->
+            isVideoFile(child) && child.name.contains(Regex("(?i)[sS]\\d{1,2}[eE]\\d{1,3}|\\b\\d{1,2}x\\d{1,3}\\b"))
+        }
+        return hasEpisodeFiles
     }
 
-    private fun isStrictTvShowPath(absolutePath: String): Boolean {
-        val standardizedPath = absolutePath.replace("\\", "/")
-        return standardizedPath.contains("/CineRex/tvshows/", ignoreCase = true) || 
-               standardizedPath.contains("/Cinerex/tvshows/", ignoreCase = true)
+    /**
+     * Checks if a directory is a Season subfolder inside a TV show (e.g. "Season 1", "Season 02", "Specials").
+     */
+    fun isSeasonFolder(directory: File): Boolean {
+        return directory.isDirectory && directory.name.matches(Regex("(?i)^(season\\s*\\d+|s\\d+|specials|series\\s*\\d+).*"))
     }
 
+    /**
+     * Scans a root directory for all movie files and parses their Kodi NFOs and posters.
+     */
     fun scanDirectoryForMovies(directory: File): List<MovieItem> {
         val movies = mutableListOf<MovieItem>()
         if (!directory.exists() || !directory.isDirectory) return movies
 
-        directory.listFiles()?.forEach { file ->
-            if (file.isFile && isVideoFile(file)) {
-                if (isStrictMoviePath(file.absolutePath)) {
-                    val specificNfo = File(directory, "${file.nameWithoutExtension}.nfo")
-                    val genericNfo = File(directory, "movie.nfo")
-                    val targetNfo = if (specificNfo.exists()) specificNfo else if (genericNfo.exists()) genericNfo else null
-                    
-                    var movieParsed = false
-                    if (targetNfo != null) {
-                        val parsed = parseMovieNfo(targetNfo, file)
-                        if (parsed != null) {
-                            movies.add(parsed)
-                            movieParsed = true
-                        }
-                    } 
-                    
-                    if (!movieParsed) {
-                        movies.add(
-                            MovieItem(
-                                videoFilePath = file.absolutePath,
-                                title = file.nameWithoutExtension,
-                                originalTitle = "",
-                                userRating = 0.0,
-                                plot = "Fetching secure online metadata...",
-                                mpaa = "",
-                                genre = "Local Movie",
-                                director = "Unknown",
-                                premiered = "2026",
-                                posterPath = resolveArtworkLocalFallback(file.parentFile, "poster.jpg"),
-                                isMetadataCached = false,
-                                sourceType = "local"
-                            )
-                        )
-                    }
-                }
-            } else if (file.isDirectory) {
-                movies.addAll(scanDirectoryForMovies(file))
-            }
+        // If this directory is a TV show or Season folder, skip scanning as movies
+        if (isTvShowDirectory(directory) || isSeasonFolder(directory)) {
+            return movies
         }
-        return movies
-    }
 
-    fun scanDirectoryForTvShows(directory: File): List<TvShowItem> {
-        val tvShows = mutableListOf<TvShowItem>()
-        if (!directory.exists() || !directory.isDirectory) return tvShows
+        val files = directory.listFiles() ?: return movies
 
-        if (isStrictTvShowPath(directory.absolutePath)) {
-            val tvShowNfo = File(directory, "tvshow.nfo")
-            val parentFolderName = directory.parentFile?.name ?: ""
-            val isMainShowFolder = parentFolderName.equals("tvshows", ignoreCase = true)
+        // Process files in current directory
+        for (file in files) {
+            if (isVideoFile(file)) {
+                // Check if this video is an episode (has SxxExx in filename) - if so, it's TV, not movie
+                if (file.name.contains(Regex("(?i)[sS]\\d{1,2}[eE]\\d{1,3}|\\b\\d{1,2}x\\d{1,3}\\b"))) {
+                    continue
+                }
 
-            if (isMainShowFolder) {
-                var showParsed = false
-                if (tvShowNfo.exists()) {
-                    val parsed = parseTvShowNfo(tvShowNfo, directory)
-                    if (parsed != null) {
-                        tvShows.add(parsed)
-                        showParsed = true
-                    }
-                } 
-                
-                if (!showParsed) {
-                    tvShows.add(
-                        TvShowItem(
-                            folderPath = directory.absolutePath,
-                            title = directory.name,
-                            plot = "Fetching secure online metadata...",
+                val specificNfo = File(directory, "${file.nameWithoutExtension}.nfo")
+                val genericNfo = File(directory, "movie.nfo")
+                val targetNfo = if (specificNfo.exists()) specificNfo else if (genericNfo.exists()) genericNfo else null
+
+                val parsedMovie = if (targetNfo != null) parseMovieNfo(targetNfo, file) else null
+
+                if (parsedMovie != null) {
+                    movies.add(parsedMovie)
+                } else {
+                    // Fallback to title and local artwork
+                    val localPoster = findLocalPosterForVideo(file)
+                    val localFanart = resolveArtworkLocalFallback(directory, "fanart.jpg")
+                        ?: resolveArtworkLocalFallback(directory, "${file.nameWithoutExtension}-fanart.jpg")
+                    movies.add(
+                        MovieItem(
+                            videoFilePath = file.absolutePath,
+                            title = cleanMediaTitle(file.nameWithoutExtension),
+                            originalTitle = "",
                             userRating = 0.0,
-                            genre = "Local Series",
+                            plot = "Local Movie File",
+                            mpaa = "",
+                            genre = "Movie",
+                            director = "Unknown",
                             premiered = "2026",
-                            studio = "Unknown",
-                            posterPath = resolveArtworkLocalFallback(directory, "poster.jpg"),
+                            posterPath = localPoster,
+                            backdropPath = localFanart,
                             isMetadataCached = false,
                             sourceType = "local"
                         )
                     )
                 }
+            } else if (file.isDirectory) {
+                // Don't recurse into TV show folders as movies
+                if (!isTvShowDirectory(file) && !isSeasonFolder(file)) {
+                    movies.addAll(scanDirectoryForMovies(file))
+                }
             }
         }
+        return movies
+    }
 
+    /**
+     * Scans for TV show folders recursively according to Kodi/XBMC structure.
+     */
+    fun scanDirectoryForTvShows(directory: File): List<TvShowItem> {
+        val tvShows = mutableListOf<TvShowItem>()
+        if (!directory.exists() || !directory.isDirectory) return tvShows
+
+        if (isTvShowDirectory(directory)) {
+            val tvShowNfo = File(directory, "tvshow.nfo")
+            val parsed = if (tvShowNfo.exists()) parseTvShowNfo(tvShowNfo, directory) else null
+
+            if (parsed != null) {
+                tvShows.add(parsed)
+            } else {
+                val localPoster = resolveArtworkLocalFallback(directory, "poster.jpg")
+                    ?: resolveArtworkLocalFallback(directory, "folder.jpg")
+                    ?: resolveArtworkLocalFallback(directory, "cover.jpg")
+                val localFanart = resolveArtworkLocalFallback(directory, "fanart.jpg")
+                    ?: resolveArtworkLocalFallback(directory, "backdrop.jpg")
+
+                tvShows.add(
+                    TvShowItem(
+                        folderPath = directory.absolutePath,
+                        title = directory.name,
+                        plot = "Local TV Series",
+                        userRating = 0.0,
+                        genre = "Series",
+                        premiered = "2026",
+                        studio = "Local",
+                        posterPath = localPoster,
+                        backdropPath = localFanart,
+                        isMetadataCached = false,
+                        sourceType = "local"
+                    )
+                )
+            }
+            // Do not recurse into Season folders inside this TV show directory as separate shows
+            return tvShows
+        }
+
+        // Otherwise recurse into subdirectories
         directory.listFiles()?.forEach { file ->
             if (file.isDirectory) {
                 tvShows.addAll(scanDirectoryForTvShows(file))
@@ -122,100 +165,129 @@ object NfoScanner {
         return tvShows
     }
 
+    /**
+     * Recursively scans ALL seasons and episodes inside a TV show folder.
+     * Accurately parses season folders, SxxExx filenames, and Kodi <episodedetails> NFOs.
+     */
     fun scanTvShowEpisodes(showFolder: File): List<EpisodeItem> {
         val episodes = mutableListOf<EpisodeItem>()
         if (!showFolder.exists() || !showFolder.isDirectory) return episodes
 
-        showFolder.listFiles()?.forEach { file ->
-            if (file.isFile && isVideoFile(file)) {
-                val nfoFile = File(showFolder, "${file.nameWithoutExtension}.nfo")
-                var parsedEpisode: EpisodeItem? = null
-                
-                if (nfoFile.exists()) {
-                    parsedEpisode = parseEpisodeNfo(nfoFile, file)
+        // Collect all video files in show folder and all its subdirectories (Season 1, Season 2, etc.)
+        val allVideoFiles = mutableListOf<File>()
+        fun collectVideos(dir: File) {
+            dir.listFiles()?.forEach { child ->
+                if (isVideoFile(child)) {
+                    allVideoFiles.add(child)
+                } else if (child.isDirectory) {
+                    collectVideos(child)
                 }
-                
-                if (parsedEpisode != null) {
-                    episodes.add(parsedEpisode)
-                } else {
-                    val cleanedTitle = file.nameWithoutExtension
-                        .replace(Regex("(?i)\\b(1080p|720p|480p|x264|x265|hevc|10bit|dual|audio|hindi|english|korean|msubs|esubs|moviesmod|org|army)\\b.*"), "")
-                        .replace(Regex("[\\.\\-_]"), " ").trim()
-
-                    episodes.add(
-                        EpisodeItem(
-                            videoFilePath = file.absolutePath,
-                            title = cleanedTitle,
-                            season = extractSeasonNumber(showFolder.name),
-                            episode = extractEpisodeNumber(file.name),
-                            plot = "Local Media File.",
-                            userRating = 0.0,
-                            aired = "2026",
-                            sourceType = "local"
-                        )
-                    )
-                }
-            } else if (file.isDirectory) {
-                episodes.addAll(scanTvShowEpisodes(file))
             }
         }
-        return episodes
-    }
+        collectVideos(showFolder)
 
-    // --- GOOGLE DRIVE LIBRARY ENGINE STUB ---
-    object GoogleDriveScanner {
-        /**
-         * Resolves virtual Google Drive metadata structures directly into standard MovieItems.
-         * Integrates automatically with the unified MetadataCacheManager.
-         */
-        fun fetchDriveLibrary(folderId: String, oauthToken: String): List<MovieItem> {
-            val driveItems = mutableListOf<MovieItem>()
-            // Implementation routes here via external App Context Intent resolving
-            // val url = "https://www.googleapis.com/drive/v3/files?q='$folderId'+in+parents"
-            // Parses JSON tree, constructs `MovieItem(videoFilePath = "drive_stream:$fileId", sourceType = "drive", driveFileId = fileId)`
-            return driveItems
+        for (videoFile in allVideoFiles) {
+            val nfoFile = File(videoFile.parentFile, "${videoFile.nameWithoutExtension}.nfo")
+            var parsedEpisode: EpisodeItem? = null
+
+            if (nfoFile.exists()) {
+                parsedEpisode = parseEpisodeNfo(nfoFile, videoFile)
+            }
+
+            if (parsedEpisode != null) {
+                // If NFO had missing/default season or episode, extract from filename or parent folder
+                var finalSeason = parsedEpisode.season
+                var finalEpisode = parsedEpisode.episode
+                if (finalSeason <= 0 || finalEpisode <= 0) {
+                    val (sFromFilename, eFromFilename) = parseSeasonAndEpisodeFromFilename(videoFile.name)
+                    if (finalSeason <= 0) {
+                        finalSeason = sFromFilename ?: extractSeasonFromFolder(videoFile.parentFile?.name ?: "") ?: 1
+                    }
+                    if (finalEpisode <= 0) {
+                        finalEpisode = eFromFilename ?: 1
+                    }
+                }
+                episodes.add(
+                    parsedEpisode.copy(
+                        season = finalSeason,
+                        episode = finalEpisode,
+                        stillPath = parsedEpisode.stillPath ?: findLocalStillForEpisode(videoFile)
+                    )
+                )
+            } else {
+                // No NFO exists: extract Season and Episode using Kodi regex
+                val (extractedSeason, extractedEp) = parseSeasonAndEpisodeFromFilename(videoFile.name)
+                val finalSeason = extractedSeason ?: extractSeasonFromFolder(videoFile.parentFile?.name ?: "") ?: 1
+                val finalEpisode = extractedEp ?: 1
+
+                val cleanTitle = cleanEpisodeTitle(videoFile.nameWithoutExtension)
+                val localStill = findLocalStillForEpisode(videoFile)
+
+                episodes.add(
+                    EpisodeItem(
+                        videoFilePath = videoFile.absolutePath,
+                        title = cleanTitle.ifBlank { "Episode $finalEpisode" },
+                        season = finalSeason,
+                        episode = finalEpisode,
+                        plot = "Local Media File.",
+                        userRating = 0.0,
+                        aired = "",
+                        stillPath = localStill,
+                        sourceType = "local"
+                    )
+                )
+            }
         }
-        
-        fun resolveDrivePlaybackUrl(fileId: String): String {
-            return "https://www.googleapis.com/drive/v3/files/$fileId?alt=media"
-        }
+
+        // Deduplicate by video file path and sort by season ascending, then episode ascending
+        return episodes.distinctBy { it.videoFilePath }
+            .sortedWith(compareBy({ it.season }, { it.episode }))
     }
 
-    private fun extractSeasonNumber(folderName: String): Int {
-        val seasonRegex = Regex("(?i)season\\s*(\\d+)|s(\\d+)")
-        val match = seasonRegex.find(folderName)
-        return match?.groupValues?.find { it.isNotBlank() && it.toIntOrNull() != null }?.toIntOrNull() ?: 1
-    }
-
-    private fun extractEpisodeNumber(fileName: String): Int {
-        val epRegex = Regex("(?i)s\\d+e(\\d+)|e(\\d+)")
-        val match = epRegex.find(fileName)
-        return match?.groupValues?.find { it.isNotBlank() && it.toIntOrNull() != null }?.toIntOrNull() ?: 1
-    }
-
-    private fun parseMovieNfo(nfoFile: File, videoFile: File): MovieItem? {
+    /**
+     * Parses a Kodi / XBMC <movie> NFO file into a MovieItem.
+     */
+    fun parseMovieNfo(nfoFile: File, videoFile: File): MovieItem? {
         return try {
             val doc = getXmlDocument(nfoFile) ?: return null
             if (doc.documentElement.nodeName != "movie") return null
 
             val root = doc.documentElement
-            val title = getTagText(root, "title").ifBlank { videoFile.nameWithoutExtension }
-            
+            val title = getTagText(root, "title").ifBlank { cleanMediaTitle(videoFile.nameWithoutExtension) }
+            val uniqueIds = extractUniqueIds(root)
+
+            val tmdbId = uniqueIds["tmdb"] ?: getTagText(root, "tmdbid").ifBlank { getTagText(root, "id") }
+            val imdbId = uniqueIds["imdb"] ?: getTagText(root, "imdbid")
+
+            val poster = resolvePosterWithFallback(nfoFile, root) ?: findLocalPosterForVideo(videoFile)
+            val backdrop = resolveFanartWithFallback(nfoFile, root)
+                ?: resolveArtworkLocalFallback(nfoFile.parentFile, "fanart.jpg")
+
+            val allGenres = getAllTagTexts(root, "genre").joinToString(", ").ifBlank {
+                getTagText(root, "genre").ifBlank { "Movie" }
+            }
+
+            val runtimeStr = getTagText(root, "runtime")
+            val runtimeMin = runtimeStr.toIntOrNull() ?: 0
+
             MovieItem(
                 videoFilePath = videoFile.absolutePath,
                 title = title,
                 originalTitle = getTagText(root, "originaltitle"),
                 userRating = getTagText(root, "userrating").toDoubleOrNull() ?: 0.0,
-                plot = getTagText(root, "plot").ifBlank { "No description available." },
+                plot = getTagText(root, "plot").ifBlank { getTagText(root, "outline").ifBlank { "No description available." } },
+                tagline = getTagText(root, "tagline"),
                 mpaa = getTagText(root, "mpaa"),
-                genre = getTagText(root, "genre").ifBlank { "Local Movie" },
+                genre = allGenres,
                 director = getTagText(root, "director").ifBlank { "Unknown" },
                 premiered = getTagText(root, "premiered").ifBlank { getTagText(root, "year").ifBlank { "2026" } },
-                tmdbId = getTagText(root, "tmdbid"),
-                imdbId = getTagText(root, "imdbid"),
-                posterPath = resolvePosterWithFallback(nfoFile, root),
+                runtime = runtimeMin,
+                tmdbId = tmdbId,
+                imdbId = imdbId,
+                posterPath = poster,
+                backdropPath = backdrop,
                 actors = parseActorsFromNfo(doc),
-                isMetadataCached = false,
+                isMetadataCached = true,
                 sourceType = "local"
             )
         } catch (e: Exception) {
@@ -224,27 +296,48 @@ object NfoScanner {
         }
     }
 
-    private fun parseTvShowNfo(nfoFile: File, folder: File): TvShowItem? {
+    /**
+     * Parses a Kodi / XBMC <tvshow> NFO file into a TvShowItem.
+     */
+    fun parseTvShowNfo(nfoFile: File, folder: File): TvShowItem? {
         return try {
             val doc = getXmlDocument(nfoFile) ?: return null
             if (doc.documentElement.nodeName != "tvshow") return null
 
             val root = doc.documentElement
-            val title = getTagText(root, "title").ifBlank { folder.name }
-            
+            val title = getTagText(root, "title").ifBlank { getTagText(root, "showtitle").ifBlank { folder.name } }
+            val uniqueIds = extractUniqueIds(root)
+
+            val tmdbId = uniqueIds["tmdb"] ?: getTagText(root, "tmdbid")
+            val tvdbId = uniqueIds["tvdb"] ?: getTagText(root, "tvdbid").ifBlank { getTagText(root, "id") }
+            val tvmazeId = uniqueIds["tvmaze"]
+
+            val poster = resolvePosterWithFallback(nfoFile, root)
+                ?: resolveArtworkLocalFallback(folder, "poster.jpg")
+                ?: resolveArtworkLocalFallback(folder, "folder.jpg")
+
+            val backdrop = resolveFanartWithFallback(nfoFile, root)
+                ?: resolveArtworkLocalFallback(folder, "fanart.jpg")
+                ?: resolveArtworkLocalFallback(folder, "backdrop.jpg")
+
+            val allGenres = getAllTagTexts(root, "genre").joinToString(", ").ifBlank {
+                getTagText(root, "genre").ifBlank { "Series" }
+            }
+
             TvShowItem(
                 folderPath = folder.absolutePath,
                 title = title,
                 plot = getTagText(root, "plot").ifBlank { "No description available." },
                 userRating = getTagText(root, "userrating").toDoubleOrNull() ?: 0.0,
-                genre = getTagText(root, "genre").ifBlank { "Local Series" },
+                genre = allGenres,
                 premiered = getTagText(root, "premiered").ifBlank { getTagText(root, "year").ifBlank { "2026" } },
-                studio = getTagText(root, "studio").ifBlank { "Unknown" },
-                tmdbId = getTagText(root, "tmdbid"),
-                tvdbId = getTagText(root, "tvdbid"),
-                posterPath = resolvePosterWithFallback(nfoFile, root),
+                studio = getTagText(root, "studio").ifBlank { "Network" },
+                tmdbId = tmdbId,
+                tvdbId = tvdbId,
+                posterPath = poster,
+                backdropPath = backdrop,
                 actors = parseActorsFromNfo(doc),
-                isMetadataCached = false,
+                isMetadataCached = true,
                 sourceType = "local"
             )
         } catch (e: Exception) {
@@ -253,58 +346,86 @@ object NfoScanner {
         }
     }
 
-    private fun parseEpisodeNfo(nfoFile: File, videoFile: File): EpisodeItem? {
+    /**
+     * Parses a Kodi / XBMC <episodedetails> NFO file into an EpisodeItem.
+     */
+    fun parseEpisodeNfo(nfoFile: File, videoFile: File): EpisodeItem? {
         return try {
             val doc = getXmlDocument(nfoFile) ?: return null
             if (doc.documentElement.nodeName != "episodedetails") return null
 
             val root = doc.documentElement
+            val title = getTagText(root, "title").ifBlank { cleanEpisodeTitle(videoFile.nameWithoutExtension) }
+
+            val season = getTagText(root, "season").toIntOrNull() ?: 0
+            val episode = getTagText(root, "episode").toIntOrNull() ?: 0
+
+            val still = resolveEpisodeStill(nfoFile, root, videoFile)
+
             EpisodeItem(
                 videoFilePath = videoFile.absolutePath,
-                title = getTagText(root, "title").ifBlank { videoFile.nameWithoutExtension },
-                season = getTagText(root, "season").toIntOrNull() ?: 1,
-                episode = getTagText(root, "episode").toIntOrNull() ?: 1,
-                plot = getTagText(root, "plot"),
+                title = title,
+                season = season,
+                episode = episode,
+                plot = getTagText(root, "plot").ifBlank { "Local Episode File." },
                 userRating = getTagText(root, "userrating").toDoubleOrNull() ?: 0.0,
-                aired = getTagText(root, "aired"),
+                aired = getTagText(root, "aired").ifBlank { getTagText(root, "premiered") },
+                stillPath = still,
                 sourceType = "local"
             )
         } catch (e: Exception) {
+            Log.e("CineHubScanner", "Error parsing episode NFO: ${nfoFile.name}", e)
             null
         }
     }
 
-    fun getXmlDocument(file: File): Document? {
-        return try {
-            val factory = DocumentBuilderFactory.newInstance()
-            val builder = factory.newDocumentBuilder()
-            val doc = builder.parse(file)
-            doc.documentElement.normalize()
-            doc
-        } catch (e: Exception) { null }
-    }
-
-    fun getTagText(element: Element, tagName: String): String {
-        val nodeList = element.getElementsByTagName(tagName)
-        if (nodeList.length > 0) {
-            return nodeList.item(0)?.textContent?.trim() ?: ""
+    /**
+     * Extracts unique IDs from <uniqueid type="..."> tags or <episodeguide> JSON.
+     */
+    private fun extractUniqueIds(element: Element): Map<String, String> {
+        val ids = mutableMapOf<String, String>()
+        val uniqueNodes = element.getElementsByTagName("uniqueid")
+        for (i in 0 until uniqueNodes.length) {
+            val node = uniqueNodes.item(i)
+            if (node != null && node.nodeType == Node.ELEMENT_NODE) {
+                val elem = node as Element
+                val type = elem.getAttribute("type").lowercase().trim()
+                val value = elem.textContent?.trim() ?: ""
+                if (type.isNotBlank() && value.isNotBlank()) {
+                    ids[type] = value
+                }
+            }
         }
-        return ""
+
+        // Also check <episodeguide> tag (e.g. {"tvmaze": "53647", "tvdb": "397060", "imdb": "tt13443470"})
+        val guideText = getTagText(element, "episodeguide")
+        if (guideText.contains("{") && guideText.contains("}")) {
+            val regex = Regex("\"([a-zA-Z0-9_]+)\"\\s*:\\s*\"([^\"]+)\"")
+            regex.findAll(guideText).forEach { match ->
+                val k = match.groupValues[1].lowercase()
+                val v = match.groupValues[2]
+                if (v != "None" && v.isNotBlank() && !ids.containsKey(k)) {
+                    ids[k] = v
+                }
+            }
+        }
+
+        return ids
     }
 
-    fun resolveArtworkLocalFallback(parentDir: File?, targetName: String): String? {
-        if (parentDir == null) return null
-        return File(parentDir, targetName).takeIf { it.exists() }?.absolutePath
-    }
-
+    /**
+     * Resolves poster URL from XML <thumb aspect="poster"> or local artwork fallbacks.
+     */
     private fun resolvePosterWithFallback(nfoFile: File, rootElement: Element): String? {
         val baseName = nfoFile.nameWithoutExtension
         val parentDir = nfoFile.parentFile
 
-        val localCheck = resolveArtworkLocalFallback(parentDir, "$baseName.jpg")
+        val localCheck = resolveArtworkLocalFallback(parentDir, "$baseName-poster.jpg")
+            ?: resolveArtworkLocalFallback(parentDir, "$baseName.jpg")
             ?: resolveArtworkLocalFallback(parentDir, "poster.jpg")
             ?: resolveArtworkLocalFallback(parentDir, "folder.jpg")
-            
+            ?: resolveArtworkLocalFallback(parentDir, "cover.jpg")
+
         if (localCheck != null) return localCheck
 
         val thumbList = rootElement.getElementsByTagName("thumb")
@@ -312,7 +433,7 @@ object NfoScanner {
             val thumbNode = thumbList.item(i)
             if (thumbNode != null && thumbNode.nodeType == Node.ELEMENT_NODE) {
                 val thumbElement = thumbNode as Element
-                val aspect = thumbElement.getAttribute("aspect")
+                val aspect = thumbElement.getAttribute("aspect").lowercase().trim()
                 if (aspect == "poster" || aspect.isBlank()) {
                     val url = thumbElement.textContent?.trim() ?: ""
                     if (url.startsWith("http")) return url
@@ -320,6 +441,81 @@ object NfoScanner {
             }
         }
         return null
+    }
+
+    /**
+     * Resolves backdrop/fanart URL from <fanart><thumb> or local fanart.jpg.
+     */
+    private fun resolveFanartWithFallback(nfoFile: File, rootElement: Element): String? {
+        val parentDir = nfoFile.parentFile
+        val localFanart = resolveArtworkLocalFallback(parentDir, "fanart.jpg")
+            ?: resolveArtworkLocalFallback(parentDir, "backdrop.jpg")
+            ?: resolveArtworkLocalFallback(parentDir, "${nfoFile.nameWithoutExtension}-fanart.jpg")
+
+        if (localFanart != null) return localFanart
+
+        val fanartNodes = rootElement.getElementsByTagName("fanart")
+        if (fanartNodes.length > 0) {
+            val fanartElement = fanartNodes.item(0) as? Element
+            val thumbs = fanartElement?.getElementsByTagName("thumb")
+            if (thumbs != null && thumbs.length > 0) {
+                val url = thumbs.item(0)?.textContent?.trim() ?: ""
+                if (url.startsWith("http")) return url
+            }
+        }
+        return null
+    }
+
+    /**
+     * Resolves episode still image from XML <thumb aspect="thumb"> or local thumbnail.
+     */
+    private fun resolveEpisodeStill(nfoFile: File, rootElement: Element, videoFile: File): String? {
+        val localStill = findLocalStillForEpisode(videoFile)
+        if (localStill != null) return localStill
+
+        val thumbList = rootElement.getElementsByTagName("thumb")
+        for (i in 0 until thumbList.length) {
+            val thumbNode = thumbList.item(i)
+            if (thumbNode != null && thumbNode.nodeType == Node.ELEMENT_NODE) {
+                val thumbElement = thumbNode as Element
+                val url = thumbElement.textContent?.trim() ?: ""
+                if (url.startsWith("http")) return url
+            }
+        }
+        return null
+    }
+
+    /**
+     * Finds local episode still image file.
+     */
+    fun findLocalStillForEpisode(videoFile: File): String? {
+        val parent = videoFile.parentFile ?: return null
+        val base = videoFile.nameWithoutExtension
+        return resolveArtworkLocalFallback(parent, "$base-thumb.jpg")
+            ?: resolveArtworkLocalFallback(parent, "$base-thumb.png")
+            ?: resolveArtworkLocalFallback(parent, "$base.jpg")
+            ?: resolveArtworkLocalFallback(parent, "$base.png")
+    }
+
+    /**
+     * Finds local poster file for a movie or TV show video file.
+     */
+    fun findLocalPosterForVideo(videoFile: File): String? {
+        val parent = videoFile.parentFile ?: return null
+        val base = videoFile.nameWithoutExtension
+
+        return resolveArtworkLocalFallback(parent, "$base-poster.jpg")
+            ?: resolveArtworkLocalFallback(parent, "$base.jpg")
+            ?: resolveArtworkLocalFallback(parent, "poster.jpg")
+            ?: resolveArtworkLocalFallback(parent, "folder.jpg")
+            ?: resolveArtworkLocalFallback(parent, "cover.jpg")
+            // Check grand-parent if video is inside a Season X subfolder
+            ?: (if (isSeasonFolder(parent)) {
+                parent.parentFile?.let { gp ->
+                    resolveArtworkLocalFallback(gp, "poster.jpg")
+                        ?: resolveArtworkLocalFallback(gp, "folder.jpg")
+                }
+            } else null)
     }
 
     fun parseActorsFromNfo(doc: Document): List<ActorItem> {
@@ -340,6 +536,92 @@ object NfoScanner {
             }
         } catch (_: Exception) {}
         return actorsList
+    }
+
+    fun parseSeasonAndEpisodeFromFilename(fileName: String): Pair<Int?, Int?> {
+        // Pattern 1: S01E02 or s1e2
+        val seRegex = Regex("(?i)[sS](\\d{1,2})[eE](\\d{1,3})")
+        val seMatch = seRegex.find(fileName)
+        if (seMatch != null) {
+            val s = seMatch.groupValues[1].toIntOrNull()
+            val e = seMatch.groupValues[2].toIntOrNull()
+            return Pair(s, e)
+        }
+
+        // Pattern 2: 1x02 or 01x02
+        val xRegex = Regex("(?i)\\b(\\d{1,2})x(\\d{1,3})\\b")
+        val xMatch = xRegex.find(fileName)
+        if (xMatch != null) {
+            val s = xMatch.groupValues[1].toIntOrNull()
+            val e = xMatch.groupValues[2].toIntOrNull()
+            return Pair(s, e)
+        }
+
+        // Pattern 3: Episode 02 or Ep 02
+        val epRegex = Regex("(?i)\\b(?:ep|episode)[._\\-\\s]*(\\d{1,3})\\b")
+        val epMatch = epRegex.find(fileName)
+        if (epMatch != null) {
+            val e = epMatch.groupValues[1].toIntOrNull()
+            return Pair(null, e)
+        }
+
+        return Pair(null, null)
+    }
+
+    fun extractSeasonFromFolder(folderName: String): Int? {
+        val seasonRegex = Regex("(?i)(?:season|series|s)[._\\-\\s]*(\\d+)")
+        val match = seasonRegex.find(folderName)
+        return match?.groupValues?.getOrNull(1)?.toIntOrNull()
+    }
+
+    fun cleanMediaTitle(fileName: String): String {
+        return fileName
+            .replace(Regex("(?i)\\b(1080p|720p|480p|2160p|4k|x264|x265|hevc|10bit|dual|audio|hindi|english|korean|tamil|telugu|web-dl|bluray|hdtv|repack|yify|rarbg)\\b.*"), "")
+            .replace(Regex("[\\.\\-_]"), " ")
+            .trim()
+    }
+
+    fun cleanEpisodeTitle(fileName: String): String {
+        return fileName
+            .replace(Regex("(?i)[sS]\\d{1,2}[eE]\\d{1,3}|\\b\\d{1,2}x\\d{1,3}\\b"), "")
+            .replace(Regex("(?i)\\b(1080p|720p|480p|x264|x265|hevc|10bit|dual|audio|hindi|english|web-dl|bluray)\\b.*"), "")
+            .replace(Regex("[\\.\\-_]"), " ")
+            .trim()
+    }
+
+    fun getXmlDocument(file: File): Document? {
+        return try {
+            val factory = DocumentBuilderFactory.newInstance()
+            factory.isNamespaceAware = false
+            factory.isValidating = false
+            val builder = factory.newDocumentBuilder()
+            val doc = builder.parse(file)
+            doc.documentElement.normalize()
+            doc
+        } catch (e: Exception) { null }
+    }
+
+    fun getTagText(element: Element, tagName: String): String {
+        val nodeList = element.getElementsByTagName(tagName)
+        if (nodeList.length > 0) {
+            return nodeList.item(0)?.textContent?.trim() ?: ""
+        }
+        return ""
+    }
+
+    fun getAllTagTexts(element: Element, tagName: String): List<String> {
+        val list = mutableListOf<String>()
+        val nodeList = element.getElementsByTagName(tagName)
+        for (i in 0 until nodeList.length) {
+            val text = nodeList.item(i)?.textContent?.trim() ?: ""
+            if (text.isNotBlank()) list.add(text)
+        }
+        return list
+    }
+
+    fun resolveArtworkLocalFallback(parentDir: File?, targetName: String): String? {
+        if (parentDir == null) return null
+        return File(parentDir, targetName).takeIf { it.exists() }?.absolutePath
     }
 
     fun getSharedFilmography(actorName: String, movies: List<MovieItem>, shows: List<TvShowItem>): Pair<List<MovieItem>, List<TvShowItem>> {

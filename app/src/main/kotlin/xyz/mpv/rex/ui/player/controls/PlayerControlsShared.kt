@@ -11,10 +11,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.graphics.Brush
+import xyz.mpv.rex.cinehub.data.NfoScanner
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1369,6 +1372,14 @@ fun DynamicMediaInfoRectangle(
   val currentFilePath = `is`.xyz.mpv.MPVLib.getPropertyString("path") ?: ""
   val mediaTitle = viewModel.mediaTitle.collectAsState().value ?: ""
 
+  val localPosterSync = remember(currentFilePath) {
+    if (currentFilePath.isNotBlank() && !currentFilePath.startsWith("http") && !currentFilePath.contains("://")) {
+      try {
+        NfoScanner.findLocalPosterForVideo(java.io.File(currentFilePath))
+      } catch (_: Exception) { null }
+    } else null
+  }
+
   var activeResolution by remember { mutableStateOf<ActiveMediaResolution?>(null) }
 
   LaunchedEffect(currentFilePath, mediaTitle) {
@@ -1379,10 +1390,12 @@ fun DynamicMediaInfoRectangle(
     )
   }
 
+  val effectivePoster = activeResolution?.posterUrl ?: localPosterSync
+
   Surface(
     shape = RoundedCornerShape(10.dp),
-    color = Color.Black.copy(alpha = 0.55f),
-    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+    color = Color.Black.copy(alpha = 0.65f),
+    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
     modifier = modifier
       .height(buttonSize)
       .clip(RoundedCornerShape(10.dp))
@@ -1390,97 +1403,61 @@ fun DynamicMediaInfoRectangle(
   ) {
     Row(
       verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+      modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
     ) {
-      when (val res = activeResolution) {
-        is ActiveMediaResolution.Movie -> {
-          // Dynamic Movie Poster in Rectangle
-          Box(
-            modifier = Modifier
-              .width(20.dp)
-              .height(buttonSize - 12.dp)
-              .clip(RoundedCornerShape(4.dp))
-              .background(Color(0x33FFFFFF)),
-            contentAlignment = Alignment.Center
-          ) {
-            if (!res.movie.posterPath.isNullOrBlank()) {
-              AsyncImage(
-                model = res.movie.posterPath,
-                contentDescription = res.movie.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-              )
-            } else {
-              Icon(
-                imageVector = Icons.Outlined.Movie,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-              )
-            }
-          }
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = if (isMoreSheet) res.movie.title else "Movie",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+      // Mini Cinematic Poster Card
+      Box(
+        modifier = Modifier
+          .width(26.dp)
+          .height(buttonSize - 8.dp)
+          .clip(RoundedCornerShape(6.dp))
+          .border(BorderStroke(0.8.dp, Color.White.copy(alpha = 0.40f)), RoundedCornerShape(6.dp))
+          .background(
+            Brush.verticalGradient(
+              listOf(Color(0xFF33384C), Color(0xFF161824))
+            )
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        if (!effectivePoster.isNullOrBlank()) {
+          AsyncImage(
+            model = effectivePoster,
+            contentDescription = "Poster",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
           )
-        }
-        is ActiveMediaResolution.TvShow -> {
-          // Dynamic Series Poster in Rectangle + Episode Badge
-          Box(
-            modifier = Modifier
-              .width(20.dp)
-              .height(buttonSize - 12.dp)
-              .clip(RoundedCornerShape(4.dp))
-              .background(Color(0x33FFFFFF)),
-            contentAlignment = Alignment.Center
-          ) {
-            if (!res.show.posterPath.isNullOrBlank()) {
-              AsyncImage(
-                model = res.show.posterPath,
-                contentDescription = res.show.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-              )
-            } else {
-              Icon(
-                imageVector = Icons.Outlined.Tv,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-              )
-            }
-          }
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = "S${res.season}:E${res.episode}",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            maxLines = 1
-          )
-        }
-        else -> {
-          // Normal Media: Info icon in dynamic rectangle
+        } else {
           Icon(
-            imageVector = Icons.Outlined.Info,
-            contentDescription = "Media Info",
-            tint = Color.White,
-            modifier = Modifier.size(18.dp)
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = "Info",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
+            imageVector = when (activeResolution) {
+              is ActiveMediaResolution.TvShow -> Icons.Outlined.Tv
+              else -> Icons.Outlined.Movie
+            },
+            contentDescription = "Poster",
+            tint = Color.White.copy(alpha = 0.9f),
+            modifier = Modifier.size(16.dp)
           )
         }
       }
+
+      Spacer(modifier = Modifier.width(6.dp))
+
+      // Dynamic Title / Badge
+      val badgeText = when (val res = activeResolution) {
+        is ActiveMediaResolution.TvShow -> "S${res.season}:E${res.episode}"
+        is ActiveMediaResolution.Movie -> if (isMoreSheet) res.movie.title else "Movie"
+        is ActiveMediaResolution.Normal -> if (isMoreSheet) res.title else "Poster"
+        null -> "Poster"
+      }
+
+      Text(
+        text = badgeText,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = Color.White,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(end = 4.dp)
+      )
     }
   }
 }

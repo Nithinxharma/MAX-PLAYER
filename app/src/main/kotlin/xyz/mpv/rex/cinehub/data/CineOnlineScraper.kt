@@ -691,6 +691,129 @@ object CineOnlineScraper {
             else -> "Media File"
         }
 
+        val localFile = if (filePath.isNotBlank() && !filePath.startsWith("http") && !filePath.contains("://")) {
+            try { File(filePath).takeIf { it.exists() } } catch (_: Exception) { null }
+        } else null
+
+        // 1. If local file exists, check Kodi NFOs and local artwork first!
+        if (localFile != null) {
+            val parentDir = localFile.parentFile
+            val baseName = localFile.nameWithoutExtension
+
+            val specificNfo = File(parentDir, "$baseName.nfo")
+            val movieNfo = File(parentDir, "movie.nfo")
+            val tvShowNfo = File(parentDir, "tvshow.nfo")
+
+            // Check if specific NFO exists
+            if (specificNfo.exists()) {
+                val doc = NfoScanner.getXmlDocument(specificNfo)
+                val rootName = doc?.documentElement?.nodeName
+                if (rootName == "episodedetails") {
+                    val parsedEp = NfoScanner.parseEpisodeNfo(specificNfo, localFile)
+                    if (parsedEp != null) {
+                        val showFolder = if (NfoScanner.isSeasonFolder(parentDir ?: localFile)) {
+                            parentDir?.parentFile ?: parentDir ?: localFile
+                        } else {
+                            parentDir ?: localFile
+                        }
+                        val showNfoFile = File(showFolder, "tvshow.nfo")
+                        val showItem = (if (showNfoFile.exists()) {
+                            NfoScanner.parseTvShowNfo(showNfoFile, showFolder)
+                        } else null) ?: TvShowItem(
+                            folderPath = showFolder.absolutePath,
+                            title = showFolder.name,
+                            plot = parsedEp.plot,
+                            userRating = parsedEp.userRating,
+                            genre = "Series",
+                            premiered = "2026",
+                            studio = "Local",
+                            posterPath = NfoScanner.findLocalPosterForVideo(localFile),
+                            backdropPath = NfoScanner.resolveArtworkLocalFallback(showFolder, "fanart.jpg")
+                        )
+
+                        val allLocalEps = NfoScanner.scanTvShowEpisodes(showFolder)
+                        val seasonEps = allLocalEps.filter { it.season == parsedEp.season }
+                        val foundSeasons = allLocalEps.map { it.season }.filter { it > 0 }.distinct().sorted()
+                        val allSeasons = if (foundSeasons.isEmpty()) listOf(parsedEp.season) else foundSeasons
+
+                        return@withContext ActiveMediaResolution.TvShow(
+                            show = showItem,
+                            season = parsedEp.season,
+                            episode = parsedEp.episode,
+                            episodeTitle = parsedEp.title,
+                            episodePlot = parsedEp.plot,
+                            episodeStill = parsedEp.stillPath ?: showItem.posterPath,
+                            episodes = if (seasonEps.isNotEmpty()) seasonEps else allLocalEps,
+                            totalSeasons = allSeasons.maxOrNull() ?: 1,
+                            allSeasons = allSeasons
+                        )
+                    }
+                } else if (rootName == "movie") {
+                    val parsedMovie = NfoScanner.parseMovieNfo(specificNfo, localFile)
+                    if (parsedMovie != null) {
+                        return@withContext ActiveMediaResolution.Movie(parsedMovie)
+                    }
+                }
+            }
+
+            // Check movie.nfo
+            if (movieNfo.exists()) {
+                val parsedMovie = NfoScanner.parseMovieNfo(movieNfo, localFile)
+                if (parsedMovie != null) {
+                    return@withContext ActiveMediaResolution.Movie(parsedMovie)
+                }
+            }
+
+            // Check if TV structure by folder or filename
+            val (sFn, eFn) = NfoScanner.parseSeasonAndEpisodeFromFilename(localFile.name)
+            val isTv = tvShowNfo.exists() || sFn != null || NfoScanner.isSeasonFolder(parentDir ?: localFile)
+            if (isTv) {
+                val showFolder = if (NfoScanner.isSeasonFolder(parentDir ?: localFile)) {
+                    parentDir?.parentFile ?: parentDir ?: localFile
+                } else {
+                    parentDir ?: localFile
+                }
+                val showNfoFile = File(showFolder, "tvshow.nfo")
+                val localShow = if (showNfoFile.exists()) NfoScanner.parseTvShowNfo(showNfoFile, showFolder) else null
+                val showTitle = localShow?.title ?: showFolder.name
+                val seasonNum = sFn ?: NfoScanner.extractSeasonFromFolder(parentDir?.name ?: "") ?: 1
+                val epNum = eFn ?: 1
+
+                val allLocalEps = NfoScanner.scanTvShowEpisodes(showFolder)
+                val seasonEps = allLocalEps.filter { it.season == seasonNum }
+                val currentEp = allLocalEps.find { it.season == seasonNum && it.episode == epNum }
+                    ?: seasonEps.firstOrNull() ?: allLocalEps.firstOrNull()
+
+                val foundSeasons = allLocalEps.map { it.season }.filter { it > 0 }.distinct().sorted()
+                val allSeasons = if (foundSeasons.isEmpty()) listOf(seasonNum) else foundSeasons
+
+                val showItem = localShow ?: TvShowItem(
+                    folderPath = showFolder.absolutePath,
+                    title = showTitle,
+                    plot = currentEp?.plot ?: "Local Series",
+                    userRating = 0.0,
+                    genre = "Series",
+                    premiered = "2026",
+                    studio = "Local",
+                    posterPath = NfoScanner.findLocalPosterForVideo(localFile),
+                    backdropPath = NfoScanner.resolveArtworkLocalFallback(showFolder, "fanart.jpg")
+                )
+
+                return@withContext ActiveMediaResolution.TvShow(
+                    show = showItem,
+                    season = seasonNum,
+                    episode = epNum,
+                    episodeTitle = currentEp?.title ?: "Episode $epNum",
+                    episodePlot = currentEp?.plot ?: showItem.plot,
+                    episodeStill = currentEp?.stillPath ?: showItem.posterPath,
+                    episodes = if (seasonEps.isNotEmpty()) seasonEps else allLocalEps,
+                    totalSeasons = allSeasons.maxOrNull() ?: 1,
+                    allSeasons = allSeasons
+                )
+            }
+        }
+
+        // 2. Parse title using online scrapers
         val parsed = MediaInfoParser.parse(targetName)
 
         // Check if identified as TV series
@@ -702,6 +825,12 @@ object CineOnlineScraper {
             if (tvShow != null) {
                 val episodes = fetchTvShowEpisodes(context, tvShow.tmdbId.ifBlank { tvShow.title }, season, tvShow.title)
                 val currentEp = episodes.find { it.episode == episodeNumber } ?: episodes.firstOrNull()
+                val tvDetails = if (tvShow.tmdbId.isNotBlank() && tvShow.tmdbId.all { it.isDigit() }) {
+                    fetchTvShowDetails(tvShow.tmdbId)
+                } else null
+                val seasonsList = tvDetails?.seasons?.map { it.season_number }?.filter { it > 0 }?.distinct()?.sorted()
+                    ?: (1..maxOf(season, tvDetails?.number_of_seasons ?: 1)).toList()
+
                 return@withContext ActiveMediaResolution.TvShow(
                     show = tvShow,
                     season = season,
@@ -710,44 +839,20 @@ object CineOnlineScraper {
                     episodePlot = currentEp?.plot ?: tvShow.plot,
                     episodeStill = currentEp?.stillPath ?: tvShow.backdropPath ?: tvShow.posterPath,
                     episodes = episodes,
-                    totalSeasons = 1
+                    totalSeasons = seasonsList.maxOrNull() ?: 1,
+                    allSeasons = seasonsList
                 )
-            } else if (filePath.isNotBlank() && File(filePath).exists()) {
-                val parentDir = File(filePath).parentFile
-                if (parentDir != null && parentDir.exists()) {
-                    val localEps = NfoScanner.scanTvShowEpisodes(parentDir)
-                    if (localEps.isNotEmpty()) {
-                        val currentEp = localEps.find { it.episode == episodeNumber } ?: localEps.first()
-                        val dummyShow = TvShowItem(
-                            folderPath = parentDir.absolutePath,
-                            title = parsed.title,
-                            plot = currentEp.plot,
-                            userRating = 8.0,
-                            genre = "Series",
-                            premiered = "2026",
-                            studio = "Local",
-                            posterPath = NfoScanner.resolveArtworkLocalFallback(parentDir, "poster.jpg"),
-                            backdropPath = NfoScanner.resolveArtworkLocalFallback(parentDir, "fanart.jpg")
-                        )
-                        return@withContext ActiveMediaResolution.TvShow(
-                            show = dummyShow,
-                            season = season,
-                            episode = episodeNumber,
-                            episodeTitle = currentEp.title,
-                            episodePlot = currentEp.plot,
-                            episodeStill = currentEp.stillPath ?: dummyShow.posterPath,
-                            episodes = localEps,
-                            totalSeasons = 1
-                        )
-                    }
-                }
             }
         }
 
         // Check if Movie
         val movie = getOrFetchMovie(context, parsed.title)
         if (movie != null) {
-            return@withContext ActiveMediaResolution.Movie(movie)
+            val localPoster = localFile?.let { NfoScanner.findLocalPosterForVideo(it) }
+            val finalMovie = if (movie.posterPath.isNullOrBlank() && localPoster != null) {
+                movie.copy(posterPath = localPoster)
+            } else movie
+            return@withContext ActiveMediaResolution.Movie(finalMovie)
         }
 
         // Normal Media
@@ -758,19 +863,27 @@ object CineOnlineScraper {
             if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
         } else ""
 
+        val localPoster = localFile?.let { NfoScanner.findLocalPosterForVideo(it) }
+
         return@withContext ActiveMediaResolution.Normal(
             title = parsed.title.ifBlank { targetName },
             fileName = if (filePath.isNotBlank()) File(filePath).name else targetName,
             durationFormatted = formattedDuration,
             resolution = resolution,
             videoCodec = videoCodec,
-            audioCodec = audioCodec
+            audioCodec = audioCodec,
+            posterPath = localPoster
         )
     }
 }
 
 sealed class ActiveMediaResolution {
-    data class Movie(val movie: MovieItem) : ActiveMediaResolution()
+    abstract val posterUrl: String?
+
+    data class Movie(val movie: MovieItem) : ActiveMediaResolution() {
+        override val posterUrl: String? get() = movie.posterPath
+    }
+
     data class TvShow(
         val show: TvShowItem,
         val season: Int,
@@ -779,14 +892,21 @@ sealed class ActiveMediaResolution {
         val episodePlot: String,
         val episodeStill: String?,
         val episodes: List<EpisodeItem>,
-        val totalSeasons: Int = 1
-    ) : ActiveMediaResolution()
+        val totalSeasons: Int = 1,
+        val allSeasons: List<Int> = (1..maxOf(1, totalSeasons)).toList()
+    ) : ActiveMediaResolution() {
+        override val posterUrl: String? get() = show.posterPath ?: episodeStill
+    }
+
     data class Normal(
         val title: String,
         val fileName: String,
         val durationFormatted: String = "",
         val resolution: String = "",
         val videoCodec: String = "",
-        val audioCodec: String = ""
-    ) : ActiveMediaResolution()
+        val audioCodec: String = "",
+        val posterPath: String? = null
+    ) : ActiveMediaResolution() {
+        override val posterUrl: String? get() = posterPath
+    }
 }

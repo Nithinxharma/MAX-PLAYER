@@ -1030,27 +1030,79 @@ private fun CineDetailBottomSheet(
           val context = LocalContext.current
           val scope = rememberCoroutineScope()
           var selectedSeason by remember { mutableIntStateOf(1) }
-          var episodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
+          var allLocalEpisodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
+          var availableSeasons by remember { mutableStateOf<List<Int>>(listOf(1)) }
+          var seasonEpisodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
           var isLoadingEpisodes by remember { mutableStateOf(true) }
 
-          LaunchedEffect(item, selectedSeason) {
+          // Initial scan or season detection
+          LaunchedEffect(item) {
             isLoadingEpisodes = true
-            val loaded = withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
               if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
-                NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+                val scanned = NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+                allLocalEpisodes = scanned
+                val detected = scanned.map { it.season }.filter { it > 0 }.distinct().sorted()
+                availableSeasons = if (detected.isNotEmpty()) detected else listOf(1)
+                selectedSeason = availableSeasons.firstOrNull() ?: 1
               } else {
-                CineOnlineScraper.fetchTvShowEpisodes(context, item.tmdbId.ifBlank { item.title }, selectedSeason, item.title)
+                // Online show: check TMDB for season count
+                val tmdbId = item.tmdbId
+                val seasonsFromTmdb = if (tmdbId.isNotBlank() && tmdbId.all { it.isDigit() }) {
+                  val details = CineOnlineScraper.fetchTvShowDetails(tmdbId)
+                  details?.seasons?.map { it.season_number }?.filter { it > 0 }?.distinct()?.sorted()
+                } else null
+
+                availableSeasons = seasonsFromTmdb?.takeIf { it.isNotEmpty() } ?: (1..3).toList()
+                selectedSeason = availableSeasons.firstOrNull() ?: 1
               }
             }
-            episodes = loaded
             isLoadingEpisodes = false
           }
 
-          // Top Play Next / S1E1 Quick Button
+          // Fetch or filter episodes whenever selectedSeason changes
+          LaunchedEffect(item, selectedSeason, allLocalEpisodes) {
+            isLoadingEpisodes = true
+            val loaded = withContext(Dispatchers.IO) {
+              if (allLocalEpisodes.isNotEmpty()) {
+                val filtered = allLocalEpisodes.filter { it.season == selectedSeason }
+                if (filtered.isNotEmpty()) filtered else allLocalEpisodes
+              } else if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
+                val scanned = NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+                allLocalEpisodes = scanned
+                val filtered = scanned.filter { it.season == selectedSeason }
+                if (filtered.isNotEmpty()) filtered else scanned
+              } else {
+                CineOnlineScraper.fetchTvShowEpisodes(
+                  context,
+                  item.tmdbId.ifBlank { item.title },
+                  selectedSeason,
+                  item.title
+                )
+              }
+            }
+            seasonEpisodes = loaded
+            isLoadingEpisodes = false
+          }
+
+          val nextEpisodeToPlay = seasonEpisodes.firstOrNull() ?: allLocalEpisodes.firstOrNull()
+
+          // Top Play Next / Quick Play Button
           Button(
             onClick = {
-              onDismiss()
-              onPlay()
+              if (nextEpisodeToPlay != null) {
+                scope.launch(Dispatchers.IO) {
+                  val playUri = CineCloudRepoClient.resolveMediaUri(nextEpisodeToPlay.videoFilePath)
+                  withContext(Dispatchers.Main) {
+                    onDismiss()
+                    Toast.makeText(context, "Playing ${item.title} - ${nextEpisodeToPlay.title}", Toast.LENGTH_SHORT).show()
+                    MediaUtils.playFile(playUri, context, "cinehub")
+                  }
+                }
+              } else {
+                onDismiss()
+                onPlay()
+              }
             },
             modifier = Modifier
               .fillMaxWidth()
@@ -1060,7 +1112,7 @@ private fun CineDetailBottomSheet(
             Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = if (episodes.isNotEmpty()) "Play Next (${episodes.first().title})" else "Play Series",
+              text = if (nextEpisodeToPlay != null) "Play ${nextEpisodeToPlay.title}" else "Play Series",
               fontWeight = FontWeight.Bold,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
@@ -1077,18 +1129,22 @@ private fun CineDetailBottomSheet(
             modifier = Modifier.padding(bottom = 8.dp)
           )
 
-          Row(
+          LazyRow(
             modifier = Modifier
               .fillMaxWidth()
               .padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            for (s in 1..3) {
+            items(availableSeasons) { s ->
               FilterChip(
                 selected = selectedSeason == s,
                 onClick = { selectedSeason = s },
-                label = { Text("Season $s") },
-                shape = RoundedCornerShape(12.dp)
+                label = { Text("Season $s", fontWeight = FontWeight.SemiBold) },
+                shape = RoundedCornerShape(12.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = MaterialTheme.colorScheme.primary,
+                  selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                )
               )
             }
           }
@@ -1107,7 +1163,7 @@ private fun CineDetailBottomSheet(
               verticalArrangement = Arrangement.spacedBy(10.dp),
               modifier = Modifier.fillMaxWidth()
             ) {
-              episodes.forEach { ep ->
+              seasonEpisodes.forEach { ep ->
                 Card(
                   modifier = Modifier
                     .fillMaxWidth()
@@ -1134,7 +1190,7 @@ private fun CineDetailBottomSheet(
                   ) {
                     Box(
                       modifier = Modifier
-                        .size(width = 80.dp, height = 54.dp)
+                        .size(width = 86.dp, height = 56.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surface),
                       contentAlignment = Alignment.Center
@@ -1178,13 +1234,14 @@ private fun CineDetailBottomSheet(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                       )
-                      if (ep.plot.isNotBlank()) {
+                      if (ep.plot.isNotBlank() && ep.plot != "Local Media File.") {
                         Text(
                           text = ep.plot,
                           style = MaterialTheme.typography.bodySmall,
                           color = MaterialTheme.colorScheme.outline,
                           maxLines = 2,
-                          overflow = TextOverflow.Ellipsis
+                          overflow = TextOverflow.Ellipsis,
+                          modifier = Modifier.padding(top = 2.dp)
                         )
                       }
                     }
