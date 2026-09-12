@@ -50,32 +50,47 @@ jobs:
           set -e
           RELEASE_DIR="app/build/outputs/apk/release"
           
-          echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.keystore
+          if [ -n "${{ secrets.SIGNING_KEYSTORE }}" ]; then
+            echo "Using repository SIGNING_KEYSTORE secret..."
+            echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.keystore
+            KEY_ALIAS="${{ secrets.SIGNING_KEY_ALIAS }}"
+            STORE_PASS="${{ secrets.SIGNING_STORE_PASSWORD }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          else
+            echo "No SIGNING_KEYSTORE secret configured. Falling back to debug.keystore..."
+            cp debug.keystore release.keystore
+            KEY_ALIAS="androiddebugkey"
+            STORE_PASS="android"
+            KEY_PASS="android"
+          fi
+          
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          echo "Using apksigner: $APKSIGNER"
           
           APK_COUNT=$(find "$RELEASE_DIR" -name "app-*-release-unsigned.apk" -type f | wc -l)
           if [ "$APK_COUNT" -eq 0 ]; then
             echo "No unsigned APK files found"
             ls -lah "$RELEASE_DIR"
-            rm release.keystore
+            rm -f release.keystore
             exit 1
           fi
           
           find "$RELEASE_DIR" -name "app-*-release-unsigned.apk" -type f | while read -r apk; do
             signed_apk="${apk/-unsigned/}"
           
-            $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+            "$APKSIGNER" sign \
               --ks release.keystore \
-              --ks-key-alias "${{ secrets.SIGNING_KEY_ALIAS }}" \
-              --ks-pass "pass:${{ secrets.SIGNING_STORE_PASSWORD }}" \
-              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$STORE_PASS" \
+              --key-pass "pass:$KEY_PASS" \
               --out "$signed_apk" \
               "$apk"
           
-            $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$signed_apk"
+            "$APKSIGNER" verify "$signed_apk"
             rm "$apk"
           done
           
-          rm release.keystore
+          rm -f release.keystore
           ls -lh "$RELEASE_DIR"/app-*-release.apk
 
       - name: Copy build artifacts

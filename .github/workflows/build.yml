@@ -6,9 +6,10 @@ on:
       - main
       - master
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -34,8 +35,46 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build with Gradle
-        # Passing debug keystore properties ensures the release APK is signed and can be installed
-        run: ./gradlew assembleRelease -PreleaseKeyStore=../debug.keystore -PreleaseKeyStorePassword=android -PreleaseKeyAlias=androiddebugkey -PreleaseKeyPassword=android
+        run: ./gradlew assembleRelease
+
+      - name: Sign APKs
+        run: |
+          set -e
+          RELEASE_DIR="app/build/outputs/apk/release"
+
+          if [ -n "${{ secrets.SIGNING_KEYSTORE }}" ]; then
+            echo "Using repository SIGNING_KEYSTORE secret..."
+            echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.keystore
+            KEY_ALIAS="${{ secrets.SIGNING_KEY_ALIAS }}"
+            STORE_PASS="${{ secrets.SIGNING_STORE_PASSWORD }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          else
+            echo "No SIGNING_KEYSTORE secret configured. Falling back to debug.keystore..."
+            cp debug.keystore release.keystore
+            KEY_ALIAS="androiddebugkey"
+            STORE_PASS="android"
+            KEY_PASS="android"
+          fi
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          echo "Using apksigner: $APKSIGNER"
+
+          find "$RELEASE_DIR" -name "app-*-release-unsigned.apk" -type f | while read -r apk; do
+            signed_apk="${apk/-unsigned/}"
+            echo "Signing $apk -> $signed_apk"
+            "$APKSIGNER" sign \
+              --ks release.keystore \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$STORE_PASS" \
+              --key-pass "pass:$KEY_PASS" \
+              --out "$signed_apk" \
+              "$apk"
+
+            "$APKSIGNER" verify "$signed_apk"
+          done
+
+          rm -f release.keystore
+          ls -lh "$RELEASE_DIR"/app-*-release.apk
 
       - name: Upload app-arm64-v8a Artifact
         uses: actions/upload-artifact@v4
