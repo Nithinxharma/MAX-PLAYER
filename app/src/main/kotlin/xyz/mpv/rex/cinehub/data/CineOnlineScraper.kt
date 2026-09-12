@@ -256,10 +256,46 @@ object CineOnlineScraper {
     private val jsonParser = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     
     private const val TMDB_BASE_URL = "https://api.themoviedb.org/3"
-    private const val API_KEY = "38a73d59546aa8789c007d3dbd96cdbc"
+    const val DEFAULT_TMDB_API_KEY = "38a73d59546aa8789c007d3dbd96cdbc"
     const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original"
     const val THUMB_BASE_URL = "https://image.tmdb.org/t/p/w500"
     private const val TVMAZE_BASE_URL = "https://api.tvmaze.com"
+
+    fun getEffectiveApiKey(context: Context? = null): String {
+        if (context != null) {
+            val prefs = org.koin.core.context.GlobalContext.getOrNull()?.get<xyz.mpv.rex.preferences.BrowserPreferences>()
+            val custom = prefs?.customTmdbApiKey?.get()
+            if (!custom.isNullOrBlank()) {
+                return custom.trim()
+            }
+        }
+        return DEFAULT_TMDB_API_KEY
+    }
+
+    fun getScraperProvider(context: Context? = null): String {
+        if (context != null) {
+            val prefs = org.koin.core.context.GlobalContext.getOrNull()?.get<xyz.mpv.rex.preferences.BrowserPreferences>()
+            val provider = prefs?.scraperProvider?.get()
+            if (!provider.isNullOrBlank()) return provider
+        }
+        return "tmdb_and_tvmaze"
+    }
+
+    fun isMovieScraperEnabled(context: Context? = null): Boolean {
+        if (context != null) {
+            val prefs = org.koin.core.context.GlobalContext.getOrNull()?.get<xyz.mpv.rex.preferences.BrowserPreferences>()
+            return prefs?.enableMovieScraper?.get() ?: true
+        }
+        return true
+    }
+
+    fun isTvScraperEnabled(context: Context? = null): Boolean {
+        if (context != null) {
+            val prefs = org.koin.core.context.GlobalContext.getOrNull()?.get<xyz.mpv.rex.preferences.BrowserPreferences>()
+            return prefs?.enableTvScraper?.get() ?: true
+        }
+        return true
+    }
 
     fun cleanMediaFileName(fileName: String): Pair<String, String?> {
         var cleanName = fileName.replace(Regex("(?i)\\.(mp4|mkv|avi|mov|webm|flv|ts)\$"), "")
@@ -282,10 +318,11 @@ object CineOnlineScraper {
         return Pair(cleanName, year)
     }
 
-    suspend fun executeManualMovieSearch(query: String): List<TMDBMovieNode> = withContext(Dispatchers.IO) {
+    suspend fun executeManualMovieSearch(query: String, context: Context? = null): List<TMDBMovieNode> = withContext(Dispatchers.IO) {
         try {
+            val key = getEffectiveApiKey(context)
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            val url = "$TMDB_BASE_URL/search/movie?api_key=$API_KEY&query=$encodedQuery&language=en-US"
+            val url = "$TMDB_BASE_URL/search/movie?api_key=$key&query=$encodedQuery&language=en-US"
             val request = Request.Builder().url(url).build()
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
@@ -298,10 +335,11 @@ object CineOnlineScraper {
         return@withContext emptyList()
     }
 
-    suspend fun executeManualTvSearch(query: String): List<TMDBTvNode> = withContext(Dispatchers.IO) {
+    suspend fun executeManualTvSearch(query: String, context: Context? = null): List<TMDBTvNode> = withContext(Dispatchers.IO) {
         try {
+            val key = getEffectiveApiKey(context)
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            val url = "$TMDB_BASE_URL/search/tv?api_key=$API_KEY&query=$encodedQuery&language=en-US"
+            val url = "$TMDB_BASE_URL/search/tv?api_key=$key&query=$encodedQuery&language=en-US"
             val request = Request.Builder().url(url).build()
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
@@ -345,7 +383,9 @@ object CineOnlineScraper {
     }
 
     suspend fun getOrFetchMovie(context: Context?, fileName: String, fallbackTmdbId: String? = null, forceRefresh: Boolean = false): MovieItem? = withContext(Dispatchers.IO) {
+        if (!isMovieScraperEnabled(context)) return@withContext null
         var tmdbId = fallbackTmdbId
+        val apiKey = getEffectiveApiKey(context)
         
         // 1. Check Permanent Manual Mapping
         if (context != null && tmdbId == null) {
@@ -366,7 +406,7 @@ object CineOnlineScraper {
 
             if (tmdbId.isNullOrBlank()) {
                 val encodedTitle = URLEncoder.encode(cleanTitle, "UTF-8")
-                var searchUrl = "$TMDB_BASE_URL/search/movie?api_key=$API_KEY&query=$encodedTitle&language=en-US"
+                var searchUrl = "$TMDB_BASE_URL/search/movie?api_key=$apiKey&query=$encodedTitle&language=en-US"
                 if (year != null) searchUrl += "&primary_release_year=$year"
 
                 val searchReq = Request.Builder().url(searchUrl).build()
@@ -380,7 +420,7 @@ object CineOnlineScraper {
             }
 
             if (!tmdbId.isNullOrBlank()) {
-                val detailUrl = "$TMDB_BASE_URL/movie/$tmdbId?api_key=$API_KEY&append_to_response=credits,images&include_image_language=en,null"
+                val detailUrl = "$TMDB_BASE_URL/movie/$tmdbId?api_key=$apiKey&append_to_response=credits,images&include_image_language=en,null"
                 val detailReq = Request.Builder().url(detailUrl).build()
                 
                 client.newCall(detailReq).execute().use { res ->
@@ -445,7 +485,10 @@ object CineOnlineScraper {
     }
 
     suspend fun getOrFetchTvShow(context: Context?, folderName: String, fallbackTmdbId: String? = null, forceRefresh: Boolean = false): TvShowItem? = withContext(Dispatchers.IO) {
+        if (!isTvScraperEnabled(context)) return@withContext null
         var tmdbId = fallbackTmdbId
+        val provider = getScraperProvider(context)
+        val apiKey = getEffectiveApiKey(context)
         
         // 1. Check Permanent Manual Mapping
         if (context != null && tmdbId == null) {
@@ -465,37 +508,41 @@ object CineOnlineScraper {
             val (cleanTitle, year) = cleanMediaFileName(folderName)
             val encodedTitle = URLEncoder.encode(cleanTitle, "UTF-8")
             
-            var searchUrl = "$TMDB_BASE_URL/search/tv?api_key=$API_KEY&query=$encodedTitle&language=en-US"
-            if (year != null) searchUrl += "&first_air_date_year=$year"
+            // Try TMDB first unless user specifically selected TVMaze only
+            if (provider != "tvmaze") {
+                var searchUrl = "$TMDB_BASE_URL/search/tv?api_key=$apiKey&query=$encodedTitle&language=en-US"
+                if (year != null) searchUrl += "&first_air_date_year=$year"
 
-            val searchReq = Request.Builder().url(searchUrl).build()
-            client.newCall(searchReq).execute().use { res ->
-                if (res.isSuccessful) {
-                    val body = res.body?.string() ?: return@use
-                    val parsed = jsonParser.decodeFromString<TMDBTvSearchWrapper>(body)
-                    
-                    val result = if (tmdbId != null) parsed.results.find { it.id.toString() == tmdbId } ?: parsed.results.firstOrNull() else parsed.results.firstOrNull()
-                    
-                    if (result != null) {
-                        val tvShow = TvShowItem(
-                            folderPath = "",
-                            title = result.name ?: cleanTitle,
-                            plot = result.overview ?: "No description.",
-                            userRating = result.vote_average,
-                            genre = "Series",
-                            premiered = result.first_air_date ?: "2026",
-                            studio = "Unknown",
-                            posterPath = result.poster_path?.let { "$IMAGE_BASE_URL$it" },
-                            backdropPath = result.backdrop_path?.let { "$IMAGE_BASE_URL$it" },
-                            tmdbId = result.id.toString(),
-                            isMetadataCached = true
-                        )
-                        if (context != null) MetadataCacheManager.saveToCache(context, "tv_$cacheId", tvShow)
-                        return@withContext tvShow
+                val searchReq = Request.Builder().url(searchUrl).build()
+                client.newCall(searchReq).execute().use { res ->
+                    if (res.isSuccessful) {
+                        val body = res.body?.string() ?: return@use
+                        val parsed = jsonParser.decodeFromString<TMDBTvSearchWrapper>(body)
+                        
+                        val result = if (tmdbId != null) parsed.results.find { it.id.toString() == tmdbId } ?: parsed.results.firstOrNull() else parsed.results.firstOrNull()
+                        
+                        if (result != null) {
+                            val tvShow = TvShowItem(
+                                folderPath = "",
+                                title = result.name ?: cleanTitle,
+                                plot = result.overview ?: "No description.",
+                                userRating = result.vote_average,
+                                genre = "Series",
+                                premiered = result.first_air_date ?: "2026",
+                                studio = "Unknown",
+                                posterPath = result.poster_path?.let { "$IMAGE_BASE_URL$it" },
+                                backdropPath = result.backdrop_path?.let { "$IMAGE_BASE_URL$it" },
+                                tmdbId = result.id.toString(),
+                                isMetadataCached = true
+                            )
+                            if (context != null) MetadataCacheManager.saveToCache(context, "tv_$cacheId", tvShow)
+                            return@withContext tvShow
+                        }
                     }
                 }
             }
             
+            // Fallback or primary TVMaze (no API key required)
             val tvMazeUrl = "$TVMAZE_BASE_URL/search/shows?q=$encodedTitle"
             val reqMaze = Request.Builder().url(tvMazeUrl).build()
             client.newCall(reqMaze).execute().use { response ->
@@ -526,9 +573,10 @@ object CineOnlineScraper {
         return@withContext null
     }
 
-    suspend fun fetchArtworkOptions(tmdbId: String, type: String = "movie"): TMDBImagesResponse? = withContext(Dispatchers.IO) {
+    suspend fun fetchArtworkOptions(tmdbId: String, type: String = "movie", context: Context? = null): TMDBImagesResponse? = withContext(Dispatchers.IO) {
         try {
-            val url = "$TMDB_BASE_URL/$type/$tmdbId/images?api_key=$API_KEY&include_image_language=en,null"
+            val apiKey = getEffectiveApiKey(context)
+            val url = "$TMDB_BASE_URL/$type/$tmdbId/images?api_key=$apiKey&include_image_language=en,null"
             val req = Request.Builder().url(url).build()
             client.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
@@ -545,7 +593,8 @@ object CineOnlineScraper {
         if (cached != null) return@withContext cached
 
         try {
-            val url = "$TMDB_BASE_URL/person/$personId?api_key=$API_KEY"
+            val apiKey = getEffectiveApiKey(context)
+            val url = "$TMDB_BASE_URL/person/$personId?api_key=$apiKey"
             val req = Request.Builder().url(url).build()
             client.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
@@ -559,17 +608,18 @@ object CineOnlineScraper {
         return@withContext null
     }
 
-    suspend fun fetchTvShowDetails(tmdbId: String, showTitle: String? = null): TMDBTvDetails? = withContext(Dispatchers.IO) {
+    suspend fun fetchTvShowDetails(tmdbId: String, showTitle: String? = null, context: Context? = null): TMDBTvDetails? = withContext(Dispatchers.IO) {
         var resolvedId = tmdbId
         if ((resolvedId.isBlank() || !resolvedId.all { it.isDigit() }) && !showTitle.isNullOrBlank()) {
-            val tv = getOrFetchTvShow(null, showTitle)
+            val tv = getOrFetchTvShow(context, showTitle)
             if (tv != null && tv.tmdbId.isNotBlank() && tv.tmdbId.all { it.isDigit() }) {
                 resolvedId = tv.tmdbId
             }
         }
         if (resolvedId.isBlank() || !resolvedId.all { it.isDigit() }) return@withContext null
         try {
-            val url = "$TMDB_BASE_URL/tv/$resolvedId?api_key=$API_KEY&language=en-US&append_to_response=credits"
+            val apiKey = getEffectiveApiKey(context)
+            val url = "$TMDB_BASE_URL/tv/$resolvedId?api_key=$apiKey&language=en-US&append_to_response=credits"
             val req = Request.Builder().url(url).build()
             client.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
@@ -606,7 +656,8 @@ object CineOnlineScraper {
         // 1. Try TMDB Season API
         if (resolvedId.isNotBlank() && resolvedId.all { it.isDigit() }) {
             try {
-                val url = "$TMDB_BASE_URL/tv/$resolvedId/season/$seasonNumber?api_key=$API_KEY&language=en-US"
+                val apiKey = getEffectiveApiKey(context)
+                val url = "$TMDB_BASE_URL/tv/$resolvedId/season/$seasonNumber?api_key=$apiKey&language=en-US"
                 val req = Request.Builder().url(url).build()
                 client.newCall(req).execute().use { res ->
                     if (res.isSuccessful) {

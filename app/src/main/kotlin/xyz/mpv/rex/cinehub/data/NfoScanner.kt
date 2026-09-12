@@ -60,8 +60,8 @@ object NfoScanner {
         val movies = mutableListOf<MovieItem>()
         if (!directory.exists() || !directory.isDirectory) return movies
 
-        // If this directory is a TV show or Season folder, skip scanning as movies
-        if (isTvShowDirectory(directory) || isSeasonFolder(directory)) {
+        // If this directory is an explicit TV show or Season folder, skip scanning as movies
+        if (File(directory, "tvshow.nfo").exists() || isSeasonFolder(directory)) {
             return movies
         }
 
@@ -107,8 +107,8 @@ object NfoScanner {
                     )
                 }
             } else if (file.isDirectory) {
-                // Don't recurse into TV show folders as movies
-                if (!isTvShowDirectory(file) && !isSeasonFolder(file)) {
+                // Don't recurse into season or explicit TV show directories as movies
+                if (!isSeasonFolder(file) && !File(file, "tvshow.nfo").exists()) {
                     movies.addAll(scanDirectoryForMovies(file))
                 }
             }

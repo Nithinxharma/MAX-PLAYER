@@ -1529,4 +1529,19 @@
   <string name="pref_trending_content">Trending Content</string>
   <string name="pref_recommended_content">Recommended Content</string>
   <string name="pref_region_selection">Region Selection</string>
+
+  <string name="pref_custom_movies_folder">Movies Folder</string>
+  <string name="pref_custom_movies_folder_summary">Custom folder to scan for movies</string>
+  <string name="pref_custom_tv_shows_folder">TV Shows Folder</string>
+  <string name="pref_custom_tv_shows_folder_summary">Custom folder to scan for TV series</string>
+  <string name="pref_scraper_provider">Scraper Provider</string>
+  <string name="pref_scraper_provider_summary">Select metadata source provider</string>
+  <string name="pref_custom_tmdb_api_key">TMDB API Key</string>
+  <string name="pref_custom_tmdb_api_key_summary">Custom or editable API key for TMDB</string>
+  <string name="pref_enable_movie_scraper">Scrape Movie Metadata</string>
+  <string name="pref_enable_tv_scraper">Scrape TV Show Metadata</string>
+  <string name="pref_cache_scanned_metadata">Cache Library &amp; Metadata</string>
+  <string name="pref_cache_scanned_metadata_summary">Speed up startup without rescanning from scratch</string>
+  <string name="pref_folder_path_hint">Folder path</string>
+  <string name="pref_api_key_hint">API Key</string>
 </resources>

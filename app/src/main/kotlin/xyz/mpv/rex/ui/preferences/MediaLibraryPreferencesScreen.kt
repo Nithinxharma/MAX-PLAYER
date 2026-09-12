@@ -39,6 +39,9 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
+import me.zhanghai.compose.preference.ListPreference
+import me.zhanghai.compose.preference.TextFieldPreference
+import androidx.compose.ui.text.AnnotatedString
 import xyz.mpv.rex.ui.preferences.components.SwitchPreference
 import xyz.mpv.rex.cinehub.data.MetadataCacheManager
 import org.koin.compose.koinInject
@@ -75,6 +78,14 @@ object MediaLibraryPreferencesScreen : Screen {
     val trendingContent by browserPreferences.trendingContent.collectAsState()
     
     val enableCineHubIntegration by browserPreferences.enableCineHubIntegration.collectAsState()
+
+    val customMoviesFolder by browserPreferences.customMoviesFolder.collectAsState()
+    val customTvShowsFolder by browserPreferences.customTvShowsFolder.collectAsState()
+    val scraperProvider by browserPreferences.scraperProvider.collectAsState()
+    val customTmdbApiKey by browserPreferences.customTmdbApiKey.collectAsState()
+    val enableMovieScraper by browserPreferences.enableMovieScraper.collectAsState()
+    val enableTvScraper by browserPreferences.enableTvScraper.collectAsState()
+    val cacheScannedMetadata by browserPreferences.cacheScannedMetadata.collectAsState()
 
     Scaffold(
       topBar = {
@@ -175,31 +186,126 @@ object MediaLibraryPreferencesScreen : Screen {
                   }
               }
 
-              item { PreferenceSectionHeader(title = "Metadata & Artwork") }
+              item { PreferenceSectionHeader(title = "Media Folders & Scraper Configuration") }
               item {
                   GroupedListColumn {
                       GroupedPreferenceCard(position = GroupPosition.FIRST, highlightKey = null) {
-                          Preference(
-                              title = { Text(text = stringResource(R.string.pref_preferred_metadata_source)) },
-                              summary = { Text(text = browserPreferences.preferredMetadataSource.get(), color = MaterialTheme.colorScheme.outline) },
-                              onClick = {}
+                          TextFieldPreference(
+                              value = customMoviesFolder,
+                              onValueChange = { browserPreferences.customMoviesFolder.set(it) },
+                              textToValue = { it },
+                              title = { Text(text = stringResource(R.string.pref_custom_movies_folder)) },
+                              summary = {
+                                  Text(
+                                      text = if (customMoviesFolder.isNotBlank()) customMoviesFolder else "Default (CineRex/movies, Movies)",
+                                      color = MaterialTheme.colorScheme.outline
+                                  )
+                              }
                           )
                       }
                       GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          TextFieldPreference(
+                              value = customTvShowsFolder,
+                              onValueChange = { browserPreferences.customTvShowsFolder.set(it) },
+                              textToValue = { it },
+                              title = { Text(text = stringResource(R.string.pref_custom_tv_shows_folder)) },
+                              summary = {
+                                  Text(
+                                      text = if (customTvShowsFolder.isNotBlank()) customTvShowsFolder else "Default (CineRex/tvshows, TV Shows)",
+                                      color = MaterialTheme.colorScheme.outline
+                                  )
+                              }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          ListPreference(
+                              value = scraperProvider,
+                              onValueChange = { browserPreferences.scraperProvider.set(it) },
+                              values = listOf("tmdb_and_tvmaze", "tvmaze", "tmdb"),
+                              valueToText = { value ->
+                                  AnnotatedString(
+                                      when (value) {
+                                          "tmdb_and_tvmaze" -> "TMDB & TVMaze (Recommended)"
+                                          "tvmaze" -> "TVMaze (No API key needed for TV shows)"
+                                          "tmdb" -> "TMDB Only"
+                                          else -> value
+                                      }
+                                  )
+                              },
+                              title = { Text(text = stringResource(R.string.pref_scraper_provider)) },
+                              summary = {
+                                  Text(
+                                      text = when (scraperProvider) {
+                                          "tmdb_and_tvmaze" -> "TMDB & TVMaze (Recommended)"
+                                          "tvmaze" -> "TVMaze (No API key needed for TV shows)"
+                                          "tmdb" -> "TMDB Only"
+                                          else -> scraperProvider
+                                      },
+                                      color = MaterialTheme.colorScheme.outline
+                                  )
+                              }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          TextFieldPreference(
+                              value = customTmdbApiKey,
+                              onValueChange = { browserPreferences.customTmdbApiKey.set(it) },
+                              textToValue = { it },
+                              title = { Text(text = stringResource(R.string.pref_custom_tmdb_api_key)) },
+                              summary = {
+                                  Text(
+                                      text = if (customTmdbApiKey.isNotBlank()) {
+                                          customTmdbApiKey.take(8) + "..."
+                                      } else {
+                                          "Built-in Key (Tap to edit or customize)"
+                                      },
+                                      color = MaterialTheme.colorScheme.outline
+                                  )
+                              }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableMovieScraper,
+                              onValueChange = { browserPreferences.enableMovieScraper.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_movie_scraper)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          SwitchPreference(
+                              value = enableTvScraper,
+                              onValueChange = { browserPreferences.enableTvScraper.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_enable_tv_scraper)) }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
+                          SwitchPreference(
+                              value = cacheScannedMetadata,
+                              onValueChange = { browserPreferences.cacheScannedMetadata.set(it) },
+                              title = { Text(text = stringResource(R.string.pref_cache_scanned_metadata)) },
+                              summary = {
+                                  Text(
+                                      text = stringResource(R.string.pref_cache_scanned_metadata_summary),
+                                      color = MaterialTheme.colorScheme.outline
+                                  )
+                              }
+                          )
+                      }
+                      GroupedPreferenceCard(position = GroupPosition.LAST, highlightKey = null) {
                           Preference(
                               title = { Text(text = stringResource(R.string.pref_force_refresh_metadata)) },
+                              summary = {
+                                  Text(
+                                      text = "Clear cached posters, TV show summaries, and local index",
+                                      color = MaterialTheme.colorScheme.outline
+                                  )
+                              },
                               onClick = {
                                   scope.launch(Dispatchers.IO) {
                                       MetadataCacheManager.clearCache(context)
                                   }
                                   Toast.makeText(context, "Metadata cache cleared.", Toast.LENGTH_SHORT).show()
                               }
-                          )
-                      }
-                      GroupedPreferenceCard(position = GroupPosition.LAST, highlightKey = null) {
-                          Preference(
-                              title = { Text(text = stringResource(R.string.pref_manual_mappings)) },
-                              onClick = {}
                           )
                       }
                   }

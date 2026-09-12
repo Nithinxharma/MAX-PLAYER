@@ -1392,72 +1392,54 @@ fun DynamicMediaInfoRectangle(
 
   val effectivePoster = activeResolution?.posterUrl ?: localPosterSync
 
+  // Prominently enlarged cinematic poster button (Poster ONLY)
+  val posterHeight = buttonSize * 5f
+  val posterWidth = posterHeight * (2f / 3f)
+
   Surface(
     shape = RoundedCornerShape(10.dp),
-    color = Color.Black.copy(alpha = 0.65f),
-    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
+    color = Color.Black.copy(alpha = 0.75f),
+    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.45f)),
+    shadowElevation = 6.dp,
     modifier = modifier
-      .height(buttonSize)
+      .width(posterWidth)
+      .height(posterHeight)
       .clip(RoundedCornerShape(10.dp))
       .clickable { onClick() }
   ) {
-    Row(
-      verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+    Box(
+      modifier = Modifier.fillMaxSize(),
+      contentAlignment = Alignment.Center
     ) {
-      // Mini Cinematic Poster Card
-      Box(
-        modifier = Modifier
-          .width(26.dp)
-          .height(buttonSize - 8.dp)
-          .clip(RoundedCornerShape(6.dp))
-          .border(BorderStroke(0.8.dp, Color.White.copy(alpha = 0.40f)), RoundedCornerShape(6.dp))
-          .background(
-            Brush.verticalGradient(
-              listOf(Color(0xFF33384C), Color(0xFF161824))
-            )
-          ),
-        contentAlignment = Alignment.Center
-      ) {
-        if (!effectivePoster.isNullOrBlank()) {
-          AsyncImage(
-            model = effectivePoster,
-            contentDescription = "Poster",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-          )
-        } else {
+      if (!effectivePoster.isNullOrBlank()) {
+        AsyncImage(
+          model = effectivePoster,
+          contentDescription = "Media Poster",
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize()
+        )
+      } else {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                listOf(Color(0xFF2C3246), Color(0xFF141622))
+              )
+            ),
+          contentAlignment = Alignment.Center
+        ) {
           Icon(
             imageVector = when (activeResolution) {
               is ActiveMediaResolution.TvShow -> Icons.Outlined.Tv
               else -> Icons.Outlined.Movie
             },
-            contentDescription = "Poster",
-            tint = Color.White.copy(alpha = 0.9f),
-            modifier = Modifier.size(16.dp)
+            contentDescription = "Media Poster",
+            tint = Color.White.copy(alpha = 0.90f),
+            modifier = Modifier.size(28.dp)
           )
         }
       }
-
-      Spacer(modifier = Modifier.width(6.dp))
-
-      // Dynamic Title / Badge
-      val badgeText = when (val res = activeResolution) {
-        is ActiveMediaResolution.TvShow -> "S${res.season}:E${res.episode}"
-        is ActiveMediaResolution.Movie -> if (isMoreSheet) res.movie.title else "Movie"
-        is ActiveMediaResolution.Normal -> if (isMoreSheet) res.title else "Poster"
-        null -> "Poster"
-      }
-
-      Text(
-        text = badgeText,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        color = Color.White,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(end = 4.dp)
-      )
     }
   }
 }

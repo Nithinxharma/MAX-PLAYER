@@ -57,6 +57,9 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
+import xyz.mpv.rex.cinehub.data.MetadataCacheManager
+import xyz.mpv.rex.cinehub.data.NfoScanner
+import xyz.mpv.rex.cinehub.model.MovieItem
 import xyz.mpv.rex.utils.media.MediaFormatter
 import xyz.mpv.rex.preferences.UiSettings
 import xyz.mpv.rex.ui.theme.pillShape
@@ -82,6 +85,42 @@ fun VideoCard(
   allowThumbnailGeneration: Boolean = true,
 ) {
   val maxLines = if (uiSettings.unlimitedNameLines) Int.MAX_VALUE else 2
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val browserPrefs = koinInject<BrowserPreferences>()
+  val isCineHubEnabled by browserPrefs.enableCineHubIntegration.collectAsState()
+
+  var mediaPosterUrl by remember(video.path) { mutableStateOf<String?>(null) }
+  var episodeBadge by remember(video.path) { mutableStateOf<String?>(null) }
+  var resolvedTitle by remember(video.displayName) { mutableStateOf<String?>(null) }
+
+  LaunchedEffect(video.path, isCineHubEnabled) {
+    if (isCineHubEnabled && !video.isAudio && video.path.isNotBlank()) {
+      withContext(Dispatchers.IO) {
+        val file = java.io.File(video.path)
+        val localPoster = NfoScanner.findLocalPosterForVideo(file)
+        if (!localPoster.isNullOrBlank()) {
+          mediaPosterUrl = localPoster
+        }
+        val (season, ep) = NfoScanner.parseSeasonAndEpisodeFromFilename(file.name)
+        if (season != null && ep != null) {
+          episodeBadge = "S$season:E$ep"
+          val clean = NfoScanner.cleanEpisodeTitle(file.nameWithoutExtension, file.parentFile?.name ?: "")
+          if (clean.isNotBlank()) resolvedTitle = clean
+        } else {
+          val cleanName = NfoScanner.cleanMediaTitle(file.nameWithoutExtension)
+          val cachedMovie = MetadataCacheManager.loadFromCache<MovieItem>(context, "movie_$cleanName")
+          if (cachedMovie != null) {
+            if (mediaPosterUrl == null && !cachedMovie.posterPath.isNullOrBlank()) {
+              mediaPosterUrl = cachedMovie.posterPath
+            }
+            if (cachedMovie.title.isNotBlank()) {
+              resolvedTitle = cachedMovie.title
+            }
+          }
+        }
+      }
+    }
+  }
   
   val thumbnailRepository = koinInject<ThumbnailRepository>()
   val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -119,11 +158,12 @@ fun VideoCard(
   }
 
   BaseMediaCard(
-    title = video.displayName,
+    title = resolvedTitle ?: video.displayName,
     listTitleStyle = MaterialTheme.typography.bodyMedium,
     modifier = modifier,
-    thumbnailAspectRatio = 16f / 9f,
-    thumbnail = if (uiSettings.showVideoThumbnails) thumbnail?.asImageBitmap() else null,
+    thumbnailAspectRatio = if (!mediaPosterUrl.isNullOrBlank()) 2f / 3f else 16f / 9f,
+    thumbnailUrl = mediaPosterUrl,
+    thumbnail = if (mediaPosterUrl.isNullOrBlank() && uiSettings.showVideoThumbnails) thumbnail?.asImageBitmap() else null,
     thumbnailIcon = {
       Icon(
         if (video.isAudio) Icons.Filled.MusicNote else Icons.Filled.PlayArrow,
@@ -198,6 +238,13 @@ fun VideoCard(
       }
     },
     chipsContent = {
+      if (episodeBadge != null) {
+        MediaMetadataChip(
+          text = episodeBadge!!,
+          color = MaterialTheme.colorScheme.primaryContainer,
+          contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+      }
       if (showSubtitleIndicator && video.hasEmbeddedSubtitles && video.subtitleCodec.isNotBlank()) {
         for (codec in video.subtitleCodec.split(" ")) {
           MediaMetadataChip(

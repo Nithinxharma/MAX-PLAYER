@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xyz.mpv.rex.cinehub.model.TvShowItem
+import xyz.mpv.rex.cinehub.model.MovieItem
 import xyz.mpv.rex.domain.media.model.VideoFolder
 import java.io.File
 
@@ -120,7 +121,15 @@ object CineFolderMetadataManager {
             return true
         }
         val nfoFiles = folder.listFiles { f -> f.isFile && f.extension.equals("nfo", ignoreCase = true) } ?: emptyArray()
-        return nfoFiles.isNotEmpty()
+        if (nfoFiles.isNotEmpty() && !File(folder, "tvshow.nfo").exists()) {
+            return true
+        }
+        val videoFiles = folder.listFiles { f -> f.isFile && NfoScanner.isVideoFile(f) } ?: emptyArray()
+        if (videoFiles.isNotEmpty() && !isTvShowFolder(folder)) {
+            val hasEpisodes = videoFiles.any { it.name.contains(Regex("(?i)[sS]\\d{1,2}[eE]\\d{1,3}|\\b\\d{1,2}x\\d{1,3}\\b")) }
+            return !hasEpisodes
+        }
+        return false
     }
 
     /**
@@ -260,17 +269,26 @@ object CineFolderMetadataManager {
                 ?: KodiMediaScraper.getPersistentArtworkFile(context, "movies", folder.name, "poster.jpg").takeIf { it.exists() }?.absolutePath
                 ?: KodiMediaScraper.getPersistentArtworkFile(context, "movies", cleanName, "poster.jpg").takeIf { it.exists() }?.absolutePath
 
-            val onlineMovie = try {
+            var onlineMovie = try {
                 CineOnlineScraper.getOrFetchMovie(context, cleanName, forceRefresh = false)
             } catch (e: Exception) {
                 null
             }
 
+            val firstVideo = folderFile.listFiles { f -> f.isFile && NfoScanner.isVideoFile(f) }?.firstOrNull()
+            if (onlineMovie == null && firstVideo != null) {
+                onlineMovie = try {
+                    CineOnlineScraper.getOrFetchMovie(context, firstVideo.nameWithoutExtension, forceRefresh = false)
+                } catch (_: Exception) { null }
+            }
+
+            val videoPoster = firstVideo?.let { NfoScanner.findLocalPosterForVideo(it) }
+            val effectivePoster = localPoster ?: videoPoster ?: onlineMovie?.posterPath
+
             if (onlineMovie != null) {
-                val finalPoster = localPoster ?: onlineMovie.posterPath
                 return@withContext folder.copy(
                     mediaTitle = onlineMovie.title.ifBlank { cleanName },
-                    posterPath = finalPoster,
+                    posterPath = effectivePoster,
                     backdropPath = onlineMovie.backdropPath,
                     rating = onlineMovie.userRating,
                     year = onlineMovie.premiered.take(4),
@@ -281,7 +299,7 @@ object CineFolderMetadataManager {
             } else {
                 return@withContext folder.copy(
                     mediaTitle = cleanName,
-                    posterPath = localPoster,
+                    posterPath = effectivePoster,
                     isTvShow = false,
                     isMovie = true
                 )
@@ -328,13 +346,16 @@ object CineFolderMetadataManager {
 
         // For folders inside CineRex: ONLY show those that have movies or TV shows with metadata / poster / name
         if (isUnderCineRex(folder.path)) {
+            val folderFile = File(folder.path)
             val hasPosterOrMetadata = !folder.posterPath.isNullOrBlank() ||
                     folder.isTvShow ||
                     folder.isMovie ||
                     folder.rating > 0.0 ||
                     folder.year.isNotBlank() ||
-                    File(folder.path, "tvshow.nfo").exists() ||
-                    File(folder.path, "movie.nfo").exists()
+                    File(folderFile, "tvshow.nfo").exists() ||
+                    File(folderFile, "movie.nfo").exists() ||
+                    isMovieFolder(folderFile) ||
+                    isTvShowFolder(folderFile)
 
             return hasPosterOrMetadata
         }
@@ -396,17 +417,34 @@ object CineFolderMetadataManager {
     }
 
     /**
-     * Discovers all local TV shows across standard device directories.
+     * Discovers all local TV shows across configured and standard device directories.
      */
     fun getAllLocalTvShows(context: Context?): List<TvShowItem> {
         val extStorage = android.os.Environment.getExternalStorageDirectory()
-        val roots = listOf(
+        val roots = mutableListOf<File>()
+
+        if (context != null) {
+            try {
+                val prefs = org.koin.core.context.GlobalContext.get().get<xyz.mpv.rex.preferences.BrowserPreferences>()
+                val customTv = prefs.customTvShowsFolder.get()
+                if (customTv.isNotBlank()) {
+                    val customDir = File(customTv.trim())
+                    if (customDir.exists() && customDir.isDirectory) {
+                        roots.add(customDir)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        roots.addAll(listOf(
             File(extStorage, "CineRex/tvshows"),
             File(extStorage, "TV Shows"),
+            File(extStorage, "Download/TV Shows"),
             File(extStorage, "Download"),
             File(extStorage, "Movies"),
             File(extStorage, "CineRex")
-        )
+        ))
+
         val tvShows = mutableListOf<TvShowItem>()
         val seenPaths = mutableSetOf<String>()
 
@@ -421,5 +459,50 @@ object CineFolderMetadataManager {
             }
         }
         return tvShows
+    }
+
+    /**
+     * Discovers all local movies across configured and standard device directories.
+     */
+    fun getAllLocalMovies(context: Context?): List<MovieItem> {
+        val extStorage = android.os.Environment.getExternalStorageDirectory()
+        val roots = mutableListOf<File>()
+
+        if (context != null) {
+            try {
+                val prefs = org.koin.core.context.GlobalContext.get().get<xyz.mpv.rex.preferences.BrowserPreferences>()
+                val customMovie = prefs.customMoviesFolder.get()
+                if (customMovie.isNotBlank()) {
+                    val customDir = File(customMovie.trim())
+                    if (customDir.exists() && customDir.isDirectory) {
+                        roots.add(customDir)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        roots.addAll(listOf(
+            File(extStorage, "CineRex/movies"),
+            File(extStorage, "Movies"),
+            File(extStorage, "Download/Movies"),
+            File(extStorage, "Download"),
+            File(extStorage, "DCIM"),
+            File(extStorage, "CineRex")
+        ))
+
+        val movies = mutableListOf<MovieItem>()
+        val seenPaths = mutableSetOf<String>()
+
+        for (root in roots) {
+            if (root.exists() && root.isDirectory) {
+                val list = NfoScanner.scanDirectoryForMovies(root)
+                for (mov in list) {
+                    if (seenPaths.add(mov.videoFilePath)) {
+                        movies.add(mov)
+                    }
+                }
+            }
+        }
+        return movies
     }
 }

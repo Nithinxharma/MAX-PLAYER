@@ -99,6 +99,15 @@ class BrowserPreferences(
   val trendingContent = preferenceStore.getBoolean("trending_content", true)
   
   val enableCineHubIntegration = preferenceStore.getBoolean("enable_cinehub_integration", true)
+
+  // CineHub Scraper Management & Custom Media Folders
+  val customMoviesFolder = preferenceStore.getString("custom_movies_folder", "")
+  val customTvShowsFolder = preferenceStore.getString("custom_tv_shows_folder", "")
+  val scraperProvider = preferenceStore.getString("scraper_provider", "Auto")
+  val customTmdbApiKey = preferenceStore.getString("custom_tmdb_api_key", "")
+  val enableMovieScraper = preferenceStore.getBoolean("enable_movie_scraper", true)
+  val enableTvScraper = preferenceStore.getBoolean("enable_tv_scraper", true)
+  val cacheScannedMetadata = preferenceStore.getBoolean("cache_scanned_metadata", true)
 }
 
 /**

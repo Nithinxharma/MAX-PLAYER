@@ -28,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,13 +79,48 @@ fun FolderCard(
   val browserPreferences = koinInject<BrowserPreferences>()
   val showFolderPath by browserPreferences.showFolderPath.collectAsState()
   val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
+  val isCineHubEnabled by browserPreferences.enableCineHubIntegration.collectAsState()
+  
+  val context = LocalContext.current
+  var resolvedPosterPath by androidx.compose.runtime.remember(folder.path) { androidx.compose.runtime.mutableStateOf(folder.posterPath) }
+  var resolvedTitle by androidx.compose.runtime.remember(folder.path) { androidx.compose.runtime.mutableStateOf(folder.mediaTitle) }
+  var resolvedRating by androidx.compose.runtime.remember(folder.path) { androidx.compose.runtime.mutableDoubleStateOf(folder.rating) }
+  var resolvedYear by androidx.compose.runtime.remember(folder.path) { androidx.compose.runtime.mutableStateOf(folder.year) }
+  var resolvedGenre by androidx.compose.runtime.remember(folder.path) { androidx.compose.runtime.mutableStateOf(folder.genre) }
+  
+  androidx.compose.runtime.LaunchedEffect(folder.path, isCineHubEnabled) {
+      if (isCineHubEnabled && folder.path.isNotBlank()) {
+          kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+              val dir = java.io.File(folder.path)
+              val localPoster = xyz.mpv.rex.cinehub.data.NfoScanner.resolveArtworkLocalFallback(dir, "poster.jpg")
+                  ?: xyz.mpv.rex.cinehub.data.NfoScanner.resolveArtworkLocalFallback(dir, "folder.jpg")
+              
+              if (!localPoster.isNullOrBlank()) {
+                  resolvedPosterPath = localPoster
+              }
+              
+              val cleanName = xyz.mpv.rex.cinehub.data.NfoScanner.cleanMediaTitle(dir.name)
+              val cachedTv = xyz.mpv.rex.cinehub.data.MetadataCacheManager.loadFromCache<xyz.mpv.rex.cinehub.model.TvShowItem>(context, "tv_$cleanName")
+              if (cachedTv != null) {
+                  if (resolvedPosterPath == null && !cachedTv.posterPath.isNullOrBlank()) {
+                      resolvedPosterPath = cachedTv.posterPath
+                  }
+                  if (cachedTv.title.isNotBlank()) resolvedTitle = cachedTv.title
+                  if (cachedTv.userRating > 0.0) resolvedRating = cachedTv.userRating
+                  if (cachedTv.premiered.isNotBlank()) resolvedYear = cachedTv.premiered.take(4)
+                  if (cachedTv.genre.isNotBlank()) resolvedGenre = cachedTv.genre
+              }
+          }
+      }
+  }
+
   val totalCount = if (showAudioFiles) folder.videoCount + folder.audioCount else folder.videoCount
   val countLabel = if (totalCount == 1) "1 Item" else "$totalCount Items"
   val maxLines = if (uiSettings.unlimitedNameLines) Int.MAX_VALUE else 2
   val parentPath = folder.path.substringBeforeLast("/", folder.path)
 
-  val hasPoster = !folder.posterPath.isNullOrBlank()
-  val displayTitle = folder.mediaTitle?.takeIf { it.isNotBlank() } ?: folder.name
+  val hasPoster = !resolvedPosterPath.isNullOrBlank()
+  val displayTitle = resolvedTitle?.takeIf { it.isNotBlank() } ?: folder.name
   val effectiveAspectRatio = if (hasPoster) 2f / 3f else thumbnailAspectRatio
   val effectiveThumbnailSize = if (hasPoster) 82.dp else thumbnailSize
 
@@ -98,7 +134,7 @@ fun FolderCard(
     thumbnailIcon = {
       if (hasPoster) {
         AsyncImage(
-          model = folder.posterPath,
+          model = resolvedPosterPath,
           contentDescription = displayTitle,
           modifier = Modifier.fillMaxSize(),
           contentScale = ContentScale.Crop,
@@ -127,7 +163,7 @@ fun FolderCard(
     gridColumns = gridColumns,
     maxTitleLines = maxLines,
     overlayContent = {
-      if (folder.rating > 0.0) {
+      if (resolvedRating > 0.0) {
         Surface(
           shape = RoundedCornerShape(8.dp),
           color = Color.Black.copy(alpha = 0.75f),
@@ -147,7 +183,7 @@ fun FolderCard(
             )
             Spacer(modifier = Modifier.width(2.dp))
             Text(
-              text = String.format(java.util.Locale.US, "%.1f", folder.rating),
+              text = String.format(java.util.Locale.US, "%.1f", resolvedRating),
               style = MaterialTheme.typography.labelSmall,
               color = Color.White,
               fontSize = 10.sp,
@@ -214,11 +250,11 @@ fun FolderCard(
           contentColor = Color(0xFFFFD54F),
         )
       }
-      if (folder.year.isNotBlank()) {
-        MediaMetadataChip(text = folder.year)
+      if (resolvedYear.isNotBlank()) {
+        MediaMetadataChip(text = resolvedYear)
       }
-      if (folder.genre.isNotBlank()) {
-        MediaMetadataChip(text = folder.genre.split(",").first().trim())
+      if (resolvedGenre.isNotBlank()) {
+        MediaMetadataChip(text = resolvedGenre.split(",").first().trim())
       }
       if (totalCount > 0) {
         MediaMetadataChip(text = countLabel)

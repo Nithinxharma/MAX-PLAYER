@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import xyz.mpv.rex.ui.theme.pillShape
 
 /**
@@ -73,6 +74,7 @@ fun BaseMediaCard(
     title: String,
     modifier: Modifier = Modifier,
     thumbnail: ImageBitmap? = null,
+    thumbnailUrl: String? = null,
     thumbnailIcon: @Composable (() -> Unit)? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -169,7 +171,14 @@ fun BaseMediaCard(
                     },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (thumbnail != null) {
+                    if (!thumbnailUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = thumbnailUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (thumbnail != null) {
                         Image(
                             bitmap = thumbnail,
                             contentDescription = null,
@@ -308,7 +317,14 @@ fun BaseMediaCard(
           },
           contentAlignment = Alignment.Center,
         ) {
-                    if (thumbnail != null) {
+                    if (!thumbnailUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = thumbnailUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (thumbnail != null) {
                         Image(
                             bitmap = thumbnail,
                             contentDescription = null,

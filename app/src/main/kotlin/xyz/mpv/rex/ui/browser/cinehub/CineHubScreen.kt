@@ -119,29 +119,8 @@ object CineHubScreen : Screen {
           }
 
           // Scan local directories if permitted/configured
-          val extStorage = Environment.getExternalStorageDirectory()
           if (enableLocalMovies) {
-            val cineRexMoviesDir = File(extStorage, "CineRex/movies")
-            val altMoviesDir = File(extStorage, "Movies")
-            val scanned = mutableListOf<MovieItem>()
-            if (cineRexMoviesDir.exists()) {
-              scanned.addAll(NfoScanner.scanDirectoryForMovies(cineRexMoviesDir))
-            }
-            if (altMoviesDir.exists()) {
-              scanned.addAll(NfoScanner.scanDirectoryForMovies(altMoviesDir))
-            }
-
-            if (enableMetadataScraping) {
-              for (i in scanned.indices) {
-                val item = scanned[i]
-                if (item.posterPath.isNullOrBlank() || !item.isMetadataCached) {
-                  runCatching {
-                    val enriched = KodiMediaScraper.scrapeMovie(context, File(item.videoFilePath), downloadArtworkAndNfo = enableArtworkDownloads)
-                    scanned[i] = enriched
-                  }
-                }
-              }
-            }
+            val scanned = CineFolderMetadataManager.getAllLocalMovies(context).toMutableList()
 
             withContext(Dispatchers.Main) {
               localMovies = scanned
@@ -150,32 +129,6 @@ object CineHubScreen : Screen {
 
           if (enableLocalTvShows) {
             val scannedTv = CineFolderMetadataManager.getAllLocalTvShows(context).toMutableList()
-            val cineRexTvDir = File(extStorage, "CineRex/tvshows")
-            val altTvDir = File(extStorage, "TV Shows")
-            if (cineRexTvDir.exists()) {
-              val more = NfoScanner.scanDirectoryForTvShows(cineRexTvDir)
-              for (m in more) {
-                if (scannedTv.none { it.folderPath == m.folderPath }) scannedTv.add(m)
-              }
-            }
-            if (altTvDir.exists()) {
-              val more = NfoScanner.scanDirectoryForTvShows(altTvDir)
-              for (m in more) {
-                if (scannedTv.none { it.folderPath == m.folderPath }) scannedTv.add(m)
-              }
-            }
-
-            if (enableMetadataScraping) {
-              for (i in scannedTv.indices) {
-                val item = scannedTv[i]
-                if (item.posterPath.isNullOrBlank() || !item.isMetadataCached) {
-                  runCatching {
-                    val enriched = KodiMediaScraper.scrapeTvShow(context, File(item.folderPath), downloadArtworkAndNfo = enableArtworkDownloads)
-                    scannedTv[i] = enriched
-                  }
-                }
-              }
-            }
 
             withContext(Dispatchers.Main) {
               localTvShows = scannedTv
