@@ -1,10 +1,14 @@
 name: CI/CD Build
 
 on:
+  push:
+    branches:
+      - main
+      - master
   pull_request:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -30,30 +34,35 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build with Gradle
-        run: ./gradlew assembleRelease
+        # Passing debug keystore properties ensures the release APK is signed and can be installed
+        run: ./gradlew assembleRelease -PreleaseKeyStore=../debug.keystore -PreleaseKeyStorePassword=android -PreleaseKeyAlias=androiddebugkey -PreleaseKeyPassword=android
 
       - name: Upload app-arm64-v8a Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: REX-Player-arm64-v8a-release-unsigned-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
+          name: mpvRex-arm64-v8a-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-arm64-v8a-release.apk
+
       - name: Upload app-armeabi-v7a Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: REX-Player-armeabi-v7a-release-unsigned-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/release/app-armeabi-v7a-release-unsigned.apk
+          name: mpvRex-armeabi-v7a-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-armeabi-v7a-release.apk
+
       - name: Upload app-universal Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: REX-Player-universal-release-unsigned-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/release/app-universal-release-unsigned.apk
+          name: mpvRex-universal-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-universal-release.apk
+
       - name: Upload app-x86 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: REX-Player-x86-release-unsigned-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/release/app-x86-release-unsigned.apk
+          name: mpvRex-x86-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-x86-release.apk
+
       - name: Upload app-x86_64 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: REX-Player-x86_64-release-unsigned-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/release/app-x86_64-release-unsigned.apk
+          name: mpvRex-x86_64-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-x86_64-release.apk
