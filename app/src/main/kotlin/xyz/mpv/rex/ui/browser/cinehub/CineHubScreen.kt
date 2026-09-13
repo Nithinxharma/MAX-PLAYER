@@ -13,8 +13,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CloudDownload
@@ -1009,11 +1007,9 @@ private fun CineDetailBottomSheet(
     onDismissRequest = onDismiss,
     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
   ) {
-    val scrollState = rememberScrollState()
     Column(
       modifier = Modifier
         .fillMaxWidth()
-        .verticalScroll(scrollState)
         .padding(bottom = 36.dp),
     ) {
       if (!backdropPath.isNullOrBlank()) {

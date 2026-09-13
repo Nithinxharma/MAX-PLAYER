@@ -2271,7 +2271,6 @@ class PlayerActivity :
    * @return true if saved state was found and applied, false otherwise
    */
   internal suspend fun loadVideoPlaybackState(mediaTitle: String): Boolean {
-    android.util.Log.d("Playback", "[Playback] Starting playback for $mediaTitle")
     return playbackStateController.loadVideoPlaybackState(mediaTitle)
   }
 

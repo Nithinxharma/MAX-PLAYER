@@ -17,6 +17,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import xyz.mpv.rex.preferences.preference.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -29,7 +30,6 @@ import xyz.mpv.rex.presentation.components.GroupPosition
 import xyz.mpv.rex.presentation.components.GroupedListColumn
 import xyz.mpv.rex.ui.preferences.GroupedPreferenceCard
 import xyz.mpv.rex.ui.preferences.components.SwitchPreference
-import me.zhanghai.compose.preference.Preference
 import xyz.mpv.rex.ui.utils.LocalBackStack
 
 @Serializable
@@ -65,7 +65,7 @@ object CineTubeSettingsScreen : Screen {
                 item {
                     GroupedListColumn {
                         GroupedPreferenceCard(
-                            position = GroupPosition.FIRST,
+                            position = GroupPosition.ONLY,
                             highlightKey = R.string.pref_appearance_tab_cinetube_title,
                         ) {
                             SwitchPreference(
@@ -77,62 +77,7 @@ object CineTubeSettingsScreen : Screen {
                                         text = stringResource(id = R.string.pref_appearance_tab_cinetube_summary),
                                         color = MaterialTheme.colorScheme.outline,
                                     )
-                                },
-                            )
-                        }
-                        
-                        GroupedPreferenceCard(
-                            position = GroupPosition.MIDDLE,
-                            highlightKey = 0,
-                        ) {
-                            Preference(
-                                title = { Text(text = "API Status") },
-                                summary = { Text(text = "Connected via Invidious nodes", color = MaterialTheme.colorScheme.outline) },
-                                onClick = {}
-                            )
-                        }
-
-                        GroupedPreferenceCard(
-                            position = GroupPosition.MIDDLE,
-                            highlightKey = 0,
-                        ) {
-                            Preference(
-                                title = { Text(text = "Region") },
-                                summary = { Text(text = "IN", color = MaterialTheme.colorScheme.outline) },
-                                onClick = {}
-                            )
-                        }
-
-                        GroupedPreferenceCard(
-                            position = GroupPosition.MIDDLE,
-                            highlightKey = 0,
-                        ) {
-                            Preference(
-                                title = { Text(text = "Search Preferences") },
-                                summary = { Text(text = "Movies & Music", color = MaterialTheme.colorScheme.outline) },
-                                onClick = {}
-                            )
-                        }
-
-                        GroupedPreferenceCard(
-                            position = GroupPosition.MIDDLE,
-                            highlightKey = 0,
-                        ) {
-                            Preference(
-                                title = { Text(text = "Cache") },
-                                summary = { Text(text = "Clear CineTube cached data", color = MaterialTheme.colorScheme.outline) },
-                                onClick = {}
-                            )
-                        }
-
-                        GroupedPreferenceCard(
-                            position = GroupPosition.LAST,
-                            highlightKey = 0,
-                        ) {
-                            Preference(
-                                title = { Text(text = "API Client") },
-                                summary = { Text(text = "CineTubeApiClient", color = MaterialTheme.colorScheme.outline) },
-                                onClick = {}
+                                }
                             )
                         }
                     }

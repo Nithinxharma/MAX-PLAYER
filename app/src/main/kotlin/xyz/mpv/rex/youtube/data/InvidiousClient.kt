@@ -21,11 +21,10 @@ object InvidiousClient {
     }
     
     private val INSTANCES = listOf(
-        "https://invidious.nerdvpn.de",
-        "https://inv.nadeko.net",
-        "https://invidious.f5.si",
-        "https://yt.chocolatemoo53.com",
-        "https://invidious.privacydev.net"
+        "https://invidious.projectsegfau.lt",
+        "https://yewtu.be",
+        "https://invidious.privacydev.net",
+        "https://iv.melmac.space"
     )
 
     suspend fun fetchTrendingVideos(type: String = "Movies"): List<YoutubeVideo> = withContext(Dispatchers.IO) {

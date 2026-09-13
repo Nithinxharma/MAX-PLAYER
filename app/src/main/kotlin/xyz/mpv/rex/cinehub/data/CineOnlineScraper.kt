@@ -172,16 +172,6 @@ data class TVMazeImage(val original: String? = null, val medium: String? = null)
 @kotlinx.serialization.Serializable
 data class TVMazeSearchWrapper(val show: TVMazeShowNode? = null)
 
-@kotlinx.serialization.Serializable
-data class TVMazeEmbed(val episodes: List<TVMazeEpisodeNode> = emptyList())
-
-@kotlinx.serialization.Serializable
-data class TVMazeSingleShow(
-    val id: Int = 0,
-    val name: String? = null,
-    val _embedded: TVMazeEmbed? = null
-)
-
 data class OnlineMediaMetadata(
     val title: String, 
     val plot: String, 
@@ -702,9 +692,11 @@ object CineOnlineScraper {
                 client.newCall(req).execute().use { res ->
                     if (res.isSuccessful) {
                         val body = res.body?.string() ?: ""
-                        val showObj = jsonParser.decodeFromString<TVMazeSingleShow>(body)
-                        val mazeEpisodes = showObj._embedded?.episodes ?: emptyList()
-                        mazeEpisodes.filter { it.season == seasonNumber }.forEach { ep ->
+                        if (body.contains("\"_embedded\":{\"episodes\":[")) {
+                            val epSub = body.substringAfter("\"_embedded\":{\"episodes\":[").substringBefore("]}")
+                            val arrayJson = "[$epSub]"
+                            val mazeEpisodes = jsonParser.decodeFromString<List<TVMazeEpisodeNode>>(arrayJson)
+                            mazeEpisodes.filter { it.season == seasonNumber }.forEach { ep ->
                                 resultList.add(
                                     EpisodeItem(
                                         videoFilePath = "vidsrc_tv:${tmdbId.ifBlank { showTitle }}:$seasonNumber:${ep.number}",
@@ -719,6 +711,7 @@ object CineOnlineScraper {
                                     )
                                 )
                             }
+                        }
                     }
                 }
             } catch (_: Exception) {}

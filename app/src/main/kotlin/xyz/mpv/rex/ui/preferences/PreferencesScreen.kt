@@ -237,13 +237,6 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
-                  title = "JioTV Integration",
-                  summary = "JioTV Login & M3U Playlists",
-                  icon = Icons.Outlined.VideoLibrary,
-                  onClick = { backstack.add(JioTvSettingsScreen) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.MIDDLE,
                   title = "CineTube",
                   summary = "YouTube & YouTube Shorts integration settings",
                   icon = Icons.Outlined.Movie,

@@ -436,9 +436,14 @@ object CineFolderMetadataManager {
             } catch (_: Exception) {}
         }
 
-        // Strict folder scanning: only custom folder (if set) + CineRex default folder.
-        // Prevent scraping standard generic directories like Download or DCIM to avoid false positives.
-        roots.add(File(extStorage, "CineRex/tvshows"))
+        roots.addAll(listOf(
+            File(extStorage, "CineRex/tvshows"),
+            File(extStorage, "TV Shows"),
+            File(extStorage, "Download/TV Shows"),
+            File(extStorage, "Download"),
+            File(extStorage, "Movies"),
+            File(extStorage, "CineRex")
+        ))
 
         val tvShows = mutableListOf<TvShowItem>()
         val seenPaths = mutableSetOf<String>()
@@ -476,9 +481,14 @@ object CineFolderMetadataManager {
             } catch (_: Exception) {}
         }
 
-        // Strict folder scanning: only custom folder (if set) + CineRex default folder.
-        // Prevent scraping standard generic directories like Download or DCIM to avoid false positives.
-        roots.add(File(extStorage, "CineRex/movies"))
+        roots.addAll(listOf(
+            File(extStorage, "CineRex/movies"),
+            File(extStorage, "Movies"),
+            File(extStorage, "Download/Movies"),
+            File(extStorage, "Download"),
+            File(extStorage, "DCIM"),
+            File(extStorage, "CineRex")
+        ))
 
         val movies = mutableListOf<MovieItem>()
         val seenPaths = mutableSetOf<String>()
