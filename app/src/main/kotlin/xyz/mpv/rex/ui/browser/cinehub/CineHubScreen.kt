@@ -211,7 +211,19 @@ object CineHubScreen : Screen {
         ?: onlineMovies.firstOrNull()
     }
 
+    var showProviderSheet by remember { mutableStateOf(false) }
+    var selectedProviderId by remember { mutableStateOf<String?>(null) }
+
     Scaffold(
+      floatingActionButton = {
+        ExtendedFloatingActionButton(
+          onClick = { showProviderSheet = true },
+          icon = { Icon(Icons.Default.Menu, contentDescription = null) },
+          text = { Text(providerRegistry.getEnabledProviders().find { it.id == selectedProviderId }?.name ?: "All Providers") },
+          containerColor = MaterialTheme.colorScheme.surfaceVariant,
+          contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      },
       topBar = {
         TopAppBar(
           title = {
@@ -515,7 +527,7 @@ object CineHubScreen : Screen {
               }
 
               // Trending Movies Section
-              if (selectedTab == 0 || selectedTab == 1) {
+              if ((selectedTab == 0 || selectedTab == 1) && selectedProviderId == null) {
                 if (onlineMovies.isNotEmpty()) {
                   item {
                     SectionHeader(title = "Trending Movies")
@@ -567,7 +579,7 @@ object CineHubScreen : Screen {
               }
 
               // TV Series Section
-              if (selectedTab == 0 || selectedTab == 2) {
+              if ((selectedTab == 0 || selectedTab == 2) && selectedProviderId == null) {
                 if (onlineTvShows.isNotEmpty()) {
                   item {
                     SectionHeader(title = "Popular TV Shows")
@@ -619,8 +631,8 @@ object CineHubScreen : Screen {
               }
 
               // Extension Provider Sections
-              if (selectedTab == 0 && providerHomeRows.isNotEmpty()) {
-                providerHomeRows.forEach { homeRow ->
+              if (selectedProviderId != null) {
+                providerHomeRows.filter { it.items.firstOrNull()?.providerId == selectedProviderId }.forEach { homeRow ->
                   if (homeRow.items.isNotEmpty()) {
                     item {
                       SectionHeader(title = homeRow.title)
@@ -822,6 +834,27 @@ object CineHubScreen : Screen {
           )
         }
 
+        if (showProviderSheet) {
+          ModalBottomSheet(onDismissRequest = { showProviderSheet = false }) {
+            LazyColumn(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+              item {
+                Text("Select Provider", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+                ListItem(
+                  headlineContent = { Text("All Providers") },
+                  leadingContent = { Icon(Icons.Outlined.Movie, contentDescription = null) },
+                  modifier = Modifier.clickable { selectedProviderId = null; showProviderSheet = false }
+                )
+              }
+              items(providerRegistry.getEnabledProviders()) { provider ->
+                ListItem(
+                  headlineContent = { Text(provider.name) },
+                  leadingContent = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                  modifier = Modifier.clickable { selectedProviderId = provider.id; showProviderSheet = false }
+                )
+              }
+            }
+          }
+        }
         // Kodi Media Scraper Bottom Sheet
         if (showScraperSheet) {
           KodiScraperBottomSheet(

@@ -16,7 +16,6 @@ import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
 import xyz.mpv.rex.cinehub.extension.providers.CineOnlineBridgeProvider
 import xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider
-import xyz.mpv.rex.cinehub.extension.providers.OpenArchiveProvider
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.database.MpvExDatabase
 import java.io.File
@@ -41,7 +40,6 @@ class ExtensionManager(
     init {
         if (!extensionDir.exists()) extensionDir.mkdirs()
         // Register built-in providers immediately
-        registry.register(OpenArchiveProvider(client), isEnabledByDefault = true)
         registry.register(CineOnlineBridgeProvider(context), isEnabledByDefault = true)
 
         scope.launch {

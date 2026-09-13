@@ -27,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
-import xyz.mpv.rex.R
 
 object OnlineShortsGridScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -48,13 +47,14 @@ object OnlineShortsGridScreen : Screen {
 
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = { Text("Online Shorts (YouTube)") },
-                    navigationIcon = {
-                        IconButton(onClick = { backstack.removeLast() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
+                BrowserTopBar(
+                    title = "RexShorts",
+                    isInSelectionMode = false,
+                    selectedCount = 0,
+                    totalCount = 0,
+                    onCancelSelection = {},
+                    isHomeScreen = true,
+                    onSearchClick = {}
                 )
             }
         ) { paddingValues ->

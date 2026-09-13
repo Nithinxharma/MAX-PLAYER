@@ -12,7 +12,6 @@ import org.json.JSONObject
 import org.koin.java.KoinJavaComponent
 import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.extension.api.CineHubStreamLink
-import xyz.mpv.rex.cinehub.extension.providers.OpenArchiveProvider
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.cinehub.failover.StreamCandidate
 import xyz.mpv.rex.cinehub.failover.StreamHealthResolver
@@ -153,27 +152,6 @@ object CloudStreamLinkManager {
             }
         }
 
-        // 3. Query built-in OpenArchiveProvider for archive / public domain movies
-        if (request.isMovie && (request.providerId == null || request.providerId == "open_archive")) {
-            providerTasks.add {
-                try {
-                    val archiveProvider = OpenArchiveProvider(httpClient)
-                    val searchMatches = archiveProvider.search(request.title)
-                    val bestMatch = searchMatches.firstOrNull { 
-                        it.title.contains(request.title, ignoreCase = true) ||
-                        (request.year != null && it.year == request.year)
-                    } ?: searchMatches.firstOrNull()
-                    
-                    if (bestMatch != null) {
-                        archiveProvider.loadStreams(bestMatch.url)
-                    } else {
-                        emptyList()
-                    }
-                } catch (e: Exception) {
-                    emptyList()
-                }
-            }
-        }
 
         // 4. Query Netmirror/CineCloud resolver if available
         if (!request.tmdbId.isNullOrBlank() || !request.imdbId.isNullOrBlank()) {

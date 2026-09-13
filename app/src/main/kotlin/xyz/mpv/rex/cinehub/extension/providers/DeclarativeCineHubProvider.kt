@@ -29,12 +29,10 @@ class DeclarativeCineHubProvider(
     override val hasMainPage: Boolean = true
 
     override suspend fun search(query: String): List<CineHubSearchItem> = withContext(Dispatchers.IO) {
-        // Query extension source or fallback to global media index filtered for this provider
         try {
             val encoded = URLEncoder.encode(query, "UTF-8")
             val results = mutableListOf<CineHubSearchItem>()
             
-            // TMDB media index query tagged for this provider
             val nodes = CineOnlineScraper.executeManualMovieSearch(query)
             for (node in nodes) {
                 results.add(
@@ -58,7 +56,40 @@ class DeclarativeCineHubProvider(
     }
 
     override suspend fun getHomePage(): List<CineHubHomePageList> = withContext(Dispatchers.IO) {
-        emptyList()
+        val tmdbResults = CineOnlineScraper.executeManualMovieSearch("hindi")
+        val movies = tmdbResults.take(15).map { node ->
+            CineHubSearchItem(
+                id = "${id}_${node.id}",
+                title = node.title ?: "Untitled",
+                url = "ext://$id/${node.id}?title=${java.net.URLEncoder.encode(node.title ?: "", "UTF-8")}",
+                providerId = id,
+                providerName = name,
+                posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                type = TvType.Movie,
+                year = node.release_date?.take(4)?.toIntOrNull(),
+                rating = node.vote_average
+            )
+        }
+        
+        val tmdbShows = CineOnlineScraper.executeManualTvSearch("love")
+        val shows = tmdbShows.take(15).map { node ->
+            CineHubSearchItem(
+                id = "${id}_${node.id}",
+                title = node.name ?: "Untitled",
+                url = "ext://$id/${node.id}?title=${java.net.URLEncoder.encode(node.name ?: "", "UTF-8")}",
+                providerId = id,
+                providerName = name,
+                posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                type = TvType.TvSeries,
+                year = node.first_air_date?.take(4)?.toIntOrNull(),
+                rating = node.vote_average
+            )
+        }
+        
+        listOf(
+            CineHubHomePageList("$name Movies", movies),
+            CineHubHomePageList("$name Series", shows)
+        )
     }
 
     override suspend fun loadDetails(url: String): CineHubMediaDetails? = withContext(Dispatchers.IO) {
@@ -99,28 +130,12 @@ class DeclarativeCineHubProvider(
         if (!netStream.isNullOrBlank() && !netStream.contains("/embed/")) {
             streams.add(
                 CineHubStreamLink(
-                    name = "$name Server 1 (HD)",
+                    name = "$name Server 1 (HD) (Hindi)",
                     url = netStream,
                     quality = "1080p",
                     isM3u8 = netStream.contains(".m3u8")
                 )
             )
-        }
-
-        // 2. Query Archive.org for public domain / open media matches
-        try {
-            val titleParam = runCatching {
-                android.net.Uri.parse("http://dummy/$data").getQueryParameter("title")
-            }.getOrNull() ?: clean
-            val archiveProvider = xyz.mpv.rex.cinehub.extension.providers.OpenArchiveProvider()
-            val archiveResults = archiveProvider.search(titleParam)
-            val bestArchive = archiveResults.firstOrNull()
-            if (bestArchive != null) {
-                val archiveStreams = archiveProvider.loadStreams(bestArchive.url)
-                streams.addAll(archiveStreams.map { it.copy(name = "$name (Archive ${it.quality})") })
-            }
-        } catch (e: Exception) {
-            // Ignore archive lookup failure
         }
 
         streams

@@ -1,10 +1,13 @@
 package xyz.mpv.rex.ui.preferences
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -32,6 +35,10 @@ object CineTvPreferencesScreen : Screen {
         var isUserAuthed by remember { mutableStateOf(JioTvRepo.isUserLoggedIn()) }
         var isSaving by remember { mutableStateOf(false) }
         var saveMessage by remember { mutableStateOf<String?>(null) }
+        
+        var m3uUrl by remember { mutableStateOf("") }
+        var m3uSaveMessage by remember { mutableStateOf<String?>(null) }
+        var isM3uSaving by remember { mutableStateOf(false) }
 
         Scaffold(
             topBar = {
@@ -52,6 +59,7 @@ object CineTvPreferencesScreen : Screen {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("JioTV Login", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
@@ -148,6 +156,67 @@ object CineTvPreferencesScreen : Screen {
                             }
 
                             saveMessage?.let {
+                                Text(
+                                    text = it,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(Modifier.height(24.dp))
+                    Text("M3U Playlist Mapping", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(16.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                "Map custom M3U playlist URLs for fallback channels.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            OutlinedTextField(
+                                value = m3uUrl,
+                                onValueChange = { m3uUrl = it },
+                                label = { Text("M3U URL") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isM3uSaving = true
+                                        val success = JioTvRepo.syncPlaylistFromUrl(context, m3uUrl)
+                                        if (success) {
+                                            m3uSaveMessage = "Playlist synced successfully!"
+                                        } else {
+                                            m3uSaveMessage = "Failed to sync playlist."
+                                        }
+                                        isM3uSaving = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !isM3uSaving
+                            ) {
+                                if (isM3uSaving) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Sync Playlist")
+                                }
+                            }
+
+                            m3uSaveMessage?.let {
                                 Text(
                                     text = it,
                                     color = MaterialTheme.colorScheme.primary,

@@ -35,8 +35,8 @@ object InvidiousClient {
     suspend fun fetchTrendingVideos(type: String = "Movies"): List<YoutubeVideo> = withContext(Dispatchers.IO) {
         // Attempt 1: Standard trending
         val endpoints = listOf(
-            "api/v1/trending",
-            "api/v1/popular",
+            "api/v1/trending?region=IN",
+            "api/v1/popular?region=IN",
             "api/v1/trending?type=$type"
         )
         for (endpoint in endpoints) {
@@ -67,7 +67,7 @@ object InvidiousClient {
      */
     suspend fun fetchShorts(): List<YoutubeVideo> = withContext(Dispatchers.IO) {
         // Try popular endpoint first which heavily ranks short-form videos
-        val popBody = failoverClient.executeGet("api/v1/popular")
+        val popBody = failoverClient.executeGet("api/v1/popular?region=IN")
         if (!popBody.isNullOrBlank()) {
             try {
                 val parsed = jsonParser.decodeFromString<List<YoutubeVideo>>(popBody)
@@ -129,7 +129,7 @@ object InvidiousClient {
         for (base in pipedBases) {
             try {
                 val req = okhttp3.Request.Builder()
-                    .url("$base/trending?region=US")
+                    .url("$base/trending?region=IN")
                     .header("User-Agent", "Mozilla/5.0")
                     .build()
                 client.newCall(req).execute().use { resp ->
