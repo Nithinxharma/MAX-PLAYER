@@ -1,4 +1,5 @@
 package xyz.mpv.rex.ui.preferences
+import xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,18 +20,30 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ViewQuilt
-import androidx.compose.material.icons.outlined.Audiotrack
-import androidx.compose.material.icons.outlined.CloudDownload
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Gesture
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Subtitles
-import androidx.compose.material.icons.outlined.VideoLibrary
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -123,6 +136,21 @@ object PreferencesScreen : Screen {
                   text = stringResource(R.string.settings_search_hint),
                   style = MaterialTheme.typography.bodyLarge,
                   color = MaterialTheme.colorScheme.outline,
+                )
+              }
+            }
+          }
+
+          // Extensions Section
+          item {
+            PreferenceSection(title = "Extensions") {
+              GroupedListColumn {
+                PreferenceItem(
+                  position = GroupPosition.ONLY,
+                  title = "Plugin Extensions",
+                  summary = "Manage providers and extension repositories",
+                  icon = Icons.Outlined.Extension,
+                  onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute) },
                 )
               }
             }

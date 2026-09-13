@@ -21,6 +21,10 @@ import xyz.mpv.rex.database.entities.ShortsMediaEntity
 import xyz.mpv.rex.database.entities.VideoMetadataEntity
 import xyz.mpv.rex.domain.network.NetworkConnection
 
+import xyz.mpv.rex.cinehub.extension.model.ExtensionRepo
+import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
+import xyz.mpv.rex.cinehub.extension.model.LibraryItem
+
 @Database(
   entities = [
     PlaybackStateEntity::class,
@@ -32,23 +36,22 @@ import xyz.mpv.rex.domain.network.NetworkConnection
     ShortsMediaEntity::class,
     HybridMediaEntity::class,
     HybridMediaRootEntity::class,
+    ExtensionRepo::class,
+    InstalledExtension::class,
+    LibraryItem::class
   ],
-  version = 16,
+  version = 17,
   exportSchema = true,
 )
 @TypeConverters(NetworkProtocolConverter::class)
 abstract class MpvExDatabase : RoomDatabase() {
   abstract fun videoDataDao(): PlaybackStateDao
-
   abstract fun recentlyPlayedDao(): RecentlyPlayedDao
-
   abstract fun videoMetadataDao(): VideoMetadataDao
-
   abstract fun networkConnectionDao(): NetworkConnectionDao
-
   abstract fun playlistDao(): PlaylistDao
-
   abstract fun shortsMediaDao(): ShortsMediaDao
-
   abstract fun hybridMediaDao(): HybridMediaDao
+  abstract fun extensionDao(): xyz.mpv.rex.database.dao.ExtensionDao
+  abstract fun cineLibraryDao(): xyz.mpv.rex.database.dao.CineLibraryDao
 }
