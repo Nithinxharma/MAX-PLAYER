@@ -449,4 +449,58 @@ object MediaUtils : KoinComponent {
     )
   }
 
+  /**
+   * Plays a network stream with seamless auto-failover and injected headers.
+   *
+   * @param primaryCandidate The verified initial stream to play
+   * @param backupCandidates Backup stream candidates from the provider to fail over to upon errors or timeout
+   * @param context Android context
+   * @param title Display title for the media
+   * @param launchSource Analytics/tracking source string
+   * @param posterUrl Optional thumbnail/poster URL
+   * @param sourceType Optional source type identifier (e.g. "cinehub", "cinetube")
+   */
+  fun playStreamWithFailover(
+    primaryCandidate: xyz.mpv.rex.cinehub.failover.StreamCandidate,
+    backupCandidates: List<xyz.mpv.rex.cinehub.failover.StreamCandidate> = emptyList(),
+    context: Context,
+    title: String? = null,
+    launchSource: String? = null,
+    posterUrl: String? = null,
+    sourceType: String? = null,
+  ) {
+    val uri = runCatching { Uri.parse(primaryCandidate.url) }.getOrNull() ?: Uri.parse("file://${primaryCandidate.url}")
+    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+      setClass(context, PlayerActivity::class.java)
+      addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
+      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      putExtra("internal_launch", true)
+      launchSource?.let { putExtra("launch_source", it) }
+      title?.let {
+        putExtra("title", it)
+        putExtra("filename", it)
+      }
+      posterUrl?.let { putExtra("cinetv_poster", it) }
+      sourceType?.let { putExtra("cinetv_source_type", it) }
+
+      // Primary stream headers as flat key-value array
+      val flatHeaders = primaryCandidate.headers.flatMap { listOf(it.key, it.value) }.toTypedArray()
+      if (flatHeaders.isNotEmpty()) {
+        putExtra("headers", flatHeaders)
+      }
+
+      // Backup candidates
+      if (backupCandidates.isNotEmpty()) {
+        putStringArrayListExtra("backup_stream_urls", ArrayList(backupCandidates.map { it.url }))
+        putStringArrayListExtra("backup_stream_names", ArrayList(backupCandidates.map { it.name }))
+        putStringArrayListExtra("backup_stream_qualities", ArrayList(backupCandidates.map { it.quality }))
+        val headersJson = kotlinx.serialization.json.Json.encodeToString<List<Map<String, String>>>(
+          backupCandidates.map { it.headers }
+        )
+        putExtra("backup_stream_headers_json", headersJson)
+      }
+    }
+    context.startActivity(intent)
+  }
+
 }

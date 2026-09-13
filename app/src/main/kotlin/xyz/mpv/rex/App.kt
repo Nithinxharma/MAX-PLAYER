@@ -46,6 +46,7 @@ class App : Application() {
 
   override fun onCreate() {
     super.onCreate()
+    instance = this
 
     // Initialize Koin
     startKoin {
@@ -127,5 +128,10 @@ class App : Application() {
       storageFilter,
       ContextCompat.RECEIVER_EXPORTED,
     )
+  }
+
+  companion object {
+    lateinit var instance: App
+      private set
   }
 }

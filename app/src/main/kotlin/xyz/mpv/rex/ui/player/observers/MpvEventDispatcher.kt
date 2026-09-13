@@ -19,6 +19,7 @@ class MpvEventDispatcher(
     fun onStartFile()
     fun onFileLoaded()
     fun onPlaybackRestart()
+    fun onEndFile()
   }
 
   fun dispatchProperty(property: String) {
@@ -61,6 +62,7 @@ class MpvEventDispatcher(
       MPVLib.MpvEvent.MPV_EVENT_START_FILE -> listener.onStartFile()
       MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> listener.onFileLoaded()
       MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> listener.onPlaybackRestart()
+      MPVLib.MpvEvent.MPV_EVENT_END_FILE -> listener.onEndFile()
     }
   }
 

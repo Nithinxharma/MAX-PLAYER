@@ -218,19 +218,15 @@ object MainScreen : Screen {
             VisibleTab("cinetube", cineTubeLabel, Icons.Filled.SmartDisplay) {
               xyz.mpv.rex.youtube.ui.YoutubeTabScreen(
                 onPlayRequested = { videoUrl, title, authorThumb ->
-                  val uri = android.net.Uri.parse(videoUrl)
-                  val playerIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
-                    setClass(context, xyz.mpv.rex.ui.player.PlayerActivity::class.java)
-                    putExtra("internal_launch", true)
-                    putExtra("launch_source", "cinetube")
-                    putExtra("title", title)
-                    putExtra("filename", title)
-                    putExtra("cinetv_source_type", "cinetube")
-                    putExtra("cinetv_poster", authorThumb)
-                    setDataAndType(uri, "video/*")
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                  }
-                  context.startActivity(playerIntent)
+                  xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
+                    primaryCandidate = xyz.mpv.rex.cinehub.failover.StreamCandidate(url = videoUrl, name = title),
+                    backupCandidates = emptyList(),
+                    context = context,
+                    title = title,
+                    launchSource = "cinetube",
+                    posterUrl = authorThumb,
+                    sourceType = "cinetube"
+                  )
                 }
               )
             }

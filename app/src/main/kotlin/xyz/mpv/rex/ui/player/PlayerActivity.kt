@@ -297,6 +297,7 @@ class PlayerActivity :
       override fun onFileLoaded() {
         Log.d(TAG, "onFileLoaded called")
         handleFileLoaded()
+        streamFailoverManager.onFileLoadedAfterFailover()
         isReady = true
 
         val subs = pendingWebSubtitles
@@ -323,7 +324,63 @@ class PlayerActivity :
           }
         }
       }
+
+      override fun onEndFile() {
+        val dur = viewModel.duration ?: 0
+        val pos = viewModel.pos ?: 0
+        val premature = dur == 0 || (dur > 0 && pos < dur - 8)
+        if (premature && streamFailoverManager.triggerFailover("MPV_EVENT_END_FILE received prematurely")) {
+          Log.i(TAG, "onEndFile: Triggered auto-failover to backup stream")
+        }
+      }
     })
+  }
+
+  internal val streamFailoverManager by lazy {
+    xyz.mpv.rex.cinehub.failover.StreamFailoverManager(this, lifecycleScope)
+  }
+
+  internal fun extractAndSetupStreamFailover(targetIntent: Intent) {
+    val primaryUrl = intentHandler.parsePathFromIntent(targetIntent) ?: targetIntent.dataString ?: ""
+    if (primaryUrl.isBlank()) return
+
+    val headersArray = targetIntent.getStringArrayExtra("headers") ?: emptyArray()
+    val headersMap = mutableMapOf<String, String>()
+    headersArray.asSequence().chunked(2).forEach {
+      if (it.size == 2 && !it[0].isNullOrBlank() && !it[1].isNullOrBlank()) {
+        headersMap[it[0]!!] = it[1]!!
+      }
+    }
+
+    val primaryCandidate = xyz.mpv.rex.cinehub.failover.StreamCandidate(
+      url = primaryUrl,
+      name = targetIntent.getStringExtra("title") ?: "Primary Stream",
+      headers = headersMap
+    )
+
+    val backupUrls = targetIntent.getStringArrayListExtra("backup_stream_urls") ?: arrayListOf()
+    val backupNames = targetIntent.getStringArrayListExtra("backup_stream_names") ?: arrayListOf()
+    val backupQualities = targetIntent.getStringArrayListExtra("backup_stream_qualities") ?: arrayListOf()
+    val backupHeadersJson = targetIntent.getStringExtra("backup_stream_headers_json")
+
+    val backupHeadersList = try {
+      if (!backupHeadersJson.isNullOrBlank()) {
+        kotlinx.serialization.json.Json.decodeFromString<List<Map<String, String>>>(backupHeadersJson)
+      } else emptyList()
+    } catch (e: Exception) {
+      emptyList()
+    }
+
+    val backupCandidates = backupUrls.mapIndexed { index, url ->
+      xyz.mpv.rex.cinehub.failover.StreamCandidate(
+        url = url,
+        name = backupNames.getOrNull(index) ?: "Backup ${index + 1}",
+        quality = backupQualities.getOrNull(index) ?: "Auto",
+        headers = backupHeadersList.getOrNull(index) ?: emptyMap()
+      )
+    }
+
+    streamFailoverManager.setupCandidates(primaryCandidate, backupCandidates)
   }
 
   // ==================== Dependency Injection ====================
@@ -525,6 +582,7 @@ class PlayerActivity :
     overridePendingTransition(android.R.anim.fade_in, 0)
     super.onCreate(savedInstanceState)
     setContentView(binding.root)
+    extractAndSetupStreamFailover(intent)
 
     pendingIntentExtras = true
     // The headless controller may retain MPV idle after its mini player is closed. Always take
@@ -775,6 +833,12 @@ class PlayerActivity :
   }
 
   internal fun playDirectMedia(playableUri: String) {
+    val currentCandidate = streamFailoverManager.getCurrentCandidate()
+    if (currentCandidate != null && currentCandidate.url == playableUri) {
+      streamFailoverManager.applyCandidateHeaders(currentCandidate)
+    } else {
+      intentHandler.setHttpHeadersFromExtras(intent.extras)
+    }
     if (!playerPreferences.autoplayOnOpen.get() || playerPreferences.savePositionOnQuit.get() || playerPreferences.resumePlaybackMode.get() != ResumePlaybackMode.Never) {
       runCatching { MPVLib.setPropertyBoolean("pause", true) }
     }
@@ -1017,6 +1081,7 @@ class PlayerActivity :
   @RequiresApi(Build.VERSION_CODES.P)
   override fun onDestroy() {
     Log.d(TAG, "PlayerActivity onDestroy")
+    runCatching { streamFailoverManager.release() }
     runCatching { remoteClient.onPlayerFinished() }
 
     runCatching {
@@ -1565,6 +1630,9 @@ class PlayerActivity :
     property: String,
     value: Long,
   ) {
+    if (property == "time-pos") {
+      streamFailoverManager.updatePlaybackPosition(value.toDouble())
+    }
     mpvEventDispatcher.dispatchProperty(property, value)
   }
 
@@ -1579,6 +1647,9 @@ class PlayerActivity :
     property: String,
     value: Boolean,
   ) {
+    if (property == "paused-for-cache") {
+      streamFailoverManager.onBufferingStateChanged(value)
+    }
     mpvEventDispatcher.dispatchProperty(property, value)
   }
 
@@ -1615,6 +1686,15 @@ class PlayerActivity :
         Log.w(TAG, "handleEndOfFile: ignoring EOF because player is not ready yet")
         return
       }
+
+      val dur = viewModel.duration ?: 0
+      val pos = viewModel.pos ?: 0
+      val premature = dur == 0 || (dur > 0 && pos < dur - 8)
+      if (premature && streamFailoverManager.triggerFailover("Premature EOF or stream playback error")) {
+        Log.i(TAG, "handleEndOfFile: Triggered auto-failover to backup stream")
+        return
+      }
+
       // Save state immediately when EOF is reached
       saveVideoPlaybackState(fileName, isEof = true)
 
@@ -1690,11 +1770,13 @@ class PlayerActivity :
    * @param property The property name that changed
    * @param value The new Double value
    */
-  @Suppress("UnusedParameter")
   internal fun onObserverEvent(
     property: String,
     value: Double,
   ) {
+    if (property == "time-pos") {
+      streamFailoverManager.updatePlaybackPosition(value)
+    }
     mpvEventDispatcher.dispatchProperty(property, value)
   }
 
@@ -2296,6 +2378,7 @@ class PlayerActivity :
    */
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
+    extractAndSetupStreamFailover(intent)
     intentHandler.handleNewIntent(intent)
   }
 

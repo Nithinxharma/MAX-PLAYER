@@ -64,6 +64,7 @@ fun YoutubeTabScreen(
     var clickedChannelVideo by remember { mutableStateOf<YoutubeVideo?>(null) }
     
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(refreshTrigger, isSearching) {
@@ -190,10 +191,19 @@ fun YoutubeTabScreen(
                                             )
                                         )
                                         
-                                        val directStreamUrl = InvidiousClient.fetchDirectStreamUrl(video.videoId)
-                                        if (directStreamUrl != null) {
-                                            onPlayRequested(directStreamUrl, video.title, video.getBestAuthorThumbnailUrl() ?: "")
-                                        }
+                                        val candidates = InvidiousClient.fetchStreamCandidates(video.videoId)
+                                        val ranked = xyz.mpv.rex.cinehub.failover.StreamHealthResolver.resolveAndRankCandidates(candidates)
+                                        val primary = ranked.firstOrNull() ?: candidates.first()
+                                        val backups = ranked.drop(1)
+                                        xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
+                                            primaryCandidate = primary,
+                                            backupCandidates = backups,
+                                            context = context,
+                                            title = video.title,
+                                            launchSource = "cinetube",
+                                            posterUrl = video.getBestAuthorThumbnailUrl() ?: "",
+                                            sourceType = "cinetube"
+                                        )
                                     }
                                 },
                                 onLongClick = { longPressedVideo = video },
@@ -447,6 +457,7 @@ fun ChannelInfoBottomSheet(
     var channelVideos by remember { mutableStateOf<List<YoutubeVideo>>(emptyList()) }
     var isFetchingVideos by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(video.author) {
         isFetchingVideos = true
@@ -558,11 +569,20 @@ fun ChannelInfoBottomSheet(
                                         "AuthorThumbnail" to (channelVideo.getBestAuthorThumbnailUrl() ?: "")
                                     )
                                 )
-                                val directStreamUrl = InvidiousClient.fetchDirectStreamUrl(channelVideo.videoId)
-                                if (directStreamUrl != null) {
-                                    onPlayRequested(directStreamUrl, channelVideo.title, channelVideo.getBestAuthorThumbnailUrl() ?: "")
-                                    onDismiss() 
-                                }
+                                val candidates = InvidiousClient.fetchStreamCandidates(channelVideo.videoId)
+                                val ranked = xyz.mpv.rex.cinehub.failover.StreamHealthResolver.resolveAndRankCandidates(candidates)
+                                val primary = ranked.firstOrNull() ?: candidates.first()
+                                val backups = ranked.drop(1)
+                                xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
+                                    primaryCandidate = primary,
+                                    backupCandidates = backups,
+                                    context = context,
+                                    title = channelVideo.title,
+                                    launchSource = "cinetube",
+                                    posterUrl = channelVideo.getBestAuthorThumbnailUrl() ?: "",
+                                    sourceType = "cinetube"
+                                )
+                                onDismiss()
                             }
                         }
                     )
