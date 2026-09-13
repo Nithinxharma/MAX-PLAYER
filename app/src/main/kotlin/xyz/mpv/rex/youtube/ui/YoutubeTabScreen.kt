@@ -34,7 +34,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import xyz.mpv.rex.youtube.data.InvidiousClient
+import xyz.mpv.rex.youtube.data.CineTubeApiClient
 import xyz.mpv.rex.youtube.model.YoutubeVideo
 import xyz.mpv.rex.ui.browser.components.BrowserTopBar
 import coil.compose.AsyncImage
@@ -69,9 +69,9 @@ fun YoutubeTabScreen(
     LaunchedEffect(refreshTrigger, isSearching) {
         isLoading = true
         videoList = if (isSearching && searchQuery.isNotBlank()) {
-            InvidiousClient.fetchSearchVideos(searchQuery)
+            CineTubeApiClient.fetchSearchVideos(searchQuery)
         } else {
-            InvidiousClient.fetchTrendingVideos("Movies")
+            CineTubeApiClient.fetchTrendingVideos("Movies")
         }
         isLoading = false
     }
@@ -190,7 +190,7 @@ fun YoutubeTabScreen(
                                             )
                                         )
                                         
-                                        val directStreamUrl = InvidiousClient.fetchDirectStreamUrl(video.videoId)
+                                        val directStreamUrl = CineTubeApiClient.fetchDirectStreamUrl(video.videoId)
                                         if (directStreamUrl != null) {
                                             onPlayRequested(directStreamUrl, video.title, video.getBestAuthorThumbnailUrl() ?: "")
                                         }
@@ -450,7 +450,7 @@ fun ChannelInfoBottomSheet(
 
     LaunchedEffect(video.author) {
         isFetchingVideos = true
-        val results = InvidiousClient.fetchSearchVideos(video.author)
+        val results = CineTubeApiClient.fetchSearchVideos(video.author)
         channelVideos = results.filter { it.author.contains(video.author, ignoreCase = true) }
         isFetchingVideos = false
     }
@@ -558,7 +558,7 @@ fun ChannelInfoBottomSheet(
                                         "AuthorThumbnail" to (channelVideo.getBestAuthorThumbnailUrl() ?: "")
                                     )
                                 )
-                                val directStreamUrl = InvidiousClient.fetchDirectStreamUrl(channelVideo.videoId)
+                                val directStreamUrl = CineTubeApiClient.fetchDirectStreamUrl(channelVideo.videoId)
                                 if (directStreamUrl != null) {
                                     onPlayRequested(directStreamUrl, channelVideo.title, channelVideo.getBestAuthorThumbnailUrl() ?: "")
                                     onDismiss() 

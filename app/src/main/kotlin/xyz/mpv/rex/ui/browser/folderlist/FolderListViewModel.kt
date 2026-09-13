@@ -248,7 +248,7 @@ class FolderListViewModel(
         var folders = MediaFileRepository.getAllVideoFolders(getApplication())
         
         val scanTime = System.currentTimeMillis() - startTime
-        Log.d(TAG, "Media scan completed in ${scanTime}ms, found ${folders.size} folders")
+        Log.d("Home", "[Home] Scan completed in ${scanTime}ms, found ${folders.size} folders")
 
         // Enrich with metadata only if needed
         if (MetadataRetrieval.isFolderMetadataNeeded(browserPreferences)) {
@@ -283,10 +283,8 @@ class FolderListViewModel(
         _foldersWithNewCount.value = emptyList()
         _allVideoFolders.value = emptyList()
       } finally {
-        if (coroutineContext.isActive) {
-          _isLoading.value = false
-          _hasCompletedInitialLoad.value = true
-        }
+        _isLoading.value = false
+        _hasCompletedInitialLoad.value = true
       }
     }
   }

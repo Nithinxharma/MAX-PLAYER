@@ -63,8 +63,8 @@ object NfoScanner {
         // If this directory is an explicit TV show or Season folder, skip scanning as movies
         if (File(directory, "tvshow.nfo").exists() || isSeasonFolder(directory)) {
             return movies
-        }
 
+        }
         val files = directory.listFiles() ?: return movies
 
         // Process files in current directory
@@ -154,8 +154,8 @@ object NfoScanner {
             }
             // Do not recurse into Season folders inside this TV show directory as separate shows
             return tvShows
-        }
 
+        }
         // Otherwise recurse into subdirectories
         directory.listFiles()?.forEach { file ->
             if (file.isDirectory) {
@@ -187,44 +187,31 @@ object NfoScanner {
             }
         }
         collectVideos(targetDir)
-        if (allVideoFiles.isEmpty() && isVideoFile(showFolder)) {
-            allVideoFiles.add(showFolder)
-        }
 
         val seasonCounters = mutableMapOf<Int, Int>()
 
         for (videoFile in allVideoFiles) {
-            val nfoFile = File(videoFile.parentFile, "${videoFile.nameWithoutExtension}.nfo")
+            val nfoFile = java.io.File(videoFile.parentFile, "${videoFile.nameWithoutExtension}.nfo")
             var parsedEpisode: EpisodeItem? = null
-
             if (nfoFile.exists()) {
                 parsedEpisode = parseEpisodeNfo(nfoFile, videoFile)
             }
 
             if (parsedEpisode != null) {
-                // If NFO had missing/default season or episode, extract from filename or parent folder
-                var finalSeason = parsedEpisode.season
-                var finalEpisode = parsedEpisode.episode
-                if (finalSeason <= 0 || finalEpisode <= 0) {
-                    val (sFromFilename, eFromFilename) = parseSeasonAndEpisodeFromFilename(videoFile.name)
-                    if (finalSeason <= 0) {
-                        finalSeason = sFromFilename ?: extractSeasonFromFolder(videoFile.parentFile?.name ?: "") ?: 1
-                    }
-                    if (finalEpisode <= 0) {
-                        finalEpisode = eFromFilename ?: 1
-                    }
-                }
-                episodes.add(
-                    parsedEpisode.copy(
-                        season = finalSeason,
-                        episode = finalEpisode,
-                        stillPath = parsedEpisode.stillPath ?: findLocalStillForEpisode(videoFile)
-                    )
-                )
+                val finalSeason = parsedEpisode.season
+                val currentSeasonCount = (seasonCounters[finalSeason] ?: 0) + 1
+                val finalEpisode = if (parsedEpisode.episode > 0) parsedEpisode.episode else currentSeasonCount
+                seasonCounters[finalSeason] = maxOf(currentSeasonCount, finalEpisode)
+                
+                episodes.add(parsedEpisode.copy(
+                    videoFilePath = videoFile.absolutePath,
+                    episode = finalEpisode
+                ))
             } else {
-                // No NFO exists: extract Season and Episode using Kodi regex
-                val (extractedSeason, extractedEp) = parseSeasonAndEpisodeFromFilename(videoFile.name)
-                val finalSeason = extractedSeason ?: extractSeasonFromFolder(videoFile.parentFile?.name ?: "") ?: 1
+                val extractedSeason = extractSeasonFromFolder((videoFile.parentFile ?: targetDir).name)
+                val extractedEp = parseSeasonAndEpisodeFromFilename(videoFile.nameWithoutExtension).second
+
+                val finalSeason = extractedSeason ?: extractSeasonFromFolder((videoFile.parentFile ?: targetDir).name) ?: 1
                 val currentSeasonCount = (seasonCounters[finalSeason] ?: 0) + 1
                 val finalEpisode = extractedEp ?: currentSeasonCount
                 seasonCounters[finalSeason] = maxOf(currentSeasonCount, finalEpisode)
@@ -232,32 +219,15 @@ object NfoScanner {
                 val showName = targetDir.name
                 val rawClean = cleanEpisodeTitle(videoFile.nameWithoutExtension, showName)
                 val localStill = findLocalStillForEpisode(videoFile)
-
-                val episodeTitle = if (rawClean.isNotBlank() && !rawClean.equals(showName, ignoreCase = true)) {
-                    if (rawClean.startsWith("Episode ", ignoreCase = true)) rawClean else "Episode $finalEpisode: $rawClean"
-                } else {
-                    "Episode $finalEpisode"
-                }
-
+                
                 episodes.add(
-                    EpisodeItem(
-                        videoFilePath = videoFile.absolutePath,
-                        title = episodeTitle,
-                        season = finalSeason,
-                        episode = finalEpisode,
-                        plot = "Local Media File.",
-                        userRating = 0.0,
-                        aired = "",
-                        stillPath = localStill,
-                        sourceType = "local"
-                    )
+                    EpisodeItem(title = rawClean, season = finalSeason, episode = finalEpisode, plot = "S$finalSeason E$finalEpisode - $rawClean", videoFilePath = videoFile.absolutePath, stillPath = localStill ?: "", userRating = 0.0, aired = "")
                 )
             }
+        
         }
-
-        // Deduplicate by video file path and sort by season ascending, then episode ascending
-        return episodes.distinctBy { it.videoFilePath }
-            .sortedWith(compareBy({ it.season }, { it.episode }))
+        android.util.Log.d("Series", "[Series] Loaded ${episodes.size} episodes from ${showFolder.name}")
+        return episodes
     }
 
     /**
@@ -411,8 +381,8 @@ object NfoScanner {
                     ids[type] = value
                 }
             }
-        }
 
+        }
         // Also check <episodeguide> tag (e.g. {"tvmaze": "53647", "tvdb": "397060", "imdb": "tt13443470"})
         val guideText = getTagText(element, "episodeguide")
         if (guideText.contains("{") && guideText.contains("}")) {
@@ -424,8 +394,8 @@ object NfoScanner {
                     ids[k] = v
                 }
             }
-        }
 
+        }
         return ids
     }
 
@@ -562,8 +532,8 @@ object NfoScanner {
             val s = wordMatch.groupValues[1].toIntOrNull()
             val e = wordMatch.groupValues[2].toIntOrNull()
             return Pair(s, e)
-        }
 
+        }
         // Pattern 2: S01E02 or s1e2 or S01.E02
         val seRegex = Regex("(?i)[sS](\\d{1,2})[._\\-\\s]*[eE](\\d{1,3})")
         val seMatch = seRegex.find(fileName)
@@ -571,8 +541,8 @@ object NfoScanner {
             val s = seMatch.groupValues[1].toIntOrNull()
             val e = seMatch.groupValues[2].toIntOrNull()
             return Pair(s, e)
-        }
 
+        }
         // Pattern 3: 1x02 or 01x02
         val xRegex = Regex("(?i)\\b(\\d{1,2})x(\\d{1,3})\\b")
         val xMatch = xRegex.find(fileName)
@@ -580,16 +550,16 @@ object NfoScanner {
             val s = xMatch.groupValues[1].toIntOrNull()
             val e = xMatch.groupValues[2].toIntOrNull()
             return Pair(s, e)
-        }
 
+        }
         // Pattern 4: Standalone Episode: Episode 02, Ep 02, Ep.02, or E02
         val epRegex = Regex("(?i)\\b(?:ep|episode|e)[._\\-\\s]*(\\d{1,3})\\b")
         val epMatch = epRegex.find(fileName)
         if (epMatch != null) {
             val e = epMatch.groupValues[1].toIntOrNull()
             return Pair(null, e)
-        }
 
+        }
         // Pattern 5: Numeric episode pattern like " - 02 ", " - 02.", " 02.", "02 - "
         val numRegex = Regex("(?i)(?:^|[._\\-\\s])0*([1-9]\\d{0,2})(?:[._\\-\\s]|$)(?!\\b(?:1080|720|480|2160|x264|x265|hevc|10bit)\\b)")
         val numMatch = numRegex.find(fileName)
@@ -598,8 +568,8 @@ object NfoScanner {
             if (e != null && e in 1..999) {
                 return Pair(null, e)
             }
-        }
 
+        }
         return Pair(null, null)
     }
 
