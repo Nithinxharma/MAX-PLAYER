@@ -64,6 +64,40 @@ import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.utils.media.MediaUtils
 import java.io.File
 
+internal fun isLocalMovieItem(item: MovieItem): Boolean {
+  val path = item.videoFilePath
+  return path.isNotBlank() &&
+    !path.startsWith("ext_stream:") &&
+    !path.startsWith("cnc_stream:") &&
+    !path.startsWith("vidsrc:") &&
+    !path.startsWith("vidsrc_movie:") &&
+    !path.startsWith("stream_movie:") &&
+    !path.startsWith("http://") &&
+    !path.startsWith("https://")
+}
+
+internal fun isLocalTvShowItem(item: TvShowItem): Boolean {
+  val path = item.folderPath
+  return path.isNotBlank() &&
+    !path.startsWith("ext_stream:") &&
+    !path.startsWith("cnc_tv:") &&
+    !path.startsWith("vidsrc_tv:") &&
+    !path.startsWith("stream_tv:") &&
+    !path.startsWith("http://") &&
+    !path.startsWith("https://")
+}
+
+internal fun isLocalEpisode(ep: EpisodeItem): Boolean {
+  val path = ep.videoFilePath
+  return path.isNotBlank() &&
+    !path.startsWith("ext_stream:") &&
+    !path.startsWith("cnc_tv:") &&
+    !path.startsWith("vidsrc_tv:") &&
+    !path.startsWith("stream_tv:") &&
+    !path.startsWith("http://") &&
+    !path.startsWith("https://")
+}
+
 @Serializable
 object CineHubScreen : Screen {
 
@@ -78,6 +112,7 @@ object CineHubScreen : Screen {
     val libraryDao = database.cineLibraryDao()
     val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
     val providerRegistry = koinInject<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>()
+    val extensionManager = koinInject<xyz.mpv.rex.cinehub.extension.manager.ExtensionManager>()
 
     val enableOnlineCatalog by browserPreferences.enableOnlineCatalog.collectAsState()
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
@@ -855,12 +890,10 @@ object CineHubScreen : Screen {
   ) {
     when (item) {
       is MovieItem -> {
-        if (item.videoFilePath.isNotBlank() && !item.videoFilePath.contains("://") && !item.videoFilePath.startsWith("ext_stream:") && !item.videoFilePath.startsWith("cnc_stream:") && !item.videoFilePath.startsWith("vidsrc:")) {
-          val f = java.io.File(item.videoFilePath)
-          if (f.exists() && f.length() > 0) {
-            MediaUtils.playFile(item.videoFilePath, context, "cinehub", title = item.title, posterUrl = item.posterPath, sourceType = "cinehub")
-            return
-          }
+        if (isLocalMovieItem(item)) {
+          // Direct playback for local movies without opening stream selector or links
+          MediaUtils.playFile(item.videoFilePath, context, "cinehub", title = item.title, posterUrl = item.posterPath, sourceType = "cinehub")
+          return
         }
 
         val request = xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
@@ -870,8 +903,8 @@ object CineHubScreen : Screen {
           posterUrl = item.posterPath,
           isMovie = true,
           providerId = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringBefore("::") else null,
-          dataUrl = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringAfter("::") else null,
-          directFilePath = item.videoFilePath.takeIf { !it.contains(":") }
+          dataUrl = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringAfter("::") else item.videoFilePath,
+          directFilePath = null
         )
 
         if (onOpenStreamSelector != null) {
@@ -900,13 +933,36 @@ object CineHubScreen : Screen {
         }
       }
       is TvShowItem -> {
+        if (isLocalTvShowItem(item)) {
+          // Direct playback for local TV shows using old version logic without opening stream selector
+          scope.launch(Dispatchers.IO) {
+            val episodes = if (item.folderPath.isNotBlank() && java.io.File(item.folderPath).exists()) {
+              NfoScanner.scanTvShowEpisodes(java.io.File(item.folderPath))
+            } else {
+              emptyList()
+            }
+            val firstEp = episodes.firstOrNull()
+            withContext(Dispatchers.Main) {
+              if (firstEp != null) {
+                val epTitle = "${item.title} - S${firstEp.season.toString().padStart(2, '0')}E${firstEp.episode.toString().padStart(2, '0')}"
+                Toast.makeText(context, "Playing $epTitle", Toast.LENGTH_SHORT).show()
+                MediaUtils.playFile(firstEp.videoFilePath, context, "cinehub", title = epTitle, posterUrl = item.posterPath, sourceType = "cinehub")
+              } else {
+                Toast.makeText(context, "No local episodes found for ${item.title}", Toast.LENGTH_SHORT).show()
+              }
+            }
+          }
+          return
+        }
+
         val request = xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
           title = item.title,
           tmdbId = item.tmdbId,
           isMovie = false,
           seasonNumber = 1,
           episodeNumber = 1,
-          posterUrl = item.posterPath
+          posterUrl = item.posterPath,
+          dataUrl = item.folderPath
         )
         if (onOpenStreamSelector != null) {
           onOpenStreamSelector(request)
@@ -1329,6 +1385,7 @@ private fun CineDetailBottomSheet(
   val libraryDao = database.cineLibraryDao()
   val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
   val scope = rememberCoroutineScope()
+  val context = LocalContext.current
   
   val tmdbId = when (item) {
     is MovieItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
@@ -1540,7 +1597,10 @@ private fun CineDetailBottomSheet(
           ) {
             Button(
               onClick = {
-                if (onRequestStream != null) {
+                if (isLocalMovieItem(item)) {
+                  onDismiss()
+                  MediaUtils.playFile(item.videoFilePath, context, "cinehub", title = item.title, posterUrl = item.posterPath, sourceType = "cinehub")
+                } else if (onRequestStream != null) {
                   onRequestStream(
                     xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
                       title = title,
@@ -1549,8 +1609,8 @@ private fun CineDetailBottomSheet(
                       posterUrl = posterPath,
                       isMovie = true,
                       providerId = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringBefore("::") else null,
-                      dataUrl = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringAfter("::") else null,
-                      directFilePath = item.videoFilePath.takeIf { !it.contains(":") }
+                      dataUrl = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringAfter("::") else item.videoFilePath,
+                      directFilePath = null
                     )
                   )
                 } else {
@@ -1569,8 +1629,6 @@ private fun CineDetailBottomSheet(
             }
 
             var isScrapingMovie by remember { mutableStateOf(false) }
-            val context = LocalContext.current
-            val scope = rememberCoroutineScope()
 
             OutlinedButton(
               onClick = {
@@ -1725,7 +1783,12 @@ private fun CineDetailBottomSheet(
             Button(
               onClick = {
                 if (nextEpisodeToPlay != null) {
-                  if (onRequestStream != null) {
+                  if (isLocalEpisode(nextEpisodeToPlay)) {
+                    onDismiss()
+                    val displayName = "$title - S${nextEpisodeToPlay.season.toString().padStart(2, '0')}E${nextEpisodeToPlay.episode.toString().padStart(2, '0')}${if (nextEpisodeToPlay.title.isNotBlank()) " - " + nextEpisodeToPlay.title else ""}"
+                    Toast.makeText(context, "Playing $displayName", Toast.LENGTH_SHORT).show()
+                    MediaUtils.playFile(nextEpisodeToPlay.videoFilePath, context, "cinehub", title = displayName, posterUrl = nextEpisodeToPlay.stillPath?.takeIf { it.isNotBlank() } ?: posterPath, sourceType = "cinehub")
+                  } else if (onRequestStream != null) {
                     onRequestStream(
                       xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
                         title = title,
@@ -1735,7 +1798,7 @@ private fun CineDetailBottomSheet(
                         episodeNumber = nextEpisodeToPlay.episode,
                         episodeTitle = nextEpisodeToPlay.title,
                         posterUrl = nextEpisodeToPlay.stillPath?.takeIf { it.isNotBlank() } ?: posterPath,
-                        directFilePath = nextEpisodeToPlay.videoFilePath.takeIf { !it.contains(":") }
+                        dataUrl = nextEpisodeToPlay.videoFilePath
                       )
                     )
                   } else {
@@ -1889,7 +1952,12 @@ private fun CineDetailBottomSheet(
                   modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                      if (onRequestStream != null) {
+                      if (isLocalEpisode(ep)) {
+                        onDismiss()
+                        val displayName = "$title - S${ep.season.toString().padStart(2, '0')}E${ep.episode.toString().padStart(2, '0')}${if (ep.title.isNotBlank()) " - " + ep.title else ""}"
+                        Toast.makeText(context, "Playing $displayName", Toast.LENGTH_SHORT).show()
+                        MediaUtils.playFile(ep.videoFilePath, context, "cinehub", title = displayName, posterUrl = ep.stillPath?.takeIf { it.isNotBlank() } ?: posterPath, sourceType = "cinehub")
+                      } else if (onRequestStream != null) {
                         onRequestStream(
                           xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
                             title = title,
@@ -1899,7 +1967,7 @@ private fun CineDetailBottomSheet(
                             episodeNumber = ep.episode,
                             episodeTitle = ep.title,
                             posterUrl = ep.stillPath?.takeIf { it.isNotBlank() } ?: posterPath,
-                            directFilePath = ep.videoFilePath.takeIf { !it.contains(":") }
+                            dataUrl = ep.videoFilePath
                           )
                         )
                       } else {

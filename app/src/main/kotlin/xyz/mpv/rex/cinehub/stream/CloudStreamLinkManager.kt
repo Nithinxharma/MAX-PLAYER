@@ -93,16 +93,52 @@ object CloudStreamLinkManager {
             }
         }
 
-        // 2. Query target extension provider if specified
+        // Direct http/https stream URL
+        if (!request.dataUrl.isNullOrBlank() && (request.dataUrl.startsWith("http://") || request.dataUrl.startsWith("https://"))) {
+            candidates.add(
+                StreamCandidate(
+                    url = request.dataUrl,
+                    name = "Direct Stream (${request.title})",
+                    quality = "1080p",
+                    isM3u8 = request.dataUrl.contains(".m3u8")
+                )
+            )
+        }
+
+        // Direct CineCloud / Netmirror URL resolution
+        if (!request.dataUrl.isNullOrBlank() && (request.dataUrl.startsWith("cnc_stream:") || request.dataUrl.startsWith("cnc_tv:") || request.dataUrl.startsWith("vidsrc_") || request.dataUrl.startsWith("stream_tv:"))) {
+            try {
+                val direct = CineCloudRepoClient.resolveMediaUri(request.dataUrl)
+                if (direct.isNotBlank() && (direct.startsWith("http://") || direct.startsWith("https://"))) {
+                    candidates.add(
+                        StreamCandidate(
+                            url = direct,
+                            name = "CineHub Primary Server (Fast)",
+                            quality = "1080p",
+                            isM3u8 = direct.contains(".m3u8")
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to resolve media URI ${request.dataUrl}: ${e.message}")
+            }
+        }
+
+        // 2. Query extension providers
         val providerRegistry = runCatching {
             KoinJavaComponent.get<ProviderRegistry>(ProviderRegistry::class.java)
         }.getOrNull()
 
         val providerTasks = mutableListOf<suspend () -> List<CineHubStreamLink>>()
 
-        if (!request.providerId.isNullOrBlank() && providerRegistry != null) {
-            val targetProvider = providerRegistry.getProvider(request.providerId)
-            if (targetProvider != null) {
+        if (providerRegistry != null) {
+            val providersToQuery = if (!request.providerId.isNullOrBlank()) {
+                listOfNotNull(providerRegistry.getProvider(request.providerId))
+            } else {
+                providerRegistry.getEnabledProviders()
+            }
+
+            for (targetProvider in providersToQuery) {
                 providerTasks.add {
                     try {
                         val queryData = request.dataUrl
@@ -122,7 +158,6 @@ object CloudStreamLinkManager {
             providerTasks.add {
                 try {
                     val archiveProvider = OpenArchiveProvider(httpClient)
-                    // Search archive for title
                     val searchMatches = archiveProvider.search(request.title)
                     val bestMatch = searchMatches.firstOrNull { 
                         it.title.contains(request.title, ignoreCase = true) ||
@@ -145,8 +180,13 @@ object CloudStreamLinkManager {
             providerTasks.add {
                 try {
                     val id = request.imdbId.ifBlank { request.tmdbId }
-                    val direct = CineCloudRepoClient.resolveDirectStreamUrl(id, "nf")
-                        ?: CineCloudRepoClient.resolveDirectStreamUrl(id, "pv")
+                    val direct = if (request.isMovie) {
+                        CineCloudRepoClient.resolveDirectStreamUrl(id, "nf")
+                            ?: CineCloudRepoClient.resolveDirectStreamUrl(id, "pv")
+                    } else {
+                        CineCloudRepoClient.resolveDirectStreamUrl(id, "hs")
+                            ?: CineCloudRepoClient.resolveDirectStreamUrl(id, "dp")
+                    }
                     if (!direct.isNullOrBlank() && isValidMediaStreamUrl(direct)) {
                         listOf(
                             CineHubStreamLink(

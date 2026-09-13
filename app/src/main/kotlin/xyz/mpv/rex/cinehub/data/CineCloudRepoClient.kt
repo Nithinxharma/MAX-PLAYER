@@ -267,7 +267,10 @@ object CineCloudRepoClient {
 
     suspend fun resolveDirectStreamUrl(postId: String, platformCode: String): String? = withContext(Dispatchers.IO) {
         if (platformCode.equals("vidsrc", ignoreCase = true)) {
-            // Do not return raw HTML embed URLs that freeze MPV
+            val nfDirect = resolveDirectStreamUrl(postId, "nf")
+            if (!nfDirect.isNullOrBlank()) return@withContext nfDirect
+            val pvDirect = resolveDirectStreamUrl(postId, "pv")
+            if (!pvDirect.isNullOrBlank()) return@withContext pvDirect
             return@withContext null
         }
 

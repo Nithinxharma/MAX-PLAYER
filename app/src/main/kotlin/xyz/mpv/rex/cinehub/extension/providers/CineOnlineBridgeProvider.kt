@@ -81,17 +81,25 @@ class CineOnlineBridgeProvider(private val context: Context) : CineHubProvider {
     }
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> = withContext(Dispatchers.IO) {
-        val direct = CineCloudRepoClient.resolveDirectStreamUrl(data, "vidsrc")
-        if (!direct.isNullOrBlank()) {
-            listOf(
+        val streams = mutableListOf<CineHubStreamLink>()
+        val direct = if (data.contains(":")) {
+            CineCloudRepoClient.resolveMediaUri(data)
+        } else {
+            CineCloudRepoClient.resolveDirectStreamUrl(data, "nf")
+                ?: CineCloudRepoClient.resolveDirectStreamUrl(data, "pv")
+                ?: CineCloudRepoClient.resolveDirectStreamUrl(data, "hs")
+                ?: CineCloudRepoClient.resolveDirectStreamUrl(data, "dp")
+        }
+        if (!direct.isNullOrBlank() && (direct.startsWith("http://") || direct.startsWith("https://"))) {
+            streams.add(
                 CineHubStreamLink(
-                    name = "CineHub Mirror HD",
+                    name = "CineHub Network Server 1 (HD)",
                     url = direct,
-                    quality = "1080p"
+                    quality = "1080p",
+                    isM3u8 = direct.contains(".m3u8")
                 )
             )
-        } else {
-            emptyList()
         }
+        streams
     }
 }

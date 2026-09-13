@@ -31,7 +31,7 @@ val domainModule = module {
     single { xyz.mpv.rex.domain.ytdl.YtDlClient(androidContext(), get()) }
     single { xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry() }
     single { xyz.mpv.rex.cinehub.extension.manager.RepositoryManager(get(), get()) }
-    single { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get(), get()) }
+    single(createdAtStart = true) { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get(), get()) }
 }
 
 

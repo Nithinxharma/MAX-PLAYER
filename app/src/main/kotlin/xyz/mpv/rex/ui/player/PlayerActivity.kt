@@ -745,8 +745,14 @@ class PlayerActivity :
         enableVideoAfterBackground()
         miniPlayerStateManager.clearState()
       }
+      val isCineHubLaunch = intent.getStringExtra("launch_source") == "cinehub"
+      val isLocal = playableUri.startsWith("/") || playableUri.startsWith("content://") || playableUri.startsWith("file://")
       if (isUriM3U(playableUri)) {
         loadM3uPlaylistOrPlayDirectly(playableUri)
+      } else if (isLocal || isCineHubLaunch || !HttpUtils.isNetworkStream(runCatching { Uri.parse(playableUri) }.getOrNull())) {
+        enableVideoAfterBackground()
+        runCatching { safeSetPropertyString("vid", "auto") }
+        player.playFile(playableUri)
       } else {
         loadMediaOrResolveWebStream(playableUri)
       }
@@ -839,8 +845,9 @@ class PlayerActivity :
     } else {
       intentHandler.setHttpHeadersFromExtras(intent.extras)
     }
-    if (!playerPreferences.autoplayOnOpen.get() || playerPreferences.savePositionOnQuit.get() || playerPreferences.resumePlaybackMode.get() != ResumePlaybackMode.Never) {
-      runCatching { MPVLib.setPropertyBoolean("pause", true) }
+    enableVideoAfterBackground()
+    runCatching {
+      safeSetPropertyString("vid", "auto")
     }
     if (mpvInitialized && player.holder.surface.isValid) {
       lifecycleScope.launch(Dispatchers.Default) {

@@ -168,7 +168,12 @@ object MediaUtils : KoinComponent {
 
     title?.let {
       intent.putExtra("title", it)
-      intent.putExtra("filename", it)
+      val isLocalFile = (source is String && !source.startsWith("http://") && !source.startsWith("https://")) ||
+        source is File ||
+        (source is Uri && source.scheme != "http" && source.scheme != "https")
+      if (!isLocalFile) {
+        intent.putExtra("filename", it)
+      }
     }
     posterUrl?.let { intent.putExtra("cinetv_poster", it) }
     sourceType?.let { intent.putExtra("cinetv_source_type", it) }
