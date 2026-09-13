@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/kotlin/xyz/mpv/rex/cinehub/extension/providers/CineOnlineBridgeProvider.kt
 package xyz.mpv.rex.cinehub.extension.providers
 
 import android.content.Context
@@ -54,25 +55,22 @@ class CineOnlineBridgeProvider(private val context: Context) : CineHubProvider {
         val isTv = url.contains("tmdb://tv/")
         val idStr = url.removePrefix("tmdb://tv/").removePrefix("tmdb://movie/")
         if (isTv) {
-            val details = CineOnlineScraper.fetchTvShowDetails(idStr) ?: return@withContext null
+            val show = CineOnlineScraper.getOrFetchTvShow(context, "", idStr) ?: return@withContext null
             val episodes = mutableListOf<CineHubEpisode>()
-            details.seasons.forEach { season ->
-                if (season.season_number > 0) {
-                    val eps = CineOnlineScraper.fetchTvShowEpisodes(context, idStr, season.season_number, details.name)
-                    eps.forEach { ep ->
-                        episodes.add(CineHubEpisode(
-                            id = "${url}_S${ep.season}E${ep.episode}", name = ep.title,
-                            season = ep.season, episode = ep.episode, data = "tv:${idStr}:${ep.season}:${ep.episode}",
-                            posterUrl = ep.stillPath
-                        ))
-                    }
+            show.seasons.forEach { season ->
+                season.episodes.forEach { ep ->
+                    episodes.add(CineHubEpisode(
+                        id = "${url}_S${season.seasonNumber}E${ep.episodeNumber}", name = ep.title,
+                        season = season.seasonNumber, episode = ep.episodeNumber, data = "tv:${idStr}:${season.seasonNumber}:${ep.episodeNumber}",
+                        posterUrl = ep.stillPath
+                    ))
                 }
             }
             CineHubMediaDetails(
-                id = idStr, title = details.name ?: "", url = url, providerId = id, providerName = name,
-                posterUrl = details.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" }, backdropUrl = details.backdrop_path?.let { "https://image.tmdb.org/t/p/w500$it" }, overview = details.overview,
-                year = details.first_air_date?.take(4)?.toIntOrNull(), rating = details.vote_average, genres = emptyList(),
-                cast = emptyList(), type = TvType.TvSeries, episodes = episodes
+                id = show.tmdbId, title = show.title, url = url, providerId = id, providerName = name,
+                posterUrl = show.posterPath, backdropUrl = show.backdropPath, overview = show.plot,
+                year = show.premiered.take(4).toIntOrNull(), rating = show.userRating, genres = listOfNotNull(show.genre.ifBlank { null }),
+                cast = show.actors.map { it.name }, type = TvType.TvSeries, episodes = episodes
             )
         } else {
             val movie = CineOnlineScraper.getOrFetchMovie(context, "", idStr) ?: return@withContext null
@@ -84,8 +82,6 @@ class CineOnlineBridgeProvider(private val context: Context) : CineHubProvider {
             )
         }
     }
-
-    override suspend fun loadEpisodes(url: String): List<CineHubEpisode> = loadDetails(url)?.episodes ?: emptyList()
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> = withContext(Dispatchers.IO) {
         val streams = mutableListOf<CineHubStreamLink>()
@@ -104,3 +100,4 @@ class CineOnlineBridgeProvider(private val context: Context) : CineHubProvider {
         streams
     }
 }
+INNER_EOF

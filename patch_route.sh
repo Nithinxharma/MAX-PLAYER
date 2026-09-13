@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/kotlin/xyz/mpv/rex/ui/preferences/ExtensionPreferencesScreenRoute.kt
 package xyz.mpv.rex.ui.preferences
 
 import androidx.compose.runtime.Composable
@@ -15,3 +16,4 @@ object ExtensionPreferencesScreenRoute : Screen {
         )
     }
 }
+INNER_EOF

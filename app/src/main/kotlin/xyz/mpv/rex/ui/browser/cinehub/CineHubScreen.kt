@@ -327,8 +327,23 @@ object CineHubScreen : Screen {
                           CineOnlineScraper.executeManualMovieSearch(query)
                         }.getOrDefault(emptyList())
                       }
+                      val extDeferred = async {
+                        val all = providerRegistry.getEnabledProviders().map { p ->
+                            async { runCatching { p.search(query) }.getOrDefault(emptyList()) }
+                        }.awaitAll().flatten()
+                        val merged = all.groupBy { it.title.lowercase() + (it.year ?: "") }.map { entry ->
+                            val first = entry.value.first()
+                            first.copy(
+                                providerId = "merged",
+                                providerName = entry.value.joinToString(", ") { it.providerName },
+                                providerIds = entry.value.map { it.providerId }.distinct(),
+                                providerNames = entry.value.map { it.providerName }.distinct()
+                            )
+                        }
+                        merged
+                      }
                       val res = tmdbDeferred.await()
-                      val extRes = emptyList<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>()
+                      val extRes = extDeferred.await()
                       withContext(Dispatchers.Main) {
                         searchResults = res
                         extensionSearchResults = extRes
@@ -655,8 +670,9 @@ object CineHubScreen : Screen {
               }
 
               // Extension Provider Sections
-              if (selectedProviderId != null && selectedProviderId != "local") {
-                providerHomeRows.filter { it.items.firstOrNull()?.providerId == selectedProviderId }.forEach { homeRow ->
+              if (selectedProviderId != "local") {
+                val filteredRows = if (selectedProviderId == null) providerHomeRows else providerHomeRows.filter { it.items.firstOrNull()?.providerId == selectedProviderId }
+                filteredRows.forEach { homeRow ->
                   if (homeRow.items.isNotEmpty()) {
                     item {
                       SectionHeader(title = homeRow.title)
@@ -1329,11 +1345,19 @@ private fun ExtensionSearchResultRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        SuggestionChip(
-          onClick = {},
-          label = { Text(item.providerName, style = MaterialTheme.typography.labelSmall) },
-          modifier = Modifier.height(24.dp)
-        )
+        androidx.compose.foundation.lazy.LazyRow(
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          modifier = Modifier.weight(1f)
+        ) {
+          val names = if (item.providerNames.isNotEmpty()) item.providerNames else listOf(item.providerName)
+          items(names) { name ->
+            SuggestionChip(
+              onClick = {},
+              label = { Text("[$name]", style = MaterialTheme.typography.labelSmall) },
+              modifier = Modifier.height(24.dp)
+            )
+          }
+        }
         if (item.year != null) {
           Text(
             text = item.year.toString(),

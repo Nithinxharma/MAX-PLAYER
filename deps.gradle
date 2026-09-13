@@ -1,0 +1,13 @@
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+configurations { query }
+dependencies {
+    query 'com.github.recloudstream:cloudstream:master-SNAPSHOT'
+}
+task checkDeps {
+    doLast {
+        configurations.query.resolve().each { println it }
+    }
+}

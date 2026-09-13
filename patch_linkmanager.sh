@@ -1,1 +1,2 @@
-sed -i 's/val extractedLinks = queryVideoExtractors(request)/val extractedLinks = generateMultiProviderLinks(request, candidates.firstOrNull { it.url.startsWith("http") }?.url)/g' app/src/main/kotlin/xyz/mpv/rex/cinehub/stream/CloudStreamLinkManager.kt
+sed -i '247,$d' app/src/main/kotlin/xyz/mpv/rex/cinehub/stream/CloudStreamLinkManager.kt
+echo "}" >> app/src/main/kotlin/xyz/mpv/rex/cinehub/stream/CloudStreamLinkManager.kt

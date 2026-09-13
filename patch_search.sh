@@ -1,1 +1,35 @@
-awk 'NR>=330 && NR<=335 { next } NR==337 { print "                      val extRes = emptyList<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>()"; next } { print }' app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt > temp.kt && mv temp.kt app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt
+awk -v replace_start=324 -v replace_end=337 '
+NR < replace_start { print }
+NR == replace_start {
+    print "                    scope.launch(Dispatchers.IO) {"
+    print "                      val tmdbDeferred = async {"
+    print "                        runCatching {"
+    print "                          CineOnlineScraper.executeManualMovieSearch(query)"
+    print "                        }.getOrDefault(emptyList())"
+    print "                      }"
+    print "                      val extDeferred = async {"
+    print "                        val all = providerRegistry.getEnabledProviders().map { p ->"
+    print "                            async { runCatching { p.search(query) }.getOrDefault(emptyList()) }"
+    print "                        }.awaitAll().flatten()"
+    print "                        val merged = all.groupBy { it.title.lowercase() + (it.year ?: \"\") }.map { entry ->"
+    print "                            val first = entry.value.first()"
+    print "                            first.copy("
+    print "                                providerId = \"merged\","
+    print "                                providerName = entry.value.joinToString(\", \") { it.providerName },"
+    print "                                providerIds = entry.value.map { it.providerId }.distinct(),"
+    print "                                providerNames = entry.value.map { it.providerName }.distinct()"
+    print "                            )"
+    print "                        }"
+    print "                        merged"
+    print "                      }"
+    print "                      val res = tmdbDeferred.await()"
+    print "                      val extRes = extDeferred.await()"
+    print "                      withContext(Dispatchers.Main) {"
+    print "                        searchResults = res"
+    print "                        extensionSearchResults = extRes"
+    print "                        isSearchingOnline = false"
+    print "                      }"
+    print "                    }"
+}
+NR > replace_end { print }
+' app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt > temp.kt && mv temp.kt app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt

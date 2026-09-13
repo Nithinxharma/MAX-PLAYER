@@ -1,0 +1,1 @@
+sed -i 's/val providerName: String,/val providerName: String,\n    val providerIds: List<String> = emptyList(),\n    val providerNames: List<String> = emptyList(),/g' app/src/main/kotlin/xyz/mpv/rex/cinehub/extension/api/ProviderAPI.kt

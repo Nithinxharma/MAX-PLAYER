@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/kotlin/xyz/mpv/rex/ui/preferences/ExtensionPreferencesScreen.kt
 package xyz.mpv.rex.ui.preferences
 
 import android.widget.Toast
@@ -28,6 +29,7 @@ import xyz.mpv.rex.cinehub.extension.manager.RepositoryManager
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.ExtensionRepo
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
+import xyz.mpv.rex.ui.components.TopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,13 +54,9 @@ fun ExtensionPreferencesScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Extensions") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            TopBar(
+                title = "Extensions",
+                onNavigationIconClick = onNavigateBack
             )
         },
         floatingActionButton = {
@@ -363,3 +361,4 @@ fun Preference(
         }
     }
 }
+INNER_EOF
