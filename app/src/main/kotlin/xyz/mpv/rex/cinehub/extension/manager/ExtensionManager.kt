@@ -1,106 +1,72 @@
 package xyz.mpv.rex.cinehub.extension.manager
 
 import android.content.Context
-import dalvik.system.DexClassLoader
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import xyz.mpv.rex.cinehub.extension.api.MainAPI
+import okhttp3.OkHttpClient
+import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
+import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
+import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
+import xyz.mpv.rex.cinehub.extension.providers.CineOnlineBridgeProvider
+import xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider
+import xyz.mpv.rex.cinehub.extension.providers.OpenArchiveProvider
+import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.database.MpvExDatabase
 import java.io.File
-import java.net.URL
 
-class ExtensionManager(private val context: Context, private val db: MpvExDatabase) {
-
-    private val _activeProviders = MutableStateFlow<List<MainAPI>>(emptyList())
-    val activeProviders = _activeProviders.asStateFlow()
-
+/**
+ * ExtensionManager coordinates installed extensions, life-cycles,
+ * updates, and provider registrations.
+ */
+class ExtensionManager(
+    private val context: Context,
+    private val db: MpvExDatabase,
+    private val registry: ProviderRegistry,
+    private val repositoryManager: RepositoryManager,
+    private val client: OkHttpClient
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val extensionDir = File(context.filesDir, "cinehub_extensions")
-    private val optimizedDir = File(context.filesDir, "cinehub_extensions_opt")
+
+    private val _isUpdating = MutableStateFlow(false)
+    val isUpdating = _isUpdating.asStateFlow()
 
     init {
         if (!extensionDir.exists()) extensionDir.mkdirs()
-        if (!optimizedDir.exists()) optimizedDir.mkdirs()
+        // Register built-in providers immediately
+        registry.register(OpenArchiveProvider(client), isEnabledByDefault = true)
+        registry.register(CineOnlineBridgeProvider(context), isEnabledByDefault = true)
+
+        scope.launch {
+            loadInstalledExtensions()
+        }
     }
 
-    suspend fun loadEnabledExtensions() = withContext(Dispatchers.IO) {
-        val enabledExts = db.extensionDao().getEnabledExtensionsSync()
-        val providers = mutableListOf<MainAPI>()
+    fun getAllInstalledExtensions(): Flow<List<InstalledExtension>> {
+        return db.extensionDao().getAllInstalledExtensions()
+    }
 
+    suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
+        val enabledExts = db.extensionDao().getEnabledExtensionsSync()
         for (ext in enabledExts) {
             try {
-                if (ext.localFilePath != null && File(ext.localFilePath).exists()) {
-                    val loader = DexClassLoader(
-                        ext.localFilePath,
-                        optimizedDir.absolutePath,
-                        null,
-                        context.classLoader
-                    )
-                    
-                    if (ext.classesFile != null) {
-                        val classes = ext.classesFile.split(",")
-                        for (className in classes) {
-                            if (className.isNotBlank()) {
-                                val loadedClass = loader.loadClass(className)
-                                val providerInstance = loadedClass.getDeclaredConstructor().newInstance() as MainAPI
-                                providers.add(providerInstance)
-                            }
-                        }
-                    }
-                }
+                val provider = DeclarativeCineHubProvider(ext, client)
+                registry.register(provider, isEnabledByDefault = ext.isEnabled)
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Safemode: disable if crash on load
-                db.extensionDao().updateExtensionState(ext.pkgName, false)
             }
-        }
-        
-        _activeProviders.value = providers
-    }
-
-    suspend fun addRepository(url: String, name: String) = withContext(Dispatchers.IO) {
-        db.extensionDao().insertRepository(
-            xyz.mpv.rex.cinehub.extension.model.ExtensionRepo(
-                url = url,
-                name = name,
-                lastSync = System.currentTimeMillis()
-            )
-        )
-    }
-
-    suspend fun removeRepository(url: String) = withContext(Dispatchers.IO) {
-        db.extensionDao().deleteRepository(
-            xyz.mpv.rex.cinehub.extension.model.ExtensionRepo(url = url, name = "")
-        )
-    }
-
-    // Dummy logic to demonstrate fetching plugins from repo.json
-    suspend fun fetchAvailablePlugins(repoUrl: String): List<AvailablePlugin> = withContext(Dispatchers.IO) {
-        try {
-            // In a real implementation this fetches repoUrl
-            // e.g. val json = URL(repoUrl).readText()
-            // val repo = Gson().fromJson(json, RepoResponse::class.java)
-            // return repo.pluginLists
-            
-            // For now, simulate an empty list or parse real JSON if available
-            emptyList()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
         }
     }
 
     suspend fun installExtension(plugin: AvailablePlugin): Boolean = withContext(Dispatchers.IO) {
         try {
-            val file = File(extensionDir, "${plugin.internalName}.cs3")
-            // URL(plugin.url).openStream().use { input ->
-            //     file.outputStream().use { output ->
-            //         input.copyTo(output)
-            //     }
-            // }
-            
             val installed = InstalledExtension(
                 pkgName = plugin.internalName,
                 name = plugin.name,
@@ -108,29 +74,91 @@ class ExtensionManager(private val context: Context, private val db: MpvExDataba
                 versionCode = plugin.versionCode,
                 description = plugin.description,
                 iconUrl = plugin.iconUrl,
-                repositoryUrl = plugin.tvUrl, 
+                repositoryUrl = plugin.repositoryUrl,
                 isEnabled = true,
-                localFilePath = file.absolutePath,
-                classesFile = plugin.classes.joinToString(",")
+                localFilePath = null,
+                classesFile = plugin.authors.joinToString(", ")
             )
             db.extensionDao().insertExtension(installed)
-            loadEnabledExtensions()
-            return@withContext true
+
+            val provider = DeclarativeCineHubProvider(installed, client)
+            registry.register(provider, isEnabledByDefault = true)
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            return@withContext false
+            false
+        }
+    }
+
+    suspend fun uninstallExtension(pkgName: String) = withContext(Dispatchers.IO) {
+        try {
+            val ext = InstalledExtension(
+                pkgName = pkgName,
+                name = "",
+                version = "",
+                versionCode = 0
+            )
+            db.extensionDao().deleteExtension(ext)
+            registry.unregister(pkgName)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun toggleExtension(pkgName: String, isEnabled: Boolean) = withContext(Dispatchers.IO) {
+        db.extensionDao().updateExtensionState(pkgName, isEnabled)
+        registry.setProviderEnabled(pkgName, isEnabled)
+    }
+
+    suspend fun checkForUpdates(): List<PluginUpdateInfo> = withContext(Dispatchers.IO) {
+        val updates = mutableListOf<PluginUpdateInfo>()
+        val installedList = db.extensionDao().getEnabledExtensionsSync()
+        val cachedPlugins = repositoryManager.getCachedPlugins()
+
+        for (inst in installedList) {
+            val remote = cachedPlugins.find { it.internalName == inst.pkgName }
+            if (remote != null && remote.versionCode > inst.versionCode) {
+                updates.add(
+                    PluginUpdateInfo(
+                        pkgName = inst.pkgName,
+                        currentVersion = inst.version,
+                        newVersion = remote.version,
+                        plugin = remote
+                    )
+                )
+            }
+        }
+        updates
+    }
+
+    suspend fun updateExtension(plugin: AvailablePlugin): Boolean = withContext(Dispatchers.IO) {
+        installExtension(plugin)
+    }
+
+    suspend fun updateAll(): Int = withContext(Dispatchers.IO) {
+        _isUpdating.value = true
+        var count = 0
+        try {
+            repositoryManager.syncAllRepositories()
+            val updates = checkForUpdates()
+            for (up in updates) {
+                if (updateExtension(up.plugin)) {
+                    count++
+                }
+            }
+        } finally {
+            _isUpdating.value = false
+        }
+        count
+    }
+
+    fun clearCache() {
+        repositoryManager.clearCache()
+        try {
+            extensionDir.deleteRecursively()
+            extensionDir.mkdirs()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }
-
-data class AvailablePlugin(
-    val name: String,
-    val internalName: String,
-    val version: String,
-    val versionCode: Int,
-    val description: String?,
-    val url: String,
-    val tvUrl: String?,
-    val iconUrl: String?,
-    val classes: List<String>
-)

@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
@@ -36,6 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,6 +77,7 @@ object CineHubScreen : Screen {
     val database = koinInject<xyz.mpv.rex.database.MpvExDatabase>()
     val libraryDao = database.cineLibraryDao()
     val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
+    val providerRegistry = koinInject<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>()
 
     val enableOnlineCatalog by browserPreferences.enableOnlineCatalog.collectAsState()
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
@@ -101,7 +105,9 @@ object CineHubScreen : Screen {
     var localTvShows by remember { mutableStateOf<List<TvShowItem>>(emptyList()) }
 
     var searchResults by remember { mutableStateOf<List<TMDBMovieNode>>(emptyList()) }
+    var extensionSearchResults by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>>(emptyList()) }
     var isSearchingOnline by remember { mutableStateOf(false) }
+    var providerHomeRows by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubHomePageList>>(emptyList()) }
 
     var selectedDetailItem by remember { mutableStateOf<Any?>(null) }
 
@@ -136,6 +142,17 @@ object CineHubScreen : Screen {
             withContext(Dispatchers.Main) {
               localTvShows = scannedTv
             }
+          }
+
+          // Query dynamic home rows from all enabled extension providers
+          val activeProviders = providerRegistry.getEnabledProviders()
+          val extHomeLists = mutableListOf<xyz.mpv.rex.cinehub.extension.api.CineHubHomePageList>()
+          for (provider in activeProviders) {
+            val rows = runCatching { provider.getHomePage() }.getOrDefault(emptyList())
+            extHomeLists.addAll(rows)
+          }
+          withContext(Dispatchers.Main) {
+            providerHomeRows = extHomeLists
           }
         } catch (_: Exception) {
         } finally {
@@ -206,6 +223,17 @@ object CineHubScreen : Screen {
             }
             IconButton(
               onClick = {
+                backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
+              },
+              modifier = Modifier.testTag("cinehub_extensions_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.Extension,
+                contentDescription = "Extensions",
+              )
+            }
+            IconButton(
+              onClick = {
                 backstack.add(PreferencesScreen)
               },
               modifier = Modifier.testTag("cinehub_settings_button"),
@@ -246,17 +274,29 @@ object CineHubScreen : Screen {
                     isSearchActive = true
                     isSearchingOnline = true
                     scope.launch(Dispatchers.IO) {
-                      val res = runCatching {
-                        CineOnlineScraper.executeManualMovieSearch(query)
-                      }.getOrDefault(emptyList())
+                      val tmdbDeferred = async {
+                        runCatching {
+                          CineOnlineScraper.executeManualMovieSearch(query)
+                        }.getOrDefault(emptyList())
+                      }
+                      val activeProviders = providerRegistry.getEnabledProviders()
+                      val extDeferreds = activeProviders.map { provider ->
+                        async {
+                          runCatching { provider.search(query) }.getOrDefault(emptyList())
+                        }
+                      }
+                      val res = tmdbDeferred.await()
+                      val extRes = extDeferreds.awaitAll().flatten()
                       withContext(Dispatchers.Main) {
                         searchResults = res
+                        extensionSearchResults = extRes
                         isSearchingOnline = false
                       }
                     }
                   } else {
                     isSearchActive = false
                     searchResults = emptyList()
+                    extensionSearchResults = emptyList()
                   }
                 },
                 placeholder = { Text("Search movies, TV shows, actors…") },
@@ -269,6 +309,7 @@ object CineHubScreen : Screen {
                       searchQuery = ""
                       isSearchActive = false
                       searchResults = emptyList()
+                      extensionSearchResults = emptyList()
                     }) {
                       Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
                     }
@@ -305,33 +346,85 @@ object CineHubScreen : Screen {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                   }
                 }
-              } else if (searchResults.isEmpty()) {
+              } else if (searchResults.isEmpty() && extensionSearchResults.isEmpty()) {
                 item {
                   Text(
-                    text = "No online results found for \"$searchQuery\"",
+                    text = "No results found for \"$searchQuery\"",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
                   )
                 }
               } else {
-                items(searchResults) { node ->
-                  SearchResultRow(
-                    node = node,
-                    onClick = {
-                      scope.launch(Dispatchers.IO) {
-                        val queryTitle = node.title ?: ""
-                        val fetched = CineOnlineScraper.getOrFetchMovie(context, queryTitle, node.id.toString())
-                        withContext(Dispatchers.Main) {
-                          if (fetched != null) {
-                            selectedDetailItem = fetched
-                          } else {
-                            Toast.makeText(context, queryTitle, Toast.LENGTH_SHORT).show()
+                if (extensionSearchResults.isNotEmpty()) {
+                  item {
+                    Text(
+                      text = "Extension Providers",
+                      style = MaterialTheme.typography.titleSmall,
+                      color = MaterialTheme.colorScheme.primary,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                  }
+                  items(extensionSearchResults) { extItem ->
+                    ExtensionSearchResultRow(
+                      item = extItem,
+                      onClick = {
+                        scope.launch(Dispatchers.IO) {
+                          val provider = providerRegistry.getProvider(extItem.providerId)
+                          val details = provider?.loadDetails(extItem.url)
+                          withContext(Dispatchers.Main) {
+                            selectedDetailItem = MovieItem(
+                              videoFilePath = "ext_stream:${extItem.providerId}::${extItem.url}",
+                              title = details?.title ?: extItem.title,
+                              originalTitle = details?.title ?: extItem.title,
+                              userRating = details?.rating ?: extItem.rating ?: 0.0,
+                              plot = details?.overview ?: "Content provided by ${extItem.providerName}",
+                              tagline = "Source: ${extItem.providerName}",
+                              mpaa = "NR",
+                              genre = details?.genres?.firstOrNull() ?: extItem.type.name,
+                              director = extItem.providerName,
+                              premiered = (details?.year ?: extItem.year)?.toString() ?: "",
+                              runtime = 120,
+                              posterPath = details?.posterUrl ?: extItem.posterUrl,
+                              backdropPath = details?.backdropUrl ?: details?.posterUrl ?: extItem.posterUrl,
+                              tmdbId = details?.id ?: extItem.id,
+                              sourceType = "extension"
+                            )
                           }
                         }
                       }
-                    },
-                  )
+                    )
+                  }
+                }
+                if (searchResults.isNotEmpty()) {
+                  item {
+                    Text(
+                      text = "CineHub Catalog",
+                      style = MaterialTheme.typography.titleSmall,
+                      color = MaterialTheme.colorScheme.primary,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                  }
+                  items(searchResults) { node ->
+                    SearchResultRow(
+                      node = node,
+                      onClick = {
+                        scope.launch(Dispatchers.IO) {
+                          val queryTitle = node.title ?: ""
+                          val fetched = CineOnlineScraper.getOrFetchMovie(context, queryTitle, node.id.toString())
+                          withContext(Dispatchers.Main) {
+                            if (fetched != null) {
+                              selectedDetailItem = fetched
+                            } else {
+                              Toast.makeText(context, queryTitle, Toast.LENGTH_SHORT).show()
+                            }
+                          }
+                        }
+                      },
+                    )
+                  }
                 }
               }
             } else {
@@ -483,6 +576,57 @@ object CineHubScreen : Screen {
                             selectedDetailItem = show
                           },
                         )
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Extension Provider Sections
+              if (selectedTab == 0 && providerHomeRows.isNotEmpty()) {
+                providerHomeRows.forEach { homeRow ->
+                  if (homeRow.items.isNotEmpty()) {
+                    item {
+                      SectionHeader(title = homeRow.title)
+                    }
+                    item {
+                      LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                        items(homeRow.items) { item ->
+                          MediaPosterCard(
+                            title = item.title,
+                            posterUrl = item.posterUrl,
+                            rating = item.rating ?: 0.0,
+                            year = item.year?.toString() ?: "",
+                            onClick = {
+                              scope.launch(Dispatchers.IO) {
+                                val provider = providerRegistry.getProvider(item.providerId)
+                                val details = provider?.loadDetails(item.url)
+                                withContext(Dispatchers.Main) {
+                                  selectedDetailItem = MovieItem(
+                                    videoFilePath = "ext_stream:${item.providerId}::${item.url}",
+                                    title = details?.title ?: item.title,
+                                    originalTitle = details?.title ?: item.title,
+                                    userRating = details?.rating ?: item.rating ?: 0.0,
+                                    plot = details?.overview ?: "Content provided by ${item.providerName}",
+                                    tagline = "Source: ${item.providerName}",
+                                    mpaa = "NR",
+                                    genre = details?.genres?.firstOrNull() ?: item.type.name,
+                                    director = item.providerName,
+                                    premiered = (details?.year ?: item.year)?.toString() ?: "",
+                                    runtime = 120,
+                                    posterPath = details?.posterUrl ?: item.posterUrl,
+                                    backdropPath = details?.backdropUrl ?: details?.posterUrl ?: item.posterUrl,
+                                    tmdbId = details?.id ?: item.id,
+                                    sourceType = "extension"
+                                  )
+                                }
+                              }
+                            }
+                          )
+                        }
                       }
                     }
                   }
@@ -697,7 +841,25 @@ object CineHubScreen : Screen {
   ) {
     when (item) {
       is MovieItem -> {
-        if (item.videoFilePath.startsWith("cnc_stream:") || item.videoFilePath.startsWith("vidsrc:")) {
+        if (item.videoFilePath.startsWith("ext_stream:")) {
+          val raw = item.videoFilePath.removePrefix("ext_stream:")
+          val providerId = raw.substringBefore("::")
+          val dataUrl = raw.substringAfter("::")
+          scope.launch(Dispatchers.IO) {
+            val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
+            val provider = registry.getProvider(providerId)
+            val streams = provider?.loadStreams(dataUrl) ?: emptyList()
+            val stream = streams.firstOrNull()
+            withContext(Dispatchers.Main) {
+              if (stream != null && stream.url.isNotBlank()) {
+                Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
+                MediaUtils.playFile(stream.url, context, "cinehub")
+              } else {
+                Toast.makeText(context, "No stream found from extension", Toast.LENGTH_SHORT).show()
+              }
+            }
+          }
+        } else if (item.videoFilePath.startsWith("cnc_stream:") || item.videoFilePath.startsWith("vidsrc:")) {
           val parts = item.videoFilePath.split(":")
           val postId = parts.getOrNull(1) ?: ""
           val platform = parts.getOrNull(2) ?: "vidsrc"
@@ -965,6 +1127,81 @@ private fun MediaPosterCard(
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.outline,
       )
+    }
+  }
+}
+
+@Composable
+private fun ExtensionSearchResultRow(
+  item: xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem,
+  onClick: () -> Unit,
+) {
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable { onClick() }
+      .padding(horizontal = 16.dp, vertical = 8.dp),
+  ) {
+    Card(
+      shape = RoundedCornerShape(10.dp),
+      modifier = Modifier.size(width = 60.dp, height = 90.dp),
+    ) {
+      if (!item.posterUrl.isNullOrBlank()) {
+        AsyncImage(
+          model = item.posterUrl,
+          contentDescription = item.title,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize(),
+        )
+      } else {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+          contentAlignment = Alignment.Center,
+        ) {
+          Icon(imageVector = Icons.Outlined.Movie, contentDescription = null)
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.width(14.dp))
+
+    Column(modifier = Modifier.weight(1f)) {
+      Text(
+        text = item.title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      Spacer(modifier = Modifier.height(4.dp))
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        SuggestionChip(
+          onClick = {},
+          label = { Text(item.providerName, style = MaterialTheme.typography.labelSmall) },
+          modifier = Modifier.height(24.dp)
+        )
+        if (item.year != null) {
+          Text(
+            text = item.year.toString(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+          )
+        }
+        if (item.rating != null && item.rating > 0.0) {
+          Text(
+            text = "★ ${String.format(java.util.Locale.US, "%.1f", item.rating)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFFFB800),
+            fontWeight = FontWeight.SemiBold,
+          )
+        }
+      }
     }
   }
 }

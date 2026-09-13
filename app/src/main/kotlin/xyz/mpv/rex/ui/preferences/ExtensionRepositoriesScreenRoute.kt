@@ -6,14 +6,12 @@ import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.utils.LocalBackStack
 
 @Serializable
-object ExtensionPreferencesScreenRoute : Screen {
+object ExtensionRepositoriesScreenRoute : Screen {
     @Composable
     override fun Content() {
         val backstack = LocalBackStack.current
-        ExtensionPreferencesScreen(
-            onNavigateBack = { backstack.removeLastOrNull() },
-            onNavigateToRepositories = { backstack.add(ExtensionRepositoriesScreenRoute) },
-            onNavigateToInstalled = { backstack.add(InstalledExtensionsScreenRoute) }
+        ExtensionRepositoriesScreen(
+            onNavigateBack = { backstack.removeLastOrNull() }
         )
     }
 }

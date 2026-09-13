@@ -29,6 +29,9 @@ val domainModule = module {
     single { xyz.mpv.rex.jellyfin.api.JellyfinApi(get(), get(), get()) }
     single { xyz.mpv.rex.jellyfin.remote.JellyfinRemoteClient(get(), get(), get(), androidContext()) }
     single { xyz.mpv.rex.domain.ytdl.YtDlClient(androidContext(), get()) }
+    single { xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry() }
+    single { xyz.mpv.rex.cinehub.extension.manager.RepositoryManager(get(), get()) }
+    single { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get(), get()) }
 }
 
 
