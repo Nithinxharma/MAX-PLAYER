@@ -45,8 +45,11 @@ class MediaLibraryViewModel(
     loadData()
   }
 
+  private var currentLoadJob: kotlinx.coroutines.Job? = null
+
   override fun loadData() {
-    viewModelScope.launch(Dispatchers.IO) {
+    currentLoadJob?.cancel()
+    currentLoadJob = viewModelScope.launch(Dispatchers.IO) {
       try {
         _isLoading.value = true
         // Fetch all videos from repository (respecting blacklists and filters via MediaMetadataOps)
@@ -88,8 +91,10 @@ class MediaLibraryViewModel(
       } catch (e: Exception) {
         Log.e(tag, "Error loading media library videos", e)
       } finally {
-        if (coroutineContext.isActive) {
-          _isLoading.value = false
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+          if (currentLoadJob == coroutineContext[kotlinx.coroutines.Job]) {
+            _isLoading.value = false
+          }
         }
       }
     }

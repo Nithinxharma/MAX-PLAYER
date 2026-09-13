@@ -226,8 +226,13 @@ class FolderListViewModel(
       if (!silent) _isLoading.value = true
       currentScanJob?.cancel()
       currentScanJob = null
-      hybridMediaIndex.ensureFresh(force = true, userInitiated = !silent)
-      loadData()
+      try {
+        hybridMediaIndex.ensureFresh(force = true, userInitiated = !silent)
+      } catch (e: Exception) {
+        Log.e(TAG, "Error in ensureFresh during refresh", e)
+      } finally {
+        loadData()
+      }
     }
   }
 
@@ -283,9 +288,11 @@ class FolderListViewModel(
         _foldersWithNewCount.value = emptyList()
         _allVideoFolders.value = emptyList()
       } finally {
-        if (coroutineContext.isActive) {
-          _isLoading.value = false
-          _hasCompletedInitialLoad.value = true
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+          if (currentScanJob == coroutineContext[kotlinx.coroutines.Job]) {
+            _isLoading.value = false
+            _hasCompletedInitialLoad.value = true
+          }
         }
       }
     }
