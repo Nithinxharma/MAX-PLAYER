@@ -1,0 +1,22 @@
+--- ./app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt
++++ ./app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt
+@@ -1048,6 +1048,15 @@
+   onPlay: () -> Unit,
+   onRefreshItem: (Any) -> Unit = {},
+ ) {
++  val database = koinInject<xyz.mpv.rex.database.MpvExDatabase>()
++  val libraryDao = database.cineLibraryDao()
++  val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
++  val scope = rememberCoroutineScope()
++  val context = LocalContext.current
++  
++  val (tmdbId, isMovie) = when (item) {
++    is MovieItem -> (item.tmdbId.takeIf { it.isNotBlank() } ?: item.title) to true
++    is TvShowItem -> (item.tmdbId.takeIf { it.isNotBlank() } ?: item.title) to false
++    else -> "" to true
++  }
++  val libraryEntry = libraryItems.find { it.url == tmdbId }
++  var showLibraryMenu by remember { mutableStateOf(false) }
++
+   val title = when (item) {
+     is MovieItem -> item.title

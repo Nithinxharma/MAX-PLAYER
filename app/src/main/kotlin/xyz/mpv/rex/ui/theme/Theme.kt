@@ -53,6 +53,7 @@ import xyz.mpv.rex.R
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import org.koin.compose.koinInject
+import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import kotlin.math.hypot
 
 // ============================================================================
@@ -448,8 +449,11 @@ fun MpvexTheme(content: @Composable () -> Unit) {
                 typography = getTypography(useSystemFont),
                 shapes = AppShapes,
                 motionScheme = MotionScheme.expressive(),
-                content = content,
-            )
+            ) {
+                ProvidePreferenceLocals {
+                    content()
+                }
+            }
         }
     }
 }
@@ -514,8 +518,11 @@ fun MpvexPlayerTheme(content: @Composable () -> Unit) {
                 typography = getTypography(useSystemFont),
                 shapes = AppShapes,
                 motionScheme = MotionScheme.expressive(),
-                content = content,
-            )
+            ) {
+                ProvidePreferenceLocals {
+                    content()
+                }
+            }
         }
     }
 }

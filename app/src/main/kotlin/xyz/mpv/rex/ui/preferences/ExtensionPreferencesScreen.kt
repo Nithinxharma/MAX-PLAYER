@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import me.zhanghai.compose.preference.Preference
+import me.zhanghai.compose.preference.ProvidePreferenceLocals
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,24 +31,26 @@ fun ExtensionPreferencesScreen(
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            Text(text = "Extension Management", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
+        ProvidePreferenceLocals {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                Text(text = "Extension Management", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
 
-            Preference(
-                title = { Text("Installed Extensions") },
-                summary = { Text("Manage your installed provider plugins") },
-                onClick = onNavigateToInstalled
-            )
+                Preference(
+                    title = { Text("Installed Extensions") },
+                    summary = { Text("Manage your installed provider plugins") },
+                    onClick = onNavigateToInstalled
+                )
 
-            Preference(
-                title = { Text("Extension Repositories") },
-                summary = { Text("Add or remove repository sources") },
-                onClick = onNavigateToRepositories
-            )
+                Preference(
+                    title = { Text("Extension Repositories") },
+                    summary = { Text("Add or remove repository sources") },
+                    onClick = onNavigateToRepositories
+                )
+            }
         }
     }
 }

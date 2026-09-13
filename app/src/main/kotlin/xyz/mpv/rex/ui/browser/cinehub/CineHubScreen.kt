@@ -71,6 +71,9 @@ object CineHubScreen : Screen {
     val backstack = LocalBackStack.current
     val scope = rememberCoroutineScope()
     val browserPreferences = koinInject<BrowserPreferences>()
+    val database = koinInject<xyz.mpv.rex.database.MpvExDatabase>()
+    val libraryDao = database.cineLibraryDao()
+    val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
 
     val enableOnlineCatalog by browserPreferences.enableOnlineCatalog.collectAsState()
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
@@ -78,7 +81,7 @@ object CineHubScreen : Screen {
     val enableMetadataScraping by browserPreferences.enableMetadataScraping.collectAsState()
     val enableArtworkDownloads by browserPreferences.enableArtworkDownloads.collectAsState()
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = All, 1 = Movies, 2 = TV Shows
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = All, 1 = Movies, 2 = TV Shows, 3 = Library
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
 
@@ -358,6 +361,12 @@ object CineHubScreen : Screen {
                     label = { Text("TV Shows") },
                     shape = RoundedCornerShape(16.dp),
                   )
+                  FilterChip(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    label = { Text("Library") },
+                    shape = RoundedCornerShape(16.dp),
+                  )
                 }
               }
 
@@ -474,6 +483,82 @@ object CineHubScreen : Screen {
                             selectedDetailItem = show
                           },
                         )
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Library Section
+              if (selectedTab == 3) {
+                if (libraryItems.isEmpty()) {
+                  item {
+                    Box(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                      contentAlignment = Alignment.Center,
+                    ) {
+                      Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                        Icon(
+                          imageVector = Icons.Outlined.Folder,
+                          contentDescription = null,
+                          tint = MaterialTheme.colorScheme.outline,
+                          modifier = Modifier.size(64.dp),
+                        )
+                        Text(
+                          text = "Your library is empty.",
+                          style = MaterialTheme.typography.titleMedium,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                      }
+                    }
+                  }
+                } else {
+                  val statuses = listOf(
+                    0 to "Planned / Watchlist",
+                    1 to "Continue Watching",
+                    2 to "Completed",
+                    3 to "Dropped"
+                  )
+                  
+                  statuses.forEach { (statusId, label) ->
+                    val itemsForStatus = libraryItems.filter { it.watchStatus == statusId }
+                    if (itemsForStatus.isNotEmpty()) {
+                      item {
+                        SectionHeader(title = label)
+                      }
+                      item {
+                        LazyRow(
+                          contentPadding = PaddingValues(horizontal = 16.dp),
+                          horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                          items(itemsForStatus) { item ->
+                            MediaPosterCard(
+                              title = item.title,
+                              posterUrl = item.posterUrl,
+                              rating = 0.0,
+                              year = "",
+                              onClick = {
+                                // For now, we will attempt to fetch online if possible,
+                                // or launch appropriate handler
+                                scope.launch(Dispatchers.IO) {
+                                  val fetched = CineOnlineScraper.getOrFetchMovie(context, item.title, item.url)
+                                  withContext(Dispatchers.Main) {
+                                    if (fetched != null) {
+                                      selectedDetailItem = fetched
+                                    } else {
+                                      Toast.makeText(context, "Could not load details", Toast.LENGTH_SHORT).show()
+                                    }
+                                  }
+                                }
+                              },
+                            )
+                          }
+                        }
                       }
                     }
                   }
@@ -967,6 +1052,21 @@ private fun CineDetailBottomSheet(
   onPlay: () -> Unit,
   onRefreshItem: (Any) -> Unit = {},
 ) {
+  val database = koinInject<xyz.mpv.rex.database.MpvExDatabase>()
+  val libraryDao = database.cineLibraryDao()
+  val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
+  val scope = rememberCoroutineScope()
+  
+  val tmdbId = when (item) {
+    is MovieItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
+    is TvShowItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
+    else -> ""
+  }
+  val isMovie = item is MovieItem
+  val libraryEntry = libraryItems.find { it.url == tmdbId }
+  val inLibrary = libraryEntry != null
+  var showLibraryMenu by remember { mutableStateOf(false) }
+
   val title = when (item) {
     is MovieItem -> item.title
     is TvShowItem -> item.title
@@ -1082,6 +1182,82 @@ private fun CineDetailBottomSheet(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 12.dp, bottom = 16.dp),
           )
+        }
+
+        // Library Actions
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Box {
+            OutlinedButton(
+              onClick = { showLibraryMenu = true },
+              modifier = Modifier.fillMaxWidth(),
+              shape = RoundedCornerShape(16.dp),
+            ) {
+              Icon(
+                imageVector = if (inLibrary) Icons.Default.Check else Icons.Default.Add,
+                contentDescription = null
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = if (inLibrary) {
+                  when (libraryEntry?.watchStatus) {
+                    0 -> "In Watchlist"
+                    1 -> "Watching"
+                    2 -> "Completed"
+                    3 -> "Dropped"
+                    else -> "Saved to Library"
+                  }
+                } else "Add to Library",
+                fontWeight = FontWeight.Bold
+              )
+            }
+            
+            DropdownMenu(
+              expanded = showLibraryMenu,
+              onDismissRequest = { showLibraryMenu = false }
+            ) {
+              val options = listOf(
+                0 to "Watchlist",
+                1 to "Watching",
+                2 to "Completed",
+                3 to "Dropped"
+              )
+              options.forEach { (status, label) ->
+                DropdownMenuItem(
+                  text = { Text(label) },
+                  onClick = {
+                    showLibraryMenu = false
+                    scope.launch(Dispatchers.IO) {
+                      libraryDao.insertLibraryItem(
+                        xyz.mpv.rex.cinehub.extension.model.LibraryItem(
+                          url = tmdbId,
+                          apiName = "tmdb",
+                          title = title,
+                          posterUrl = posterPath,
+                          type = if (isMovie) 0 else 1,
+                          watchStatus = status
+                        )
+                      )
+                    }
+                  }
+                )
+              }
+              if (inLibrary) {
+                Divider()
+                DropdownMenuItem(
+                  text = { Text("Remove from Library", color = MaterialTheme.colorScheme.error) },
+                  onClick = {
+                    showLibraryMenu = false
+                    scope.launch(Dispatchers.IO) {
+                      libraryEntry?.let { libraryDao.deleteLibraryItem(it) }
+                    }
+                  }
+                )
+              }
+            }
+          }
         }
 
         if (item is MovieItem) {
