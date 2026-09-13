@@ -422,6 +422,7 @@ object CineFolderMetadataManager {
     fun getAllLocalTvShows(context: Context?): List<TvShowItem> {
         val extStorage = android.os.Environment.getExternalStorageDirectory()
         val roots = mutableListOf<File>()
+        var hasCustomTvFolder = false
 
         if (context != null) {
             try {
@@ -431,19 +432,18 @@ object CineFolderMetadataManager {
                     val customDir = File(customTv.trim())
                     if (customDir.exists() && customDir.isDirectory) {
                         roots.add(customDir)
+                        hasCustomTvFolder = true
                     }
                 }
             } catch (_: Exception) {}
         }
 
-        roots.addAll(listOf(
-            File(extStorage, "CineRex/tvshows"),
-            File(extStorage, "TV Shows"),
-            File(extStorage, "Download/TV Shows"),
-            File(extStorage, "Download"),
-            File(extStorage, "Movies"),
-            File(extStorage, "CineRex")
-        ))
+        if (!hasCustomTvFolder) {
+            roots.addAll(listOf(
+                File(extStorage, "CineRex/tvshows"),
+                File(extStorage, "TV Shows")
+            ))
+        }
 
         val tvShows = mutableListOf<TvShowItem>()
         val seenPaths = mutableSetOf<String>()
@@ -467,6 +467,7 @@ object CineFolderMetadataManager {
     fun getAllLocalMovies(context: Context?): List<MovieItem> {
         val extStorage = android.os.Environment.getExternalStorageDirectory()
         val roots = mutableListOf<File>()
+        var hasCustomMovieFolder = false
 
         if (context != null) {
             try {
@@ -476,19 +477,18 @@ object CineFolderMetadataManager {
                     val customDir = File(customMovie.trim())
                     if (customDir.exists() && customDir.isDirectory) {
                         roots.add(customDir)
+                        hasCustomMovieFolder = true
                     }
                 }
             } catch (_: Exception) {}
         }
 
-        roots.addAll(listOf(
-            File(extStorage, "CineRex/movies"),
-            File(extStorage, "Movies"),
-            File(extStorage, "Download/Movies"),
-            File(extStorage, "Download"),
-            File(extStorage, "DCIM"),
-            File(extStorage, "CineRex")
-        ))
+        if (!hasCustomMovieFolder) {
+            roots.addAll(listOf(
+                File(extStorage, "CineRex/movies"),
+                File(extStorage, "Movies")
+            ))
+        }
 
         val movies = mutableListOf<MovieItem>()
         val seenPaths = mutableSetOf<String>()

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.withContext
 import xyz.mpv.rex.R
 import xyz.mpv.rex.database.repository.HybridMediaIndexRepository
 import xyz.mpv.rex.database.repository.VideoMetadataCacheRepository
@@ -59,6 +64,9 @@ object MediaLibraryPreferencesScreen : Screen {
     val backstack = LocalBackStack.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var isScanning by remember { mutableStateOf(false) }
+    var scanStatus by remember { mutableStateOf("") }
+    var scanProgress by remember { mutableStateOf(0f) }
 
     val includeNoMediaContent by browserPreferences.includeNoMediaContent.collectAsState()
     val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
@@ -293,18 +301,87 @@ object MediaLibraryPreferencesScreen : Screen {
                       }
                       GroupedPreferenceCard(position = GroupPosition.LAST, highlightKey = null) {
                           Preference(
-                              title = { Text(text = stringResource(R.string.pref_force_refresh_metadata)) },
+                              title = { Text(text = "Scan & Scrape Library") },
                               summary = {
-                                  Text(
-                                      text = "Clear cached posters, TV show summaries, and local index",
-                                      color = MaterialTheme.colorScheme.outline
-                                  )
+                                  if (isScanning) {
+                                      androidx.compose.foundation.layout.Column(modifier = Modifier.padding(top = 8.dp)) {
+                                          Text(
+                                              text = scanStatus,
+                                              style = MaterialTheme.typography.bodySmall,
+                                              color = MaterialTheme.colorScheme.primary,
+                                          )
+                                          androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(2.dp))
+                                          androidx.compose.material3.LinearProgressIndicator(
+                                              progress = { scanProgress },
+                                              modifier = Modifier.fillMaxWidth(),
+                                          )
+                                      }
+                                  } else {
+                                      Text(
+                                          text = "Find missing artwork and TMDb metadata",
+                                          color = MaterialTheme.colorScheme.outline
+                                      )
+                                  }
                               },
                               onClick = {
-                                  scope.launch(Dispatchers.IO) {
-                                      MetadataCacheManager.clearCache(context)
+                                  if (isScanning) {
+                                      Toast.makeText(context, "Scan already in progress...", Toast.LENGTH_SHORT).show()
+                                      return@Preference
                                   }
-                                  Toast.makeText(context, "Metadata cache cleared.", Toast.LENGTH_SHORT).show()
+                                  
+                                  scope.launch(Dispatchers.IO) {
+                                      withContext(Dispatchers.Main) {
+                                          isScanning = true
+                                          scanStatus = "Initializing..."
+                                          scanProgress = 0f
+                                      }
+                                      val extStorage = android.os.Environment.getExternalStorageDirectory()
+                                      val movieRoots = mutableListOf<java.io.File>()
+                                      if (customMoviesFolder.isNotBlank()) {
+                                          movieRoots.add(java.io.File(customMoviesFolder.trim()))
+                                      } else {
+                                          movieRoots.add(java.io.File(extStorage, "CineRex/movies"))
+                                          movieRoots.add(java.io.File(extStorage, "Movies"))
+                                      }
+                                      
+                                      val tvRoots = mutableListOf<java.io.File>()
+                                      if (customTvShowsFolder.isNotBlank()) {
+                                          tvRoots.add(java.io.File(customTvShowsFolder.trim()))
+                                      } else {
+                                          tvRoots.add(java.io.File(extStorage, "CineRex/tvshows"))
+                                          tvRoots.add(java.io.File(extStorage, "TV Shows"))
+                                      }
+                                      
+                                      val foldersToScan = mutableListOf<java.io.File>()
+                                      if (enableLocalMovies) foldersToScan.addAll(movieRoots)
+                                      if (enableLocalTvShows) foldersToScan.addAll(tvRoots)
+
+                                      for (folder in foldersToScan) {
+                                          if (folder.exists() && folder.isDirectory) {
+                                              try {
+                                                  xyz.mpv.rex.cinehub.data.KodiMediaScraper.scrapeDirectory(
+                                                      context = context,
+                                                      directory = folder,
+                                                      downloadArtworkAndNfo = enableArtworkDownloads,
+                                                      onProgress = { current, total, name ->
+                                                          scope.launch(Dispatchers.Main) {
+                                                              scanStatus = "Scraping: $name"
+                                                              scanProgress = if (total > 0) current.toFloat() / total else 0f
+                                                          }
+                                                      }
+                                                  )
+                                              } catch (e: Exception) {
+                                                  e.printStackTrace()
+                                              }
+                                          }
+                                      }
+                                      
+                                      withContext(Dispatchers.Main) {
+                                          isScanning = false
+                                          scanStatus = "Done"
+                                          Toast.makeText(context, "Library scan complete!", Toast.LENGTH_SHORT).show()
+                                      }
+                                  }
                               }
                           )
                       }
@@ -472,6 +549,7 @@ object MediaLibraryPreferencesScreen : Screen {
                   onClick = {
                     scope.launch(Dispatchers.IO) {
                       runCatching { metadataCache.clearAll() }
+                      MetadataCacheManager.clearCache(context)
                     }
                     Toast.makeText(context, context.getString(R.string.pref_cache_cleared_toast), Toast.LENGTH_SHORT).show()
                   },
