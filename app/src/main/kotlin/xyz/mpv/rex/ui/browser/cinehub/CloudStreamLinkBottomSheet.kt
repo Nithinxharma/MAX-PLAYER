@@ -67,6 +67,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.mpv.rex.cinehub.failover.StreamCandidate
+import xyz.mpv.rex.cinehub.failover.StreamHealthResolver
 import xyz.mpv.rex.cinehub.stream.CloudStreamLinkManager
 import xyz.mpv.rex.cinehub.stream.CloudStreamRequest
 import xyz.mpv.rex.utils.media.MediaUtils
@@ -89,8 +90,29 @@ fun CloudStreamLinkBottomSheet(
     val scope = rememberCoroutineScope()
 
     var candidates by remember { mutableStateOf<List<StreamCandidate>>(emptyList()) }
+    var scannedStreams by remember { mutableStateOf<Map<String, StreamHealthResolver.ScannedStream>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isScanningHealth by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun scanCandidateLinks(list: List<StreamCandidate>) {
+        if (list.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) { isScanningHealth = true }
+            val results = StreamHealthResolver.scanStreamsHealth(list)
+            val resultMap = results.associateBy { it.candidate.url }
+            // Sort candidates so working streams appear first
+            val sortedCandidates = list.sortedWith(
+                compareByDescending<StreamCandidate> { resultMap[it.url]?.isHealthy == true }
+                    .thenBy { resultMap[it.url]?.latencyMs ?: Long.MAX_VALUE }
+            )
+            withContext(Dispatchers.Main) {
+                scannedStreams = resultMap
+                candidates = sortedCandidates
+                isScanningHealth = false
+            }
+        }
+    }
 
     fun loadStreams() {
         scope.launch(Dispatchers.IO) {
@@ -103,6 +125,8 @@ fun CloudStreamLinkBottomSheet(
                     isLoading = false
                     if (resolved.isEmpty()) {
                         errorMessage = "No working streams found from current provider or scrapers."
+                    } else {
+                        scanCandidateLinks(resolved)
                     }
                 }
             } catch (e: Exception) {
@@ -266,9 +290,10 @@ fun CloudStreamLinkBottomSheet(
                 }
             } else {
                 // Auto-Play Best Button
-                if (candidates.isNotEmpty()) {
+                val bestCandidate = candidates.firstOrNull { scannedStreams[it.url]?.isHealthy == true } ?: candidates.firstOrNull()
+                if (bestCandidate != null) {
                     Button(
-                        onClick = { playSelectedStream(candidates.first()) },
+                        onClick = { playSelectedStream(bestCandidate) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
@@ -280,19 +305,54 @@ fun CloudStreamLinkBottomSheet(
                         Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Auto-Play Best (${candidates.first().quality})",
+                            text = if (scannedStreams[bestCandidate.url]?.isHealthy == true) {
+                                "Auto-Play Best Working (${bestCandidate.quality} • ${scannedStreams[bestCandidate.url]?.latencyMs}ms)"
+                            } else {
+                                "Auto-Play Best (${bestCandidate.quality})"
+                            },
                             fontWeight = FontWeight.Bold
                         )
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Text(
-                        text = "Available Sources (${candidates.size})",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val workingCount = candidates.count { scannedStreams[it.url]?.isHealthy == true }
+                        Column {
+                            Text(
+                                text = "Available Sources (${candidates.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (scannedStreams.isNotEmpty() || isScanningHealth) {
+                                Text(
+                                    text = if (isScanningHealth) "Scanning stream health..." else "$workingCount verified working",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (workingCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+
+                        androidx.compose.material3.TextButton(
+                            onClick = { scanCandidateLinks(candidates) },
+                            enabled = !isScanningHealth
+                        ) {
+                            if (isScanningHealth) {
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Scanning...", style = MaterialTheme.typography.labelMedium)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Scan Links", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -304,16 +364,21 @@ fun CloudStreamLinkBottomSheet(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         itemsIndexed(candidates) { index, candidate ->
+                            val healthInfo = scannedStreams[candidate.url]
+                            val isWorking = healthInfo?.isHealthy == true
+                            val isFailed = healthInfo?.isHealthy == false
+
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { playSelectedStream(candidate) },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (index == 0) {
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    containerColor = when {
+                                        isWorking && index == 0 -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                        isWorking -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                        isFailed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                                     }
                                 )
                             ) {
@@ -328,16 +393,22 @@ fun CloudStreamLinkBottomSheet(
                                             .size(36.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                if (index == 0) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.surfaceVariant
+                                                when {
+                                                    isWorking -> Color(0xFF4CAF50)
+                                                    isFailed -> MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                                }
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            Icons.Default.PlayArrow,
+                                            when {
+                                                isWorking -> Icons.Default.CheckCircle
+                                                isFailed -> Icons.Default.Close
+                                                else -> Icons.Default.PlayArrow
+                                            },
                                             contentDescription = null,
-                                            tint = if (index == 0) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = Color.White,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -384,13 +455,46 @@ fun CloudStreamLinkBottomSheet(
                                                 )
                                             }
 
-                                            // Online checkmark
-                                            Icon(
-                                                Icons.Default.CheckCircle,
-                                                contentDescription = "Verified",
-                                                tint = Color(0xFF4CAF50),
-                                                modifier = Modifier.size(14.dp)
-                                            )
+                                            // Health Status Pill
+                                            if (isWorking) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = Color(0xFF4CAF50).copy(alpha = 0.2f)
+                                                ) {
+                                                    Text(
+                                                        text = "Working (${healthInfo?.latencyMs}ms)",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF2E7D32),
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            } else if (isFailed) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = "Offline / Broken",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            } else {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = "Scanning...",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.outline,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
 
@@ -399,7 +503,7 @@ fun CloudStreamLinkBottomSheet(
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("Play", style = MaterialTheme.typography.labelMedium)
+                                        Text(if (isWorking) "Play" else if (isFailed) "Try" else "Play", style = MaterialTheme.typography.labelMedium)
                                     }
                                 }
                             }

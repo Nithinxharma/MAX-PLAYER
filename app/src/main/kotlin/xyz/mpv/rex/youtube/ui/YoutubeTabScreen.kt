@@ -53,6 +53,8 @@ fun YoutubeTabScreen(
     ) -> Unit = { _, _, _, _, _ -> }
 ) {
     var videoList by remember { mutableStateOf<List<YoutubeVideo>>(emptyList()) }
+    var localShortsList by remember { mutableStateOf<List<LocalShortVideo>>(emptyList()) }
+    var selectedCategory by remember { mutableStateOf("All") } // "All", "Trending", "Online Shorts", "Local Shorts"
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
@@ -67,12 +69,23 @@ fun YoutubeTabScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(refreshTrigger, isSearching) {
+    LaunchedEffect(refreshTrigger, isSearching, selectedCategory) {
         isLoading = true
-        videoList = if (isSearching && searchQuery.isNotBlank()) {
-            InvidiousClient.fetchSearchVideos(searchQuery)
+        if (selectedCategory == "Local Shorts") {
+            localShortsList = queryLocalShorts(context)
+            videoList = emptyList()
+        } else if (selectedCategory == "Online Shorts") {
+            videoList = InvidiousClient.fetchShorts()
+            localShortsList = emptyList()
+        } else if (isSearching && searchQuery.isNotBlank()) {
+            videoList = InvidiousClient.fetchSearchVideos(searchQuery)
+            localShortsList = emptyList()
+        } else if (selectedCategory == "Trending") {
+            videoList = InvidiousClient.fetchTrendingVideos("Movies")
+            localShortsList = emptyList()
         } else {
-            InvidiousClient.fetchTrendingVideos("Movies")
+            videoList = InvidiousClient.fetchTrendingVideos()
+            localShortsList = emptyList()
         }
         isLoading = false
     }
@@ -81,16 +94,53 @@ fun YoutubeTabScreen(
         topBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 BrowserTopBar(
-                    title = if (isSearching) "Search Results" else "CineTube Live",
+                    title = if (isSearching) "Search Results" else "CineTube & Shorts",
                     isInSelectionMode = false,
                     selectedCount = 0,
-                    totalCount = videoList.size,
+                    totalCount = if (selectedCategory == "Local Shorts") localShortsList.size else videoList.size,
                     onCancelSelection = {},
                     isHomeScreen = true, 
                     onSearchClick = {
                         isSearchBarVisible = !isSearchBarVisible
                     }
                 )
+
+                // Category Switcher (All, Trending, Online Shorts, Local Shorts)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val categories = listOf("All", "Trending", "Online Shorts", "Local Shorts")
+                    categories.forEach { cat ->
+                        val isSel = selectedCategory == cat
+                        FilterChip(
+                            selected = isSel,
+                            onClick = {
+                                selectedCategory = cat
+                                isSearching = false
+                            },
+                            label = {
+                                Text(
+                                    text = when (cat) {
+                                        "All" -> "🎬 All Videos"
+                                        "Trending" -> "🔥 Trending"
+                                        "Online Shorts" -> "⚡ Online Shorts"
+                                        "Local Shorts" -> "📱 Local Shorts"
+                                        else -> cat
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                }
 
                 AnimatedVisibility(
                     visible = isSearchBarVisible,
@@ -155,6 +205,75 @@ fun YoutubeTabScreen(
             Crossfade(targetState = isLoading, label = "LoadingTransition") { loading ->
                 if (loading) {
                     SkeletonLoadingGrid()
+                } else if (selectedCategory == "Local Shorts") {
+                    if (localShortsList.isEmpty()) {
+                        EmptyShortsStateUi(
+                            title = "No Local Shorts Found",
+                            subtitle = "Short videos (≤90s) saved to your device will automatically appear here.",
+                            onRetry = { refreshTrigger++ }
+                        )
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 160.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(localShortsList, key = { it.id }) { shortItem ->
+                                LocalShortCard(
+                                    item = shortItem,
+                                    onClick = {
+                                        onPlayRequested(shortItem.path, shortItem.title, "")
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else if (selectedCategory == "Online Shorts") {
+                    if (videoList.isEmpty()) {
+                        ErrorStateUi(
+                            isSearching = isSearching,
+                            onRetry = { refreshTrigger++ }
+                        )
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 160.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(videoList, key = { it.videoId }) { video ->
+                                OnlineShortCard(
+                                    video = video,
+                                    onClick = {
+                                        scope.launch {
+                                            val candidates = InvidiousClient.fetchStreamCandidates(video.videoId)
+                                            val ranked = xyz.mpv.rex.cinehub.failover.StreamHealthResolver.resolveAndRankCandidates(candidates)
+                                            val primary = (ranked.firstOrNull() ?: candidates.firstOrNull() ?: xyz.mpv.rex.cinehub.failover.StreamCandidate(
+                                                url = "https://www.youtube.com/watch?v=${video.videoId}",
+                                                name = video.title,
+                                                quality = "Auto",
+                                                isM3u8 = false,
+                                                headers = emptyMap()
+                                            )).copy(name = video.title)
+                                            val backups = (if (ranked.isNotEmpty()) ranked.drop(1) else candidates.drop(1)).map { it.copy(name = video.title) }
+                                            xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
+                                                primaryCandidate = primary,
+                                                backupCandidates = backups,
+                                                context = context,
+                                                title = video.title,
+                                                launchSource = "cinetube_shorts",
+                                                posterUrl = video.getBestThumbnailUrl(),
+                                                sourceType = "cinetube"
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                 } else if (videoList.isEmpty()) {
                     ErrorStateUi(
                         isSearching = isSearching,
@@ -168,6 +287,15 @@ fun YoutubeTabScreen(
                         verticalArrangement = Arrangement.spacedBy(24.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        if (!isSearching && selectedCategory == "All") {
+                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                                ShortsSpotlightRow(
+                                    onSelectOnlineShorts = { selectedCategory = "Online Shorts" },
+                                    onSelectLocalShorts = { selectedCategory = "Local Shorts" }
+                                )
+                            }
+                        }
+
                         items(
                             items = videoList,
                             key = { it.videoId }
@@ -186,14 +314,20 @@ fun YoutubeTabScreen(
                                                 "Published" to video.publishedText,
                                                 "Duration" to "${video.lengthSeconds}s",
                                                 "Video ID" to video.videoId,
-                                                "SourceType" to "youtube", // Add metadata for poster type
-                                                "AuthorThumbnail" to (video.getBestAuthorThumbnailUrl() ?: "") // Pass channel logo
+                                                "SourceType" to "youtube",
+                                                "AuthorThumbnail" to (video.getBestAuthorThumbnailUrl() ?: "")
                                             )
                                         )
                                         
                                         val candidates = InvidiousClient.fetchStreamCandidates(video.videoId)
                                         val ranked = xyz.mpv.rex.cinehub.failover.StreamHealthResolver.resolveAndRankCandidates(candidates)
-                                        val primary = (ranked.firstOrNull() ?: candidates.first()).copy(name = video.title)
+                                        val primary = (ranked.firstOrNull() ?: candidates.firstOrNull() ?: xyz.mpv.rex.cinehub.failover.StreamCandidate(
+                                            url = "https://www.youtube.com/watch?v=${video.videoId}",
+                                            name = video.title,
+                                            quality = "Auto",
+                                            isM3u8 = false,
+                                            headers = emptyMap()
+                                        )).copy(name = video.title)
                                         val backups = (if (ranked.isNotEmpty()) ranked.drop(1) else candidates.drop(1)).map { it.copy(name = video.title) }
                                         xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
                                             primaryCandidate = primary,
@@ -721,6 +855,374 @@ fun ErrorStateUi(isSearching: Boolean, onRetry: () -> Unit) {
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(text = "Retry Connection", fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+    }
+}
+
+data class LocalShortVideo(
+    val id: Long,
+    val title: String,
+    val path: String,
+    val durationSeconds: Int,
+    val width: Int,
+    val height: Int
+)
+
+suspend fun queryLocalShorts(context: android.content.Context): List<LocalShortVideo> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val results = mutableListOf<LocalShortVideo>()
+    val projection = arrayOf(
+        android.provider.MediaStore.Video.Media._ID,
+        android.provider.MediaStore.Video.Media.DISPLAY_NAME,
+        android.provider.MediaStore.Video.Media.DATA,
+        android.provider.MediaStore.Video.Media.DURATION,
+        android.provider.MediaStore.Video.Media.WIDTH,
+        android.provider.MediaStore.Video.Media.HEIGHT
+    )
+    val selection = "${android.provider.MediaStore.Video.Media.DURATION} > 0 AND ${android.provider.MediaStore.Video.Media.DURATION} <= 95000"
+    val sortOrder = "${android.provider.MediaStore.Video.Media.DATE_MODIFIED} DESC"
+    try {
+        context.contentResolver.query(
+            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            null,
+            sortOrder
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media._ID)
+            val nameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.DISPLAY_NAME)
+            val dataCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.DATA)
+            val durCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.DURATION)
+            val widthCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.WIDTH)
+            val heightCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.HEIGHT)
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idCol)
+                val name = cursor.getString(nameCol) ?: "Short Video"
+                val path = cursor.getString(dataCol) ?: ""
+                val duration = (cursor.getLong(durCol) / 1000).toInt()
+                val width = cursor.getInt(widthCol)
+                val height = cursor.getInt(heightCol)
+                if (path.isNotBlank()) {
+                    results.add(LocalShortVideo(id, name, path, duration, width, height))
+                }
+            }
+        }
+    } catch (_: Exception) {}
+    results
+}
+
+@Composable
+fun ShortsSpotlightRow(
+    onSelectOnlineShorts: () -> Unit,
+    onSelectLocalShorts: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Online Shorts Card
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onSelectOnlineShorts() },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE50914)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Online Shorts",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Trending YouTube clips",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // Local Shorts Card
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onSelectLocalShorts() },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PhoneAndroid,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Local Shorts",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Device vertical videos",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OnlineShortCard(
+    video: YoutubeVideo,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = video.getBestThumbnailUrl(),
+                contentDescription = video.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Gradient scrim
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
+                            startY = 180f
+                        )
+                    )
+            )
+
+            // Shorts badge
+            Surface(
+                color = Color(0xFFE50914),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Icon(Icons.Default.Bolt, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = "SHORTS",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+
+            // Info at bottom
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(10.dp)
+            ) {
+                Text(
+                    text = video.title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = video.author,
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LocalShortCard(
+    item: LocalShortVideo,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(260.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Background placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.PlayCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+
+            // Scrim
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
+                            startY = 140f
+                        )
+                    )
+            )
+
+            // Duration badge
+            Surface(
+                color = Color.Black.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = "${item.durationSeconds}s",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+
+            // Info
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(10.dp)
+            ) {
+                Text(
+                    text = item.title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Local Clip • ${item.width}x${item.height}",
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyShortsStateUi(
+    title: String,
+    subtitle: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.MovieFilter,
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+            tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.outline,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = onRetry,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Refresh")
         }
     }
 }

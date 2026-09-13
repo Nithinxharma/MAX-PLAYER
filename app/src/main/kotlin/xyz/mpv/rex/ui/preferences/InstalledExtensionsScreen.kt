@@ -46,6 +46,11 @@ fun InstalledExtensionsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isRefreshingCatalog by remember { mutableStateOf(false) }
     var pluginToUninstall by remember { mutableStateOf<InstalledExtension?>(null) }
+    
+    // Testing functionality
+    var showTestDialog by remember { mutableStateOf(false) }
+    var testResults by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var isTesting by remember { mutableStateOf(false) }
 
     // Load available plugins from repositories cache
     LaunchedEffect(selectedTab) {
@@ -67,6 +72,80 @@ fun InstalledExtensionsScreen(
         }
     }
 
+    fun testProviders() {
+        showTestDialog = true
+        isTesting = true
+        testResults = emptyMap()
+        scope.launch(Dispatchers.IO) {
+            val providers = registry.getEnabledProviders()
+            val results = mutableMapOf<String, String>()
+            for (provider in providers) {
+                try {
+                    val home = provider.getHomePage()
+                    if (home.isNotEmpty() && home.first().items.isNotEmpty()) {
+                        results[provider.name] = "OK (${home.first().items.size} items)"
+                    } else {
+                        results[provider.name] = "Failed (Empty results)"
+                    }
+                } catch (e: Exception) {
+                    results[provider.name] = "Failed (${e.message ?: "Unknown error"})"
+                }
+            }
+            withContext(Dispatchers.Main) {
+                testResults = results
+                isTesting = false
+            }
+        }
+    }
+
+    if (showTestDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isTesting) showTestDialog = false },
+            title = { Text("Provider Test Results") },
+            text = {
+                if (isTesting) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Testing active providers...")
+                    }
+                } else if (testResults.isEmpty()) {
+                    Text("No active providers to test.")
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(testResults.entries.toList(), key = { it.key }) { (name, result) ->
+                            val isOk = result.startsWith("OK")
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Text(
+                                    text = if (isOk) "Working" else "Failed",
+                                    color = if (isOk) androidx.compose.ui.graphics.Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                            if (!isOk) {
+                                Text(result, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTestDialog = false }, enabled = !isTesting) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -78,6 +157,9 @@ fun InstalledExtensionsScreen(
                 },
                 actions = {
                     if (selectedTab == 0) {
+                        IconButton(onClick = { testProviders() }) {
+                            Icon(Icons.Outlined.NetworkCheck, contentDescription = "Test Active Providers")
+                        }
                         IconButton(
                             onClick = {
                                 scope.launch(Dispatchers.IO) {

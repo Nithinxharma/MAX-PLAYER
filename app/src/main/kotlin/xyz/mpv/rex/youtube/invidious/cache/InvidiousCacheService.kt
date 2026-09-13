@@ -33,13 +33,14 @@ class InvidiousCacheService(
 
         // Verified fallback seed instances if offline or api.invidious.io is blocked
         val SEED_INSTANCES = listOf(
-            InvidiousInstance("yewtu.be", "https://yewtu.be", "https", true, 99.1),
-            InvidiousInstance("invidious.projectsegfau.lt", "https://invidious.projectsegfau.lt", "https", true, 98.8),
-            InvidiousInstance("invidious.privacydev.net", "https://invidious.privacydev.net", "https", true, 98.5),
-            InvidiousInstance("iv.melmac.space", "https://iv.melmac.space", "https", true, 98.0),
-            InvidiousInstance("inv.nadeko.net", "https://inv.nadeko.net", "https", true, 97.5),
-            InvidiousInstance("invidious.nerdvpn.de", "https://invidious.nerdvpn.de", "https", true, 97.0),
-            InvidiousInstance("invidious.drgns.space", "https://invidious.drgns.space", "https", true, 96.5),
+            InvidiousInstance("invidious.flokinet.to", "https://invidious.flokinet.to", "https", true, 99.5),
+            InvidiousInstance("invidious.private.coffee", "https://invidious.private.coffee", "https", true, 99.0),
+            InvidiousInstance("inv.bp.projectsegfau.lt", "https://inv.bp.projectsegfau.lt", "https", true, 98.8),
+            InvidiousInstance("invidious.einfachzocken.eu", "https://invidious.einfachzocken.eu", "https", true, 98.5),
+            InvidiousInstance("invidious.drgns.space", "https://invidious.drgns.space", "https", true, 98.0),
+            InvidiousInstance("invidious.jing.rocks", "https://invidious.jing.rocks", "https", true, 97.8),
+            InvidiousInstance("invidious.slipfox.xyz", "https://invidious.slipfox.xyz", "https", true, 97.5),
+            InvidiousInstance("invidious.asir.dev", "https://invidious.asir.dev", "https", true, 97.0),
         )
     }
 
