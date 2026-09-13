@@ -365,6 +365,36 @@ object CineHubScreen : Screen {
                   .testTag("cinehub_search_input"),
               )
             }
+            // Provider Capsules
+            item {
+              androidx.compose.foundation.lazy.LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                item {
+                  FilterChip(
+                    selected = selectedProviderId == null,
+                    onClick = { selectedProviderId = null },
+                    label = { Text("All Providers") }
+                  )
+                }
+                item {
+                  FilterChip(
+                    selected = selectedProviderId == "local",
+                    onClick = { selectedProviderId = "local" },
+                    label = { Text("Local") }
+                  )
+                }
+                items(providerRegistry.getEnabledProviders()) { provider ->
+                  FilterChip(
+                    selected = selectedProviderId == provider.id,
+                    onClick = { selectedProviderId = provider.id },
+                    label = { Text(provider.name) }
+                  )
+                }
+              }
+            }
+
 
             // If Search is Active, display Search Results
             if (isSearchActive) {
@@ -521,8 +551,8 @@ object CineHubScreen : Screen {
               }
 
               // Trending Movies Section
-              if ((selectedTab == 0 || selectedTab == 1) && selectedProviderId == null) {
-                if (onlineMovies.isNotEmpty()) {
+              if ((selectedTab == 0 || selectedTab == 1) && (selectedProviderId == null || selectedProviderId == "local")) {
+                if (onlineMovies.isNotEmpty() && selectedProviderId != "local") {
                   item {
                     SectionHeader(title = "Trending Movies")
                   }
@@ -573,8 +603,8 @@ object CineHubScreen : Screen {
               }
 
               // TV Series Section
-              if ((selectedTab == 0 || selectedTab == 2) && selectedProviderId == null) {
-                if (onlineTvShows.isNotEmpty()) {
+              if ((selectedTab == 0 || selectedTab == 2) && (selectedProviderId == null || selectedProviderId == "local")) {
+                if (onlineTvShows.isNotEmpty() && selectedProviderId != "local") {
                   item {
                     SectionHeader(title = "Popular TV Shows")
                   }
@@ -625,7 +655,7 @@ object CineHubScreen : Screen {
               }
 
               // Extension Provider Sections
-              if (selectedProviderId != null) {
+              if (selectedProviderId != null && selectedProviderId != "local") {
                 providerHomeRows.filter { it.items.firstOrNull()?.providerId == selectedProviderId }.forEach { homeRow ->
                   if (homeRow.items.isNotEmpty()) {
                     item {

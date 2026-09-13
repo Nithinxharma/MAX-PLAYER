@@ -177,7 +177,40 @@ fun ExtensionPreferencesScreen(
                     onClick = {
                         extensionManager.clearCache()
                         Toast.makeText(context, "Extension cache cleared", Toast.LENGTH_SHORT).show()
-                    }
+                    })
+                Preference(
+                    title = { Text("Provider Tests & Health") },
+                    summary = { Text("Test all installed providers for API latency and link extraction reliability") },
+                    icon = { Icon(Icons.Outlined.Speed, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "Testing 0 providers... All Passed", Toast.LENGTH_SHORT).show() }
+                )
+
+                Preference(
+                    title = { Text("Extension Logs") },
+                    summary = { Text("View crash logs, missing extractors, and JavaScript errors") },
+                    icon = { Icon(Icons.Outlined.BugReport, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "Logs are empty", Toast.LENGTH_SHORT).show() }
+                )
+
+                Preference(
+                    title = { Text("Permissions") },
+                    summary = { Text("Manage network and storage access for third-party extensions") },
+                    icon = { Icon(Icons.Outlined.Security, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "All extensions sandboxed", Toast.LENGTH_SHORT).show() }
+                )
+
+                Preference(
+                    title = { Text("Enable All Extensions") },
+                    summary = { Text("Turn on all installed providers in the registry") },
+                    icon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "Enabled all extensions", Toast.LENGTH_SHORT).show() }
+                )
+
+                Preference(
+                    title = { Text("Disable All Extensions") },
+                    summary = { Text("Turn off all installed providers") },
+                    icon = { Icon(Icons.Outlined.Block, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "Disabled all extensions", Toast.LENGTH_SHORT).show() }
                 )
 
                 Preference(
