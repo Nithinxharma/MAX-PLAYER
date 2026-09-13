@@ -250,6 +250,53 @@ object JioTvRepo {
         return results.sortedByDescending { it.confidence }
     }
 
+    suspend fun fetchEpg(context: Context, channelId: String, offset: Int = 0): EpgProgram? = withContext(Dispatchers.IO) {
+        try {
+            val url = "https://jiotv.data.cdn.jio.com/apis/v1.3/epg/get/channel/$channelId?offset=$offset&langId=6"
+            val request = Request.Builder().url(url).get()
+                .addHeader("Accept", "application/json")
+                .addHeader("User-Agent", "okhttp/3.14.9")
+                .addHeader("os", "android")
+                .addHeader("devicetype", "phone")
+                .build()
+            
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val root = json.parseToJsonElement(body).jsonObject
+                    val epgArr = root["epg"]?.jsonArray
+                    if (epgArr != null && epgArr.isNotEmpty()) {
+                        val currentTime = System.currentTimeMillis()
+                        for (i in 0 until epgArr.size) {
+                            val node = epgArr[i].jsonObject
+                            val startEpoch = node["startEpoch"]?.jsonPrimitive?.longOrNull ?: 0L
+                            val endEpoch = node["endEpoch"]?.jsonPrimitive?.longOrNull ?: 0L
+                            if (currentTime in startEpoch..endEpoch) {
+                                return@withContext EpgProgram(
+                                    srno = node["srno"]?.jsonPrimitive?.longOrNull ?: 0L,
+                                    showId = node["showId"]?.jsonPrimitive?.content ?: "",
+                                    showtime = node["showtime"]?.jsonPrimitive?.content ?: "",
+                                    showname = node["showname"]?.jsonPrimitive?.content ?: "",
+                                    description = node["description"]?.jsonPrimitive?.content ?: "",
+                                    duration = node["duration"]?.jsonPrimitive?.intOrNull ?: 0,
+                                    endtime = node["endtime"]?.jsonPrimitive?.content ?: "",
+                                    channel_name = node["channel_name"]?.jsonPrimitive?.content ?: "",
+                                    episodeThumbnail = node["episodeThumbnail"]?.jsonPrimitive?.content ?: "",
+                                    episodePoster = node["episodePoster"]?.jsonPrimitive?.content ?: "",
+                                    startEpoch = startEpoch,
+                                    endEpoch = endEpoch
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return@withContext null
+    }
+
     suspend fun getResolvedLiveUrl(context: Context, channelId: String, channelName: String = "Unknown"): ResolvedStream = withContext(Dispatchers.IO) {
         val cacheMap = getChannelCacheMap(context)
         val entry = cacheMap[channelId] ?: ChannelCacheEntry(channelId, normalizeName(channelName), PlaybackSource.JIO_TV)

@@ -584,39 +584,83 @@ fun LiveChannelRowItem(
     onPlayRequested: (channelId: String) -> Unit
 ) {
     val isPaid = globalPaidChannels[currentActiveId] == true
+    val context = LocalContext.current
+    var epgExpanded by remember { mutableStateOf(false) }
+    var epgProgram by remember { mutableStateOf<EpgProgram?>(null) }
+    var epgLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(epgExpanded, currentActiveId) {
+        if (epgExpanded && epgProgram == null && !epgLoading) {
+            epgLoading = true
+            epgProgram = JioTvRepo.fetchEpg(context, currentActiveId)
+            epgLoading = false
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onPlayRequested(currentActiveId) },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
-        Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = channel.logoUrl, contentDescription = channel.title,
-                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface).padding(4.dp),
-                contentScale = ContentScale.Fit
-            )
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(channel.title, fontSize = 16.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${channel.category} • ${channel.variants.find { it.channelId == currentActiveId }?.language ?: channel.defaultLanguage}", 
-                         fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                    if (isPaid) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                            Text(" 🟡 Paid ", fontSize = 9.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(2.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(
+                    model = channel.logoUrl, contentDescription = channel.title,
+                    modifier = Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface).padding(4.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(channel.title, fontSize = 16.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${channel.category} • ${channel.variants.find { it.channelId == currentActiveId }?.language ?: channel.defaultLanguage}", 
+                             fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                        if (isPaid) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                Text(" 🟡 Paid ", fontSize = 9.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(2.dp))
+                            }
                         }
-                    }
-                    if (isM3uFallback) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
-                            Text(" ✓ Synced ", fontSize = 9.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(2.dp))
+                        if (isM3uFallback) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+                                Text(" ✓ Synced ", fontSize = 9.sp, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(2.dp))
+                            }
                         }
                     }
                 }
+                
+                IconButton(onClick = { epgExpanded = !epgExpanded }) {
+                    Icon(
+                        imageVector = if (epgExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, 
+                        contentDescription = "EPG",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.padding(start = 0.dp), tint = MaterialTheme.colorScheme.primary)
             }
-            Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.padding(start = 8.dp), tint = MaterialTheme.colorScheme.primary)
+            
+            AnimatedVisibility(visible = epgExpanded) {
+                Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)).padding(16.dp)) {
+                    if (epgLoading) {
+                        Text("Loading EPG...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else if (epgProgram != null) {
+                        val prog = epgProgram!!
+                        Text(prog.showname, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(prog.description, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), shape = RoundedCornerShape(4.dp)) {
+                                Text(prog.showtime, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            }
+                        }
+                    } else {
+                        Text("No EPG available for this channel.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
     }
 }

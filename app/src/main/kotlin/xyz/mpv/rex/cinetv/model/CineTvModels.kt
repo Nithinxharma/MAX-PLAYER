@@ -36,6 +36,25 @@ data class DiagnosticResult(
     val resolvedUrl: String = ""
 )
 
+data class EpgProgram(
+    val srno: Long = 0L,
+    val showId: String = "",
+    val showtime: String = "",
+    val showname: String = "",
+    val description: String = "",
+    val duration: Int = 0,
+    val endtime: String = "",
+    val channel_name: String = "",
+    val episodeThumbnail: String = "",
+    val episodePoster: String = "",
+    val startEpoch: Long = 0L,
+    val endEpoch: Long = 0L
+)
+
+data class EpgResponse(
+    val epg: List<EpgProgram> = emptyList()
+)
+
 enum class PlaybackSource { JIO_TV, M3U, MANUAL_URL }
 
 enum class MappingStatus { WORKING, BROKEN, UNTESTED }
