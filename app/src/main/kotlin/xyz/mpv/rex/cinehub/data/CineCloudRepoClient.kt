@@ -267,10 +267,8 @@ object CineCloudRepoClient {
 
     suspend fun resolveDirectStreamUrl(postId: String, platformCode: String): String? = withContext(Dispatchers.IO) {
         if (platformCode.equals("vidsrc", ignoreCase = true)) {
-            if (postId.startsWith("tt")) {
-                return@withContext "https://vidsrc.to/embed/movie/$postId"
-            }
-            return@withContext "https://vidsrc.to/embed/tv/$postId/1/1"
+            // Do not return raw HTML embed URLs that freeze MPV
+            return@withContext null
         }
 
         val activeResolverNode = fetchLiveApiUrl()
@@ -301,38 +299,17 @@ object CineCloudRepoClient {
         if (uri.startsWith("http://") || uri.startsWith("https://") || uri.startsWith("/") || uri.startsWith("content://")) {
             return@withContext uri
         }
-        if (uri.startsWith("stream_tv:")) {
-            val parts = uri.split(":")
-            val tmdbId = parts.getOrNull(1) ?: "tt14674744"
-            val season = parts.getOrNull(2) ?: "1"
-            val episode = parts.getOrNull(3) ?: "1"
-            return@withContext "https://vidsrc.to/embed/tv/$tmdbId/$season/$episode"
-        }
-        if (uri.startsWith("vidsrc_tv:")) {
-            val parts = uri.split(":")
-            val id = parts.getOrNull(1) ?: "tt14674744"
-            val season = parts.getOrNull(2) ?: "1"
-            val episode = parts.getOrNull(3) ?: "1"
-            return@withContext "https://vidsrc.to/embed/tv/$id/$season/$episode"
-        }
-        if (uri.startsWith("vidsrc_movie:")) {
-            val parts = uri.split(":")
-            val id = parts.getOrNull(1) ?: "tt15354916"
-            return@withContext "https://vidsrc.to/embed/movie/$id"
-        }
-        if (uri.startsWith("cnc_stream:")) {
+        if (uri.startsWith("stream_tv:") || uri.startsWith("vidsrc_tv:") || uri.startsWith("cnc_tv:")) {
             val parts = uri.split(":")
             val id = parts.getOrNull(1) ?: ""
-            val platform = parts.getOrNull(2) ?: "nf"
-            return@withContext resolveDirectStreamUrl(id, platform) ?: "https://vidsrc.to/embed/movie/$id"
+            val direct = resolveDirectStreamUrl(id, "hs") ?: resolveDirectStreamUrl(id, "dp")
+            return@withContext direct ?: uri
         }
-        if (uri.startsWith("cnc_tv:")) {
+        if (uri.startsWith("vidsrc_movie:") || uri.startsWith("cnc_stream:")) {
             val parts = uri.split(":")
             val id = parts.getOrNull(1) ?: ""
-            val platform = parts.getOrNull(2) ?: "hs"
-            val season = parts.getOrNull(3) ?: "1"
-            val episode = parts.getOrNull(4) ?: "1"
-            return@withContext resolveDirectStreamUrl(id, platform) ?: "https://vidsrc.to/embed/tv/$id/$season/$episode"
+            val direct = resolveDirectStreamUrl(id, "nf") ?: resolveDirectStreamUrl(id, "pv")
+            return@withContext direct ?: uri
         }
         return@withContext uri
     }

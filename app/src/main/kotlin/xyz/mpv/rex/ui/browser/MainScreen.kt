@@ -238,19 +238,14 @@ object MainScreen : Screen {
               xyz.mpv.rex.cinetv.ui.LiveTvTabScreen(
                 searchQuery = "",
                 onPlayRequested = { streamUrl, title, meta ->
-                  val uri = android.net.Uri.parse(streamUrl)
-                  val playerIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
-                    setClass(context, xyz.mpv.rex.ui.player.PlayerActivity::class.java)
-                    putExtra("internal_launch", true)
-                    putExtra("launch_source", "cinetv")
-                    putExtra("title", title)
-                    putExtra("filename", title)
-                    putExtra("cinetv_source_type", meta["SourceType"])
-                    putExtra("cinetv_poster", meta["Logo"])
-                    setDataAndType(uri, "video/*")
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                  }
-                  context.startActivity(playerIntent)
+                  xyz.mpv.rex.utils.media.MediaUtils.playFile(
+                    source = streamUrl,
+                    context = context,
+                    launchSource = "cinetv",
+                    title = title,
+                    posterUrl = meta["Logo"],
+                    sourceType = "cinetv"
+                  )
                 }
               )
             }

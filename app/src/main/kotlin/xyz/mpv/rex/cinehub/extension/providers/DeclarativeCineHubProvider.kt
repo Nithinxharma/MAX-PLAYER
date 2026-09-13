@@ -91,17 +91,38 @@ class DeclarativeCineHubProvider(
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> = withContext(Dispatchers.IO) {
         val clean = data.removePrefix("ext://$id/").substringBefore("?")
-        val stream = CineCloudRepoClient.resolveDirectStreamUrl(clean, "vidsrc")
-        if (!stream.isNullOrBlank()) {
-            listOf(
+        val streams = mutableListOf<CineHubStreamLink>()
+
+        // 1. Try Netmirror / CineCloud direct streams
+        val netStream = CineCloudRepoClient.resolveDirectStreamUrl(clean, "nf") 
+            ?: CineCloudRepoClient.resolveDirectStreamUrl(clean, "pv")
+        if (!netStream.isNullOrBlank() && !netStream.contains("/embed/")) {
+            streams.add(
                 CineHubStreamLink(
-                    name = "$name Stream (Auto)",
-                    url = stream,
-                    quality = "1080p"
+                    name = "$name Server 1 (HD)",
+                    url = netStream,
+                    quality = "1080p",
+                    isM3u8 = netStream.contains(".m3u8")
                 )
             )
-        } else {
-            emptyList()
         }
+
+        // 2. Query Archive.org for public domain / open media matches
+        try {
+            val titleParam = runCatching {
+                android.net.Uri.parse("http://dummy/$data").getQueryParameter("title")
+            }.getOrNull() ?: clean
+            val archiveProvider = xyz.mpv.rex.cinehub.extension.providers.OpenArchiveProvider()
+            val archiveResults = archiveProvider.search(titleParam)
+            val bestArchive = archiveResults.firstOrNull()
+            if (bestArchive != null) {
+                val archiveStreams = archiveProvider.loadStreams(bestArchive.url)
+                streams.addAll(archiveStreams.map { it.copy(name = "$name (Archive ${it.quality})") })
+            }
+        } catch (e: Exception) {
+            // Ignore archive lookup failure
+        }
+
+        streams
     }
 }

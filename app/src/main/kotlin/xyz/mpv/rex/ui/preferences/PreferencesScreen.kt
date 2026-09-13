@@ -265,6 +265,13 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
+                  title = "CineTube (Invidious)",
+                  summary = "Switch Invidious client or choose best instance",
+                  icon = Icons.Outlined.SmartDisplay,
+                  onClick = { backstack.add(CineTubePreferencesScreen) },
+                )
+                PreferenceItem(
+                  position = GroupPosition.MIDDLE,
                   title = "Jellyfin",
                   summary = "External player sync",
                   icon = Icons.Outlined.VideoLibrary,

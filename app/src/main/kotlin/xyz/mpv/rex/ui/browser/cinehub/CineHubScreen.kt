@@ -110,6 +110,7 @@ object CineHubScreen : Screen {
     var providerHomeRows by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubHomePageList>>(emptyList()) }
 
     var selectedDetailItem by remember { mutableStateOf<Any?>(null) }
+    var activeCloudStreamRequest by remember { mutableStateOf<xyz.mpv.rex.cinehub.stream.CloudStreamRequest?>(null) }
 
     val navBarHeight = LocalNavigationBarHeight.current
 
@@ -765,12 +766,24 @@ object CineHubScreen : Screen {
             item = item,
             onDismiss = { selectedDetailItem = null },
             onPlay = {
-              playMediaItem(context, item, scope)
+              playMediaItem(context, item, scope, onOpenStreamSelector = { activeCloudStreamRequest = it })
             },
             onRefreshItem = { updated ->
               selectedDetailItem = updated
               loadMedia()
             },
+            onRequestStream = { request ->
+              selectedDetailItem = null
+              activeCloudStreamRequest = request
+            }
+          )
+        }
+
+        // CloudStream Link Selector Bottom Sheet
+        activeCloudStreamRequest?.let { req ->
+          CloudStreamLinkBottomSheet(
+            request = req,
+            onDismiss = { activeCloudStreamRequest = null }
           )
         }
 
@@ -838,63 +851,85 @@ object CineHubScreen : Screen {
     context: android.content.Context,
     item: Any,
     scope: kotlinx.coroutines.CoroutineScope,
+    onOpenStreamSelector: ((xyz.mpv.rex.cinehub.stream.CloudStreamRequest) -> Unit)? = null,
   ) {
     when (item) {
       is MovieItem -> {
-        if (item.videoFilePath.startsWith("ext_stream:")) {
-          val raw = item.videoFilePath.removePrefix("ext_stream:")
-          val providerId = raw.substringBefore("::")
-          val dataUrl = raw.substringAfter("::")
-          scope.launch(Dispatchers.IO) {
-            val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
-            val provider = registry.getProvider(providerId)
-            val streams = provider?.loadStreams(dataUrl) ?: emptyList()
-            val stream = streams.firstOrNull()
-            withContext(Dispatchers.Main) {
-              if (stream != null && stream.url.isNotBlank()) {
-                Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
-                MediaUtils.playFile(stream.url, context, "cinehub")
-              } else {
-                Toast.makeText(context, "No stream found from extension", Toast.LENGTH_SHORT).show()
-              }
-            }
+        if (item.videoFilePath.isNotBlank() && !item.videoFilePath.contains("://") && !item.videoFilePath.startsWith("ext_stream:") && !item.videoFilePath.startsWith("cnc_stream:") && !item.videoFilePath.startsWith("vidsrc:")) {
+          val f = java.io.File(item.videoFilePath)
+          if (f.exists() && f.length() > 0) {
+            MediaUtils.playFile(item.videoFilePath, context, "cinehub", title = item.title, posterUrl = item.posterPath, sourceType = "cinehub")
+            return
           }
-        } else if (item.videoFilePath.startsWith("cnc_stream:") || item.videoFilePath.startsWith("vidsrc:")) {
-          val parts = item.videoFilePath.split(":")
-          val postId = parts.getOrNull(1) ?: ""
-          val platform = parts.getOrNull(2) ?: "vidsrc"
-          scope.launch(Dispatchers.IO) {
-            val directStream = CineCloudRepoClient.resolveDirectStreamUrl(postId, platform)
-            withContext(Dispatchers.Main) {
-              if (!directStream.isNullOrBlank()) {
-                MediaUtils.playFile(directStream, context, "cinehub")
-              } else {
-                Toast.makeText(context, "Resolving stream… Playing ${item.title}", Toast.LENGTH_SHORT).show()
-                MediaUtils.playFile(item.videoFilePath, context, "cinehub")
-              }
-            }
-          }
+        }
+
+        val request = xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+          title = item.title,
+          tmdbId = item.tmdbId,
+          year = item.premiered.take(4).toIntOrNull(),
+          posterUrl = item.posterPath,
+          isMovie = true,
+          providerId = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringBefore("::") else null,
+          dataUrl = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringAfter("::") else null,
+          directFilePath = item.videoFilePath.takeIf { !it.contains(":") }
+        )
+
+        if (onOpenStreamSelector != null) {
+          onOpenStreamSelector(request)
         } else {
-          MediaUtils.playFile(item.videoFilePath, context, "cinehub")
+          scope.launch(Dispatchers.IO) {
+            val candidates = xyz.mpv.rex.cinehub.stream.CloudStreamLinkManager.resolveStreamCandidates(request)
+            withContext(Dispatchers.Main) {
+              if (candidates.isNotEmpty()) {
+                val best = candidates.first()
+                val backups = candidates.drop(1)
+                MediaUtils.playStreamWithFailover(
+                  primaryCandidate = best.copy(name = item.title),
+                  backupCandidates = backups.map { it.copy(name = item.title) },
+                  context = context,
+                  title = item.title,
+                  launchSource = "cinehub",
+                  posterUrl = item.posterPath,
+                  sourceType = "cinehub"
+                )
+              } else {
+                Toast.makeText(context, "No playable streams found for ${item.title}", Toast.LENGTH_SHORT).show()
+              }
+            }
+          }
         }
       }
       is TvShowItem -> {
-        scope.launch(Dispatchers.IO) {
-          val episodes = if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
-            NfoScanner.scanTvShowEpisodes(File(item.folderPath))
-          } else {
-            CineOnlineScraper.fetchTvShowEpisodes(context, item.tmdbId.ifBlank { item.title }, 1, item.title)
-          }
-          val firstEp = episodes.firstOrNull()
-          if (firstEp != null) {
-            val playUri = CineCloudRepoClient.resolveMediaUri(firstEp.videoFilePath)
+        val request = xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+          title = item.title,
+          tmdbId = item.tmdbId,
+          isMovie = false,
+          seasonNumber = 1,
+          episodeNumber = 1,
+          posterUrl = item.posterPath
+        )
+        if (onOpenStreamSelector != null) {
+          onOpenStreamSelector(request)
+        } else {
+          scope.launch(Dispatchers.IO) {
+            val candidates = xyz.mpv.rex.cinehub.stream.CloudStreamLinkManager.resolveStreamCandidates(request)
             withContext(Dispatchers.Main) {
-              Toast.makeText(context, "Playing ${item.title} - ${firstEp.title}", Toast.LENGTH_SHORT).show()
-              MediaUtils.playFile(playUri, context, "cinehub")
-            }
-          } else {
-            withContext(Dispatchers.Main) {
-              Toast.makeText(context, "No episodes found for ${item.title}", Toast.LENGTH_SHORT).show()
+              if (candidates.isNotEmpty()) {
+                val best = candidates.first()
+                val backups = candidates.drop(1)
+                val epTitle = "${item.title} - S01E01"
+                MediaUtils.playStreamWithFailover(
+                  primaryCandidate = best.copy(name = epTitle),
+                  backupCandidates = backups.map { it.copy(name = epTitle) },
+                  context = context,
+                  title = epTitle,
+                  launchSource = "cinehub",
+                  posterUrl = item.posterPath,
+                  sourceType = "cinehub"
+                )
+              } else {
+                Toast.makeText(context, "No playable streams found for ${item.title}", Toast.LENGTH_SHORT).show()
+              }
             }
           }
         }
@@ -1288,6 +1323,7 @@ private fun CineDetailBottomSheet(
   onDismiss: () -> Unit,
   onPlay: () -> Unit,
   onRefreshItem: (Any) -> Unit = {},
+  onRequestStream: ((xyz.mpv.rex.cinehub.stream.CloudStreamRequest) -> Unit)? = null,
 ) {
   val database = koinInject<xyz.mpv.rex.database.MpvExDatabase>()
   val libraryDao = database.cineLibraryDao()
@@ -1504,8 +1540,23 @@ private fun CineDetailBottomSheet(
           ) {
             Button(
               onClick = {
-                onDismiss()
-                onPlay()
+                if (onRequestStream != null) {
+                  onRequestStream(
+                    xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+                      title = title,
+                      tmdbId = item.tmdbId,
+                      year = year.toIntOrNull(),
+                      posterUrl = posterPath,
+                      isMovie = true,
+                      providerId = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringBefore("::") else null,
+                      dataUrl = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringAfter("::") else null,
+                      directFilePath = item.videoFilePath.takeIf { !it.contains(":") }
+                    )
+                  )
+                } else {
+                  onDismiss()
+                  onPlay()
+                }
               },
               modifier = Modifier
                 .weight(1f)
@@ -1674,12 +1725,28 @@ private fun CineDetailBottomSheet(
             Button(
               onClick = {
                 if (nextEpisodeToPlay != null) {
-                  scope.launch(Dispatchers.IO) {
-                    val playUri = CineCloudRepoClient.resolveMediaUri(nextEpisodeToPlay.videoFilePath)
-                    withContext(Dispatchers.Main) {
-                      onDismiss()
-                      Toast.makeText(context, "Playing ${item.title} - ${nextEpisodeToPlay.title}", Toast.LENGTH_SHORT).show()
-                      MediaUtils.playFile(playUri, context, "cinehub")
+                  if (onRequestStream != null) {
+                    onRequestStream(
+                      xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+                        title = title,
+                        tmdbId = tmdbId,
+                        isMovie = false,
+                        seasonNumber = nextEpisodeToPlay.season,
+                        episodeNumber = nextEpisodeToPlay.episode,
+                        episodeTitle = nextEpisodeToPlay.title,
+                        posterUrl = nextEpisodeToPlay.stillPath?.takeIf { it.isNotBlank() } ?: posterPath,
+                        directFilePath = nextEpisodeToPlay.videoFilePath.takeIf { !it.contains(":") }
+                      )
+                    )
+                  } else {
+                    val displayName = "$title - S${nextEpisodeToPlay.season.toString().padStart(2, '0')}E${nextEpisodeToPlay.episode.toString().padStart(2, '0')}${if (nextEpisodeToPlay.title.isNotBlank()) " - " + nextEpisodeToPlay.title else ""}"
+                    scope.launch(Dispatchers.IO) {
+                      val playUri = CineCloudRepoClient.resolveMediaUri(nextEpisodeToPlay.videoFilePath)
+                      withContext(Dispatchers.Main) {
+                        onDismiss()
+                        Toast.makeText(context, "Playing $displayName", Toast.LENGTH_SHORT).show()
+                        MediaUtils.playFile(playUri, context, "cinehub", title = displayName, posterUrl = nextEpisodeToPlay.stillPath?.takeIf { it.isNotBlank() } ?: posterPath, sourceType = "cinehub")
+                      }
                     }
                   }
                 } else {
@@ -1822,12 +1889,28 @@ private fun CineDetailBottomSheet(
                   modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                      scope.launch(Dispatchers.IO) {
-                        val playUri = CineCloudRepoClient.resolveMediaUri(ep.videoFilePath)
-                        withContext(Dispatchers.Main) {
-                          onDismiss()
-                          Toast.makeText(context, "Playing ${ep.title}", Toast.LENGTH_SHORT).show()
-                          MediaUtils.playFile(playUri, context, "cinehub")
+                      if (onRequestStream != null) {
+                        onRequestStream(
+                          xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+                            title = title,
+                            tmdbId = tmdbId,
+                            isMovie = false,
+                            seasonNumber = ep.season,
+                            episodeNumber = ep.episode,
+                            episodeTitle = ep.title,
+                            posterUrl = ep.stillPath?.takeIf { it.isNotBlank() } ?: posterPath,
+                            directFilePath = ep.videoFilePath.takeIf { !it.contains(":") }
+                          )
+                        )
+                      } else {
+                        val displayName = "$title - S${ep.season.toString().padStart(2, '0')}E${ep.episode.toString().padStart(2, '0')}${if (ep.title.isNotBlank()) " - " + ep.title else ""}"
+                        scope.launch(Dispatchers.IO) {
+                          val playUri = CineCloudRepoClient.resolveMediaUri(ep.videoFilePath)
+                          withContext(Dispatchers.Main) {
+                            onDismiss()
+                            Toast.makeText(context, "Playing $displayName", Toast.LENGTH_SHORT).show()
+                            MediaUtils.playFile(playUri, context, "cinehub", title = displayName, posterUrl = ep.stillPath?.takeIf { it.isNotBlank() } ?: posterPath, sourceType = "cinehub")
+                          }
                         }
                       }
                     },

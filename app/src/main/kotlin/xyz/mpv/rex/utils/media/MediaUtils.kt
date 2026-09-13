@@ -63,6 +63,9 @@ object MediaUtils : KoinComponent {
     source: Any,
     context: Context,
     launchSource: String? = null,
+    title: String? = null,
+    posterUrl: String? = null,
+    sourceType: String? = null,
   ) {
     val intent = when (source) {
       is Video -> {
@@ -162,6 +165,13 @@ object MediaUtils : KoinComponent {
     if (source is Video && launchSource != null && (launchSource.contains("playlist") || launchSource == "m3u_playlist" || launchSource == "media_library_list")) {
       intent.putExtra("title", source.displayName)
     }
+
+    title?.let {
+      intent.putExtra("title", it)
+      intent.putExtra("filename", it)
+    }
+    posterUrl?.let { intent.putExtra("cinetv_poster", it) }
+    sourceType?.let { intent.putExtra("cinetv_source_type", it) }
 
     val isAudio = when (source) {
       is Video -> source.isAudio

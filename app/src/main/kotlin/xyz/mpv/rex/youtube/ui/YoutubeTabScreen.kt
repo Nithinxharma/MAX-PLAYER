@@ -193,8 +193,8 @@ fun YoutubeTabScreen(
                                         
                                         val candidates = InvidiousClient.fetchStreamCandidates(video.videoId)
                                         val ranked = xyz.mpv.rex.cinehub.failover.StreamHealthResolver.resolveAndRankCandidates(candidates)
-                                        val primary = ranked.firstOrNull() ?: candidates.first()
-                                        val backups = ranked.drop(1)
+                                        val primary = (ranked.firstOrNull() ?: candidates.first()).copy(name = video.title)
+                                        val backups = (if (ranked.isNotEmpty()) ranked.drop(1) else candidates.drop(1)).map { it.copy(name = video.title) }
                                         xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
                                             primaryCandidate = primary,
                                             backupCandidates = backups,
@@ -571,8 +571,8 @@ fun ChannelInfoBottomSheet(
                                 )
                                 val candidates = InvidiousClient.fetchStreamCandidates(channelVideo.videoId)
                                 val ranked = xyz.mpv.rex.cinehub.failover.StreamHealthResolver.resolveAndRankCandidates(candidates)
-                                val primary = ranked.firstOrNull() ?: candidates.first()
-                                val backups = ranked.drop(1)
+                                val primary = (ranked.firstOrNull() ?: candidates.first()).copy(name = channelVideo.title)
+                                val backups = (if (ranked.isNotEmpty()) ranked.drop(1) else candidates.drop(1)).map { it.copy(name = channelVideo.title) }
                                 xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
                                     primaryCandidate = primary,
                                     backupCandidates = backups,

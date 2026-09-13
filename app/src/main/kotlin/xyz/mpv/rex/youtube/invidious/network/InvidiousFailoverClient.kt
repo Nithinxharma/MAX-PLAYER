@@ -139,4 +139,48 @@ class InvidiousFailoverClient(
     fun getActiveBaseUrl(): String {
         return activeBaseUrl ?: cacheService.getSavedPrimaryUrl() ?: "https://yewtu.be"
     }
+
+    /**
+     * Explicitly switches the active instance and persists it to local settings.
+     */
+    fun setActiveBaseUrl(url: String) {
+        val clean = url.trim().trimEnd('/')
+        activeBaseUrl = clean
+        cacheService.savePrimaryUrl(clean)
+        Log.i(TAG, "Switched active Invidious instance to: $clean")
+    }
+
+    /**
+     * Measures response latency to an Invidious instance in milliseconds.
+     */
+    suspend fun pingInstance(baseUrl: String): Long? = withContext(Dispatchers.IO) {
+        val testUrl = baseUrl.trimEnd('/') + "/api/v1/stats"
+        val start = System.currentTimeMillis()
+        try {
+            val req = Request.Builder()
+                .url(testUrl)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .build()
+            httpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    return@withContext (System.currentTimeMillis() - start)
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback ping to trending
+            try {
+                val fbUrl = baseUrl.trimEnd('/') + "/api/v1/trending?type=Music"
+                val fbReq = Request.Builder()
+                    .url(fbUrl)
+                    .header("User-Agent", "Mozilla/5.0")
+                    .build()
+                httpClient.newCall(fbReq).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        return@withContext (System.currentTimeMillis() - start)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return@withContext null
+    }
 }
