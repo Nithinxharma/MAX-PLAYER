@@ -265,6 +265,13 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
+                  title = "CineTV",
+                  summary = "Manage live TV integration settings",
+                  icon = Icons.Outlined.Tv,
+                  onClick = { backstack.add(CineTvPreferencesScreen) },
+                )
+                PreferenceItem(
+                  position = GroupPosition.MIDDLE,
                   title = "CineTube (Invidious)",
                   summary = "Switch Invidious client or choose best instance",
                   icon = Icons.Outlined.SmartDisplay,

@@ -202,7 +202,7 @@ object MainScreen : Screen {
         if (isShortsEnabled) {
           add(
             VisibleTab("shorts", shortsLabel, Icons.Outlined.VideoLibrary) {
-              ShortsScreen().Content()
+              ShortsScreen.Content()
             }
           )
         }
