@@ -327,14 +327,8 @@ object CineHubScreen : Screen {
                           CineOnlineScraper.executeManualMovieSearch(query)
                         }.getOrDefault(emptyList())
                       }
-                      val activeProviders = providerRegistry.getEnabledProviders()
-                      val extDeferreds = activeProviders.map { provider ->
-                        async {
-                          runCatching { provider.search(query) }.getOrDefault(emptyList())
-                        }
-                      }
                       val res = tmdbDeferred.await()
-                      val extRes = extDeferreds.awaitAll().flatten()
+                      val extRes = emptyList<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>()
                       withContext(Dispatchers.Main) {
                         searchResults = res
                         extensionSearchResults = extRes
