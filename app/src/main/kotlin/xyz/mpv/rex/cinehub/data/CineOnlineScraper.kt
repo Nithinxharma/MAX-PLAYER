@@ -256,7 +256,7 @@ object CineOnlineScraper {
     private val jsonParser = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     
     private const val TMDB_BASE_URL = "https://api.themoviedb.org/3"
-    const val DEFAULT_TMDB_API_KEY = "38a73d59546aa8789c007d3dbd96cdbc"
+    const val DEFAULT_TMDB_API_KEY = "cf3287a5765254044c0d6a5afae2b1c4"
     const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p/original"
     const val THUMB_BASE_URL = "https://image.tmdb.org/t/p/w500"
     private const val TVMAZE_BASE_URL = "https://api.tvmaze.com"
