@@ -541,6 +541,7 @@ fun ControlsTab(
               PlayerButton.BOOKMARKS_CHAPTERS -> chapters.isNotEmpty()
               PlayerButton.CURRENT_CHAPTER -> chapters.isNotEmpty()
               PlayerButton.AB_LOOP -> true // Always show in more sheet if missing from UI
+              PlayerButton.SOURCES -> viewModel.streamFailoverManager?.hasCandidates() == true
               else -> true
           }
       }

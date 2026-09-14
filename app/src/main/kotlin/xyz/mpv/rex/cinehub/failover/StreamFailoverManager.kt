@@ -32,6 +32,9 @@ class StreamFailoverManager(
     private var candidateStreams: MutableList<StreamCandidate> = mutableListOf()
     private var currentIndex: Int = 0
 
+    val candidateStreamsFlow = kotlinx.coroutines.flow.MutableStateFlow<List<StreamCandidate>>(emptyList())
+    val currentIndexFlow = kotlinx.coroutines.flow.MutableStateFlow<Int>(0)
+
     @Volatile
     var lastPositionSeconds: Double = 0.0
         private set
@@ -55,6 +58,8 @@ class StreamFailoverManager(
             }
         }
         currentIndex = 0
+        candidateStreamsFlow.value = candidateStreams.toList()
+        currentIndexFlow.value = 0
         lastPositionSeconds = 0.0
         isFailingOver = false
         cancelBufferWatchdog()
@@ -101,6 +106,7 @@ class StreamFailoverManager(
         }
 
         currentIndex++
+        currentIndexFlow.value = currentIndex
         val nextCandidate = candidateStreams[currentIndex]
         val savedPos = lastPositionSeconds
         isFailingOver = true
@@ -132,6 +138,59 @@ class StreamFailoverManager(
     }
 
     /**
+     * Manually switches playback to a specific candidate index (e.g. from SourcesSheet).
+     */
+    fun switchStream(index: Int): Boolean {
+        if (index !in candidateStreams.indices) return false
+        if (index == currentIndex && !isFailingOver) return true
+
+        cancelBufferWatchdog()
+        currentIndex = index
+        currentIndexFlow.value = index
+        val targetCandidate = candidateStreams[index]
+        val savedPos = lastPositionSeconds
+        isFailingOver = true
+
+        Log.i(TAG, "Manually switching stream to #$index [${targetCandidate.quality}]: ${targetCandidate.url} (ResumeAt: ${savedPos}s)")
+
+        scope.launch(Dispatchers.Main) {
+            Toast.makeText(
+                context,
+                "Switching stream to ${targetCandidate.name} (${targetCandidate.quality})...",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        applyCandidateHeaders(targetCandidate)
+
+        scope.launch(Dispatchers.Default) {
+            runCatching {
+                MPVLib.command("loadfile", targetCandidate.url)
+            }.onFailure { e ->
+                Log.e(TAG, "Failed to send loadfile command to MPV: ${e.message}")
+            }
+        }
+
+        onStreamSwitched?.invoke(targetCandidate)
+        return true
+    }
+
+    /**
+     * Checks if candidate streams are available.
+     */
+    fun hasCandidates(): Boolean = candidateStreams.isNotEmpty()
+
+    /**
+     * Gets all registered stream candidates.
+     */
+    fun getCandidates(): List<StreamCandidate> = candidateStreams.toList()
+
+    /**
+     * Gets current candidate stream index.
+     */
+    fun getCurrentIndex(): Int = currentIndex
+
+    /**
      * Called by PlayerActivity when MPV reports MPV_EVENT_FILE_LOADED.
      * If we were failing over, seeks immediately to the saved timestamp.
      */
@@ -151,12 +210,19 @@ class StreamFailoverManager(
     }
 
     /**
-     * Injects candidate headers into MPV before loading media.
+     * Injects candidate headers and referrer into MPV before loading media.
      */
     fun applyCandidateHeaders(candidate: StreamCandidate) {
         val userAgent = candidate.headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
         if (!userAgent.isNullOrBlank()) {
             runCatching { MPVLib.setPropertyString("user-agent", userAgent) }
+        }
+
+        val referer = candidate.referer.ifBlank {
+            candidate.headers.entries.firstOrNull { it.key.equals("Referer", ignoreCase = true) }?.value ?: ""
+        }
+        if (referer.isNotBlank()) {
+            runCatching { MPVLib.setPropertyString("referrer", referer) }
         }
 
         val mpvHeaderFields = candidate.headers.entries

@@ -1297,6 +1297,73 @@ fun RenderPlayerButton(
         )
       }
     }
+    PlayerButton.SOURCES -> {
+      val failoverManager = viewModel.streamFailoverManager
+      val candidates by (failoverManager?.candidateStreamsFlow ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+      val currentIndex by (failoverManager?.currentIndexFlow ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsState()
+      val currentSource = candidates.getOrNull(currentIndex)
+      val hasSources = candidates.isNotEmpty()
+
+      if (hasSources || isMoreSheet) {
+        if (isMoreSheet) {
+          Surface(
+            shape = CircleShape,
+            color = surfaceColor,
+            contentColor = contentColor,
+            border = borderColor,
+            modifier = Modifier
+              .height(buttonSize)
+              .clip(CircleShape)
+              .clickable {
+                clickEvent()
+                onOpenSheet(Sheets.Sources)
+              }
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller)
+            ) {
+              Icon(
+                imageVector = androidx.compose.material.icons.Icons.Outlined.LiveTv,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+              )
+              Text(
+                text = "Sources (${currentSource?.quality ?: "Auto"})",
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+              )
+            }
+          }
+        } else {
+          Surface(
+            shape = CircleShape,
+            color = surfaceColor,
+            border = borderColor,
+            modifier = Modifier
+              .size(buttonSize)
+              .clip(CircleShape)
+              .clickable {
+                clickEvent()
+                onOpenSheet(Sheets.Sources)
+              }
+          ) {
+            Box(
+              modifier = Modifier.fillMaxSize(),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = androidx.compose.material.icons.Icons.Outlined.LiveTv,
+                contentDescription = "Video Sources",
+                tint = contentColor,
+                modifier = Modifier.size(24.dp)
+              )
+            }
+          }
+        }
+      }
+    }
   }
 }
 

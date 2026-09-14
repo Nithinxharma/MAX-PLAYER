@@ -498,6 +498,11 @@ object MediaUtils : KoinComponent {
       posterUrl?.let { putExtra("cinetv_poster", it) }
       sourceType?.let { putExtra("cinetv_source_type", it) }
 
+      // Primary stream metadata
+      putExtra("primary_stream_name", primaryCandidate.name)
+      putExtra("primary_stream_quality", primaryCandidate.quality)
+      putExtra("primary_stream_referer", primaryCandidate.referer)
+
       // Primary stream headers as flat key-value array
       val flatHeaders = primaryCandidate.headers.flatMap { listOf(it.key, it.value) }.toTypedArray()
       if (flatHeaders.isNotEmpty()) {
@@ -509,6 +514,8 @@ object MediaUtils : KoinComponent {
         putStringArrayListExtra("backup_stream_urls", ArrayList(backupCandidates.map { it.url }))
         putStringArrayListExtra("backup_stream_names", ArrayList(backupCandidates.map { it.name }))
         putStringArrayListExtra("backup_stream_qualities", ArrayList(backupCandidates.map { it.quality }))
+        putStringArrayListExtra("backup_stream_referers", ArrayList(backupCandidates.map { it.referer }))
+        putStringArrayListExtra("backup_stream_hosts", ArrayList(backupCandidates.map { it.host }))
         val headersJson = kotlinx.serialization.json.Json.encodeToString<List<Map<String, String>>>(
           backupCandidates.map { it.headers }
         )

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Shuffle
 import androidx.compose.material.icons.outlined.Headset
 import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -61,6 +62,7 @@ enum class PlayerButton(
   AMBIENT_MODE(Icons.Outlined.BlurOn),
   SLEEP_TIMER(Icons.Outlined.Timer),
   METADATA(Icons.Outlined.Info),
+  SOURCES(Icons.Outlined.LiveTv),
   NONE(Icons.Outlined.Bookmarks),
 }
 
@@ -106,5 +108,6 @@ fun getPlayerButtonLabel(button: PlayerButton): String =
     PlayerButton.AMBIENT_MODE -> stringResource(R.string.btn_label_ambient_mode)
     PlayerButton.SLEEP_TIMER -> stringResource(R.string.btn_label_sleep_timer)
     PlayerButton.METADATA -> "Metadata Information"
+    PlayerButton.SOURCES -> "Video Sources"
     PlayerButton.NONE -> stringResource(R.string.btn_label_none)
   }

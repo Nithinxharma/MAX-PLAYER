@@ -354,13 +354,17 @@ class PlayerActivity :
 
     val primaryCandidate = xyz.mpv.rex.cinehub.failover.StreamCandidate(
       url = primaryUrl,
-      name = targetIntent.getStringExtra("title") ?: "Primary Stream",
-      headers = headersMap
+      name = targetIntent.getStringExtra("primary_stream_name") ?: targetIntent.getStringExtra("title") ?: "Primary Stream",
+      quality = targetIntent.getStringExtra("primary_stream_quality") ?: "1080p",
+      headers = headersMap,
+      referer = targetIntent.getStringExtra("primary_stream_referer") ?: ""
     )
 
     val backupUrls = targetIntent.getStringArrayListExtra("backup_stream_urls") ?: arrayListOf()
     val backupNames = targetIntent.getStringArrayListExtra("backup_stream_names") ?: arrayListOf()
     val backupQualities = targetIntent.getStringArrayListExtra("backup_stream_qualities") ?: arrayListOf()
+    val backupReferers = targetIntent.getStringArrayListExtra("backup_stream_referers") ?: arrayListOf()
+    val backupHosts = targetIntent.getStringArrayListExtra("backup_stream_hosts") ?: arrayListOf()
     val backupHeadersJson = targetIntent.getStringExtra("backup_stream_headers_json")
 
     val backupHeadersList = try {
@@ -376,11 +380,14 @@ class PlayerActivity :
         url = url,
         name = backupNames.getOrNull(index) ?: "Backup ${index + 1}",
         quality = backupQualities.getOrNull(index) ?: "Auto",
-        headers = backupHeadersList.getOrNull(index) ?: emptyMap()
+        headers = backupHeadersList.getOrNull(index) ?: emptyMap(),
+        referer = backupReferers.getOrNull(index) ?: "",
+        host = backupHosts.getOrNull(index) ?: ""
       )
     }
 
     streamFailoverManager.setupCandidates(primaryCandidate, backupCandidates)
+    viewModel.streamFailoverManager = streamFailoverManager
   }
 
   // ==================== Dependency Injection ====================
