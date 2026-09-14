@@ -18,8 +18,4 @@ data class StreamCandidate(
     val quality: String = "1080p",
     val isM3u8: Boolean = false,
     val headers: Map<String, String> = emptyMap(),
-    val referer: String = "",
-    val qualityNumeric: Int = 1080,
-    val streamType: String = "VIDEO",
-    val host: String = ""
 )

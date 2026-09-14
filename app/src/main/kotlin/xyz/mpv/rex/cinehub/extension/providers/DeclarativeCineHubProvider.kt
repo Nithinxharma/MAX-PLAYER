@@ -121,48 +121,23 @@ class DeclarativeCineHubProvider(
     }
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> = withContext(Dispatchers.IO) {
-        val list = mutableListOf<CineHubStreamLink>()
-        loadLinks(data) { list.add(it) }
-        list
-    }
-
-    override suspend fun loadLinks(
-        data: String,
-        subtitleCallback: ((CineHubSubtitleTrack) -> Unit)?,
-        callback: (CineHubStreamLink) -> Unit
-    ): Boolean = withContext(Dispatchers.IO) {
         val clean = data.removePrefix("ext://$id/").substringBefore("?")
-        var foundAny = false
+        val streams = mutableListOf<CineHubStreamLink>()
 
-        val endpoints = listOf("nf", "pv", "hs", "dp")
-        for ((idx, ep) in endpoints.withIndex()) {
-            val netStream = CineCloudRepoClient.resolveDirectStreamUrl(clean, ep)
-            if (!netStream.isNullOrBlank()) {
-                if (xyz.mpv.rex.cinehub.extractor.ExtractorManager.canExtract(netStream)) {
-                    val extracted = xyz.mpv.rex.cinehub.extractor.ExtractorManager.loadExtractor(
-                        netStream,
-                        subtitleCallback = subtitleCallback,
-                        callback = { link ->
-                            foundAny = true
-                            callback(link.copy(name = "[$name] ${link.name}"))
-                        }
-                    )
-                    if (extracted) foundAny = true
-                } else if (!netStream.contains("/embed/")) {
-                    foundAny = true
-                    callback(
-                        CineHubStreamLink(
-                            name = "$name Server ${idx + 1} (HD)",
-                            url = netStream,
-                            quality = "1080p",
-                            isM3u8 = netStream.contains(".m3u8"),
-                            host = name
-                        )
-                    )
-                }
-            }
+        // 1. Try Netmirror / CineCloud direct streams
+        val netStream = CineCloudRepoClient.resolveDirectStreamUrl(clean, "nf") 
+            ?: CineCloudRepoClient.resolveDirectStreamUrl(clean, "pv")
+        if (!netStream.isNullOrBlank() && !netStream.contains("/embed/")) {
+            streams.add(
+                CineHubStreamLink(
+                    name = "$name Server 1 (HD) (Hindi)",
+                    url = netStream,
+                    quality = "1080p",
+                    isM3u8 = netStream.contains(".m3u8")
+                )
+            )
         }
 
-        foundAny
+        streams
     }
 }

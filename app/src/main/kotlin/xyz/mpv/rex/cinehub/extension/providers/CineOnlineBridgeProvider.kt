@@ -81,55 +81,25 @@ class CineOnlineBridgeProvider(private val context: Context) : CineHubProvider {
     }
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> = withContext(Dispatchers.IO) {
-        val list = mutableListOf<CineHubStreamLink>()
-        loadLinks(data) { list.add(it) }
-        list
-    }
-
-    override suspend fun loadLinks(
-        data: String,
-        subtitleCallback: ((CineHubSubtitleTrack) -> Unit)?,
-        callback: (CineHubStreamLink) -> Unit
-    ): Boolean = withContext(Dispatchers.IO) {
-        var foundAny = false
-        val endpoints = if (data.contains(":")) listOf("uri") else listOf("nf", "pv", "hs", "dp")
-
-        for ((idx, ep) in endpoints.withIndex()) {
-            val direct = if (ep == "uri") {
-                CineCloudRepoClient.resolveMediaUri(data)
-            } else {
-                CineCloudRepoClient.resolveDirectStreamUrl(data, ep)
-            }
-
-            if (!direct.isNullOrBlank() && (direct.startsWith("http://") || direct.startsWith("https://"))) {
-                if (xyz.mpv.rex.cinehub.extractor.ExtractorManager.canExtract(direct)) {
-                    val extracted = xyz.mpv.rex.cinehub.extractor.ExtractorManager.loadExtractor(
-                        direct,
-                        subtitleCallback = subtitleCallback,
-                        callback = { link ->
-                            foundAny = true
-                            callback(link.copy(name = "CineHub Mirror - ${link.name}"))
-                        }
-                    )
-                    if (extracted) foundAny = true
-                } else if (!direct.contains("/embed/")) {
-                    foundAny = true
-                    val baseLink = CineHubStreamLink(
-                        name = "CineHub Server ${idx + 1} (HD)",
-                        url = direct,
-                        quality = "1080p",
-                        isM3u8 = direct.contains(".m3u8"),
-                        host = "CineHub Network"
-                    )
-                    if (baseLink.isM3u8) {
-                        val variants = xyz.mpv.rex.cinehub.extractor.M3u8Helper.extractM3u8(baseLink)
-                        variants.forEach(callback)
-                    } else {
-                        callback(baseLink)
-                    }
-                }
-            }
+        val streams = mutableListOf<CineHubStreamLink>()
+        val direct = if (data.contains(":")) {
+            CineCloudRepoClient.resolveMediaUri(data)
+        } else {
+            CineCloudRepoClient.resolveDirectStreamUrl(data, "nf")
+                ?: CineCloudRepoClient.resolveDirectStreamUrl(data, "pv")
+                ?: CineCloudRepoClient.resolveDirectStreamUrl(data, "hs")
+                ?: CineCloudRepoClient.resolveDirectStreamUrl(data, "dp")
         }
-        foundAny
+        if (!direct.isNullOrBlank() && (direct.startsWith("http://") || direct.startsWith("https://"))) {
+            streams.add(
+                CineHubStreamLink(
+                    name = "CineHub Network Server 1 (HD)",
+                    url = direct,
+                    quality = "1080p",
+                    isM3u8 = direct.contains(".m3u8")
+                )
+            )
+        }
+        streams
     }
 }

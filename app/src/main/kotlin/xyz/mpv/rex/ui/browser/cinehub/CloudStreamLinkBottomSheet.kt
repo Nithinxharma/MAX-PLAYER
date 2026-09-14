@@ -149,8 +149,8 @@ fun CloudStreamLinkBottomSheet(
         Toast.makeText(context, "Playing: $displayName (${selected.quality})", Toast.LENGTH_SHORT).show()
 
         MediaUtils.playStreamWithFailover(
-            primaryCandidate = selected,
-            backupCandidates = backups,
+            primaryCandidate = selected.copy(name = displayName),
+            backupCandidates = backups.map { it.copy(name = displayName) },
             context = context,
             title = displayName,
             launchSource = "cinehub",

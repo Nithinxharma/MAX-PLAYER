@@ -15,4 +15,3 @@ install_debug.sh
 compile_release.sh
 remote.log
 mpvRex-libmpv/
-cloudstream-ref/

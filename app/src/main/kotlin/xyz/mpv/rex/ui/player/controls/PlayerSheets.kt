@@ -514,12 +514,5 @@ fun PlayerSheets(
         onDismissRequest = onDismissRequest,
       )
     }
-
-    Sheets.Sources -> {
-      xyz.mpv.rex.ui.player.controls.components.sheets.SourcesSheet(
-        failoverManager = viewModel.streamFailoverManager,
-        onDismissRequest = onDismissRequest,
-      )
-    }
   }
 }

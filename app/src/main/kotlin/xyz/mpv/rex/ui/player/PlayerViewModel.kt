@@ -110,11 +110,6 @@ class PlayerViewModel(
   private val browserPreferences: xyz.mpv.rex.preferences.BrowserPreferences by inject()
   private val miniPlayerStateManager: MiniPlayerStateManager by inject()
 
-  /**
-   * Failover and source candidate manager for online and multi-source streams.
-   */
-  var streamFailoverManager: xyz.mpv.rex.cinehub.failover.StreamFailoverManager? = null
-
   // Cache the application context to prevent leaking the Activity context
   private val appContext = host.context.applicationContext
   

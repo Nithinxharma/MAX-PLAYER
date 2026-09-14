@@ -109,15 +109,6 @@ interface CineHubProvider {
     suspend fun loadDetails(url: String): CineHubMediaDetails?
     suspend fun loadEpisodes(url: String): List<CineHubEpisode> = emptyList()
     suspend fun loadStreams(data: String): List<CineHubStreamLink>
-    suspend fun loadLinks(
-        data: String,
-        subtitleCallback: ((CineHubSubtitleTrack) -> Unit)? = null,
-        callback: (CineHubStreamLink) -> Unit
-    ): Boolean {
-        val list = loadStreams(data)
-        list.forEach(callback)
-        return list.isNotEmpty()
-    }
     suspend fun loadSubtitles(data: String): List<CineHubSubtitleTrack> = emptyList()
 }
 
@@ -170,29 +161,8 @@ data class CineHubStreamLink(
     val url: String,
     val quality: String = "1080p",
     val isM3u8: Boolean = false,
-    val headers: Map<String, String> = emptyMap(),
-    val referer: String = "",
-    val qualityNumeric: Int = 1080,
-    val streamType: String = "VIDEO",
-    val host: String = ""
-) {
-    fun toStreamCandidate(): xyz.mpv.rex.cinehub.failover.StreamCandidate {
-        val finalHeaders = if (referer.isNotBlank() && !headers.containsKey("Referer") && !headers.containsKey("referer")) {
-            headers + ("Referer" to referer)
-        } else headers
-        return xyz.mpv.rex.cinehub.failover.StreamCandidate(
-            url = url,
-            name = name,
-            quality = quality,
-            isM3u8 = isM3u8,
-            headers = finalHeaders,
-            referer = referer,
-            qualityNumeric = qualityNumeric,
-            streamType = streamType,
-            host = host
-        )
-    }
-}
+    val headers: Map<String, String> = emptyMap()
+)
 
 data class CineHubSubtitleTrack(
     val language: String,
@@ -280,47 +250,16 @@ class MainApiProviderAdapter(private val api: MainAPI) : CineHubProvider {
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> {
         val links = mutableListOf<CineHubStreamLink>()
         api.loadLinks(data, false) { extractor ->
-            val qualityLabel = if (extractor.quality > 0) "${extractor.quality}p" else "Auto"
             links.add(
                 CineHubStreamLink(
                     name = extractor.name,
                     url = extractor.url,
-                    quality = qualityLabel,
+                    quality = "${extractor.quality}p",
                     isM3u8 = extractor.isM3u8,
-                    headers = extractor.headers,
-                    referer = extractor.referer,
-                    qualityNumeric = extractor.quality,
-                    streamType = if (extractor.isM3u8) "M3U8" else "VIDEO",
-                    host = extractor.source
+                    headers = extractor.headers
                 )
             )
         }
         return links
-    }
-
-    override suspend fun loadLinks(
-        data: String,
-        subtitleCallback: ((CineHubSubtitleTrack) -> Unit)?,
-        callback: (CineHubStreamLink) -> Unit
-    ): Boolean {
-        var foundAny = false
-        api.loadLinks(data, false) { extractor ->
-            foundAny = true
-            val qualityLabel = if (extractor.quality > 0) "${extractor.quality}p" else "Auto"
-            callback(
-                CineHubStreamLink(
-                    name = extractor.name,
-                    url = extractor.url,
-                    quality = qualityLabel,
-                    isM3u8 = extractor.isM3u8,
-                    headers = extractor.headers,
-                    referer = extractor.referer,
-                    qualityNumeric = extractor.quality,
-                    streamType = if (extractor.isM3u8) "M3U8" else "VIDEO",
-                    host = extractor.source
-                )
-            )
-        }
-        return foundAny
     }
 }
