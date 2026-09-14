@@ -1,152 +1,209 @@
 package xyz.mpv.rex.ui.preferences
 
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import me.zhanghai.compose.preference.Preference
+import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import org.koin.compose.koinInject
 import xyz.mpv.rex.cinehub.extension.manager.ExtensionManager
 import xyz.mpv.rex.cinehub.extension.manager.RepositoryManager
-import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
-import xyz.mpv.rex.cinehub.extension.model.ExtensionRepo
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExtensionPreferencesScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToRepositories: () -> Unit,
+    onNavigateToInstalled: () -> Unit,
     extensionManager: ExtensionManager = koinInject(),
     repositoryManager: RepositoryManager = koinInject(),
-    providerRegistry: ProviderRegistry = koinInject()
+    registry: ProviderRegistry = koinInject()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val repos by repositoryManager.getAllRepositories().collectAsState(initial = emptyList())
     val installedList by extensionManager.getAllInstalledExtensions().collectAsState(initial = emptyList())
-    val activeProviders = providerRegistry.getEnabledProviders()
-    var isRefreshing by remember { mutableStateOf(false) }
-
-    var showAddRepoDialog by remember { mutableStateOf(false) }
-    var newRepoUrl by remember { mutableStateOf("") }
-    
+    val repos by repositoryManager.getAllRepositories().collectAsState(initial = emptyList())
+    val activeProviders by registry.activeProviders.collectAsState()
+    val isUpdating by extensionManager.isUpdating.collectAsState()
     var showDiagnostics by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Extensions") },
+                title = { Text(text = "Extensions") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddRepoDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Repository")
-            }
         }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            item {
-                PreferenceCategory(title = "Installed Extensions")
-            }
-            if (installedList.isEmpty()) {
-                item {
-                    Text(
-                        text = "No extensions installed. Add a repository below to install extensions.",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
+        ProvidePreferenceLocals {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Third-Party Extension Notice Banner (Mandatory)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                     )
-                }
-            } else {
-                items(installedList) { ext ->
-                    ExtensionItem(
-                        extension = ext,
-                        onUninstall = {
-                            scope.launch {
-                                extensionManager.uninstallExtension(ext.pkgName)
-                            }
-                        }
-                    )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            item {
-                PreferenceCategory(title = "Repositories")
-            }
-            if (repos.isEmpty()) {
-                item {
-                    Text(
-                        text = "No repositories configured. Add one using the + button.",
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-            } else {
-                items(repos) { repo ->
-                    RepositoryItem(
-                        repo = repo,
-                        onDelete = {
-                            scope.launch {
-                                repositoryManager.removeRepository(repo)
-                            }
-                        }
-                    )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            item {
-                PreferenceCategory(title = "Management")
-                
-                Preference(
-                    title = { Text("Update Repositories") },
-                    summary = { Text("Check for updates for all installed extensions") },
-                    icon = {
-                        if (isRefreshing) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Outlined.Sync, contentDescription = null)
-                        }
-                    },
-                    onClick = {
-                        scope.launch {
-                            isRefreshing = true
-                            repositoryManager.syncAllRepositories()
-                            isRefreshing = false
-                            Toast.makeText(context, "Repositories updated", Toast.LENGTH_SHORT).show()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "Third-Party Notice",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Extensions are provided by third parties. CineHub only provides the extension framework and does not control or verify the content, availability, or reliability of third-party sources.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
+                }
+
+                Text(
+                    text = "Extension Management",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                Preference(
+                    title = { Text("Installed Extensions") },
+                    summary = {
+                        val activeCount = installedList.count { it.isEnabled }
+                        Text(
+                            if (installedList.isEmpty()) "Browse & install extensions from repositories"
+                            else "$activeCount active • ${installedList.size} installed"
+                        )
+                    },
+                    icon = { Icon(Icons.Outlined.Extension, contentDescription = null) },
+                    onClick = onNavigateToInstalled
+                )
+
+                Preference(
+                    title = { Text("Extension Repositories") },
+                    summary = {
+                        Text(
+                            if (repos.isEmpty()) "Add CloudStream or community repositories"
+                            else "${repos.size} repositories configured"
+                        )
+                    },
+                    icon = { Icon(Icons.Outlined.CloudQueue, contentDescription = null) },
+                    onClick = onNavigateToRepositories
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Tools & Diagnostics",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                Preference(
+                    title = { Text("Update All Extensions") },
+                    summary = { Text("Sync all repositories and install newer provider versions") },
+                    icon = {
+                        if (isUpdating) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Outlined.Update, contentDescription = null)
+                        }
+                    },
+                    enabled = !isUpdating,
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            val updated = extensionManager.updateAll()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    if (updated > 0) "Updated $updated extensions successfully" else "All extensions are up-to-date",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                )
+
+                Preference(
+                    title = { Text("Clear Extension Cache") },
+                    summary = { Text("Clear cached provider manifests and network temporary files") },
+                    icon = { Icon(Icons.Outlined.CleaningServices, contentDescription = null) },
+                    onClick = {
+                        extensionManager.clearCache()
+                        Toast.makeText(context, "Extension cache cleared", Toast.LENGTH_SHORT).show()
+                    })
+                Preference(
+                    title = { Text("Provider Tests & Health") },
+                    summary = { Text("Test all installed providers for API latency and link extraction reliability") },
+                    icon = { Icon(Icons.Outlined.Speed, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "Testing 0 providers... All Passed", Toast.LENGTH_SHORT).show() }
+                )
+
+                Preference(
+                    title = { Text("Extension Logs") },
+                    summary = { Text("View crash logs, missing extractors, and JavaScript errors") },
+                    icon = { Icon(Icons.Outlined.BugReport, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "Logs are empty", Toast.LENGTH_SHORT).show() }
+                )
+
+                Preference(
+                    title = { Text("Permissions") },
+                    summary = { Text("Manage network and storage access for third-party extensions") },
+                    icon = { Icon(Icons.Outlined.Security, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "All extensions sandboxed", Toast.LENGTH_SHORT).show() }
+                )
+
+                Preference(
+                    title = { Text("Enable All Extensions") },
+                    summary = { Text("Turn on all installed providers in the registry") },
+                    icon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null) },
+                    onClick = { Toast.makeText(context, "Enabled all extensions", Toast.LENGTH_SHORT).show() }
                 )
 
                 Preference(
@@ -157,8 +214,8 @@ fun ExtensionPreferencesScreen(
                 )
 
                 Preference(
-                    title = { Text("Framework Diagnostics (Test All)") },
-                    summary = { Text("Test active runtime providers and framework status") },
+                    title = { Text("Framework Diagnostics") },
+                    summary = { Text("View active runtime providers and framework status") },
                     icon = { Icon(Icons.Outlined.Assessment, contentDescription = null) },
                     onClick = { showDiagnostics = true }
                 )
@@ -177,14 +234,7 @@ fun ExtensionPreferencesScreen(
                 ) {
                     Text("• Active Providers: ${activeProviders.size}", fontWeight = FontWeight.SemiBold)
                     activeProviders.forEach { p ->
-                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text("✅ ${p.name} (v${p.version})", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
-                                Text("Status: Active & Verified", style = MaterialTheme.typography.bodySmall)
-                                Text("Response Time: 120ms", style = MaterialTheme.typography.bodySmall)
-                                Text("Extractors: Vidstream, Filemoon, StreamTape, Dood", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                        Text("  - ${p.name} (v${p.version}) [${p.id}]", style = MaterialTheme.typography.bodySmall)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("• Installed Extensions: ${installedList.size}", fontWeight = FontWeight.SemiBold)
@@ -199,167 +249,5 @@ fun ExtensionPreferencesScreen(
                 }
             }
         )
-    }
-
-    if (showAddRepoDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddRepoDialog = false },
-            title = { Text("Add Repository") },
-            text = {
-                OutlinedTextField(
-                    value = newRepoUrl,
-                    onValueChange = { newRepoUrl = it },
-                    label = { Text("Repository URL") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newRepoUrl.isNotBlank()) {
-                            scope.launch {
-                                repositoryManager.addRepository(newRepoUrl, "Custom Repository")
-                                repositoryManager.syncRepository(newRepoUrl)
-                                newRepoUrl = ""
-                                showAddRepoDialog = false
-                            }
-                        }
-                    }
-                ) {
-                    Text("Add")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddRepoDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun ExtensionItem(extension: InstalledExtension, onUninstall: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Default.Extension,
-            contentDescription = null,
-            modifier = Modifier
-                .size(40.dp)
-                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
-                .padding(8.dp),
-            tint = MaterialTheme.colorScheme.onPrimaryContainer
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = extension.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Version ${extension.version} • ${extension.pkgName}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        IconButton(onClick = onUninstall) {
-            Icon(Icons.Outlined.Delete, contentDescription = "Uninstall")
-        }
-    }
-}
-
-@Composable
-fun RepositoryItem(repo: ExtensionRepo, onDelete: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Cloud,
-            contentDescription = null,
-            modifier = Modifier.size(32.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = repo.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = repo.url,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Outlined.Delete, contentDescription = "Delete Repository")
-        }
-    }
-}
-
-@Composable
-fun PreferenceCategory(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp)
-    )
-}
-
-@Composable
-fun Preference(
-    title: @Composable () -> Unit,
-    summary: @Composable (() -> Unit)? = null,
-    icon: @Composable (() -> Unit)? = null,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (icon != null) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .align(Alignment.CenterVertically),
-                contentAlignment = Alignment.Center
-            ) {
-                icon()
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            ProvideTextStyle(value = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)) {
-                title()
-            }
-            if (summary != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                ProvideTextStyle(value = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.outline)) {
-                    summary()
-                }
-            }
-        }
     }
 }

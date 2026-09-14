@@ -11,7 +11,9 @@ object ExtensionPreferencesScreenRoute : Screen {
     override fun Content() {
         val backstack = LocalBackStack.current
         ExtensionPreferencesScreen(
-            onNavigateBack = { backstack.removeLastOrNull() }
+            onNavigateBack = { backstack.removeLastOrNull() },
+            onNavigateToRepositories = { backstack.add(ExtensionRepositoriesScreenRoute) },
+            onNavigateToInstalled = { backstack.add(InstalledExtensionsScreenRoute) }
         )
     }
 }
