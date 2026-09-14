@@ -1,1 +1,0 @@
-awk 'NR>=330 && NR<=335 { next } NR==337 { print "                      val extRes = emptyList<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>()"; next } { print }' app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt > temp.kt && mv temp.kt app/src/main/kotlin/xyz/mpv/rex/ui/browser/cinehub/CineHubScreen.kt
