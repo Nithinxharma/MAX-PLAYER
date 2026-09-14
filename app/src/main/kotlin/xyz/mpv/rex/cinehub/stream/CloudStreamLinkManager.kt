@@ -1,23 +1,21 @@
 package xyz.mpv.rex.cinehub.stream
 
-import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
 import org.koin.java.KoinJavaComponent
-import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.extension.api.CineHubStreamLink
+import xyz.mpv.rex.cinehub.extension.api.CineHubSubtitleTrack
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
+import xyz.mpv.rex.cinehub.extractor.ExtractorLinkData
+import xyz.mpv.rex.cinehub.extractor.ExtractorManager
+import xyz.mpv.rex.cinehub.extractor.M3u8Helper
+import xyz.mpv.rex.cinehub.extractor.SubtitleData
 import xyz.mpv.rex.cinehub.failover.StreamCandidate
 import xyz.mpv.rex.cinehub.failover.StreamHealthResolver
 import java.io.File
-import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
 
 /**
  * CloudStream Request containing media identifiers and metadata.
@@ -55,31 +53,31 @@ data class CloudStreamRequest(
  * CloudStream-style Multi-Provider Stream & Link Management Engine.
  *
  * Emulates CloudStream's modular link resolution:
- * 1. Queries target provider and active extension registry.
- * 2. Queries multi-source stream scrapers & direct video endpoints (Archive.org, HLS direct streams).
- * 3. Sanitizes and rejects non-video HTML pages (prevents infinite demuxer hang).
- * 4. Injects mandatory HTTP headers (User-Agent, Referer, Origin) to bypass 403 Forbidden.
- * 5. Runs concurrent pre-flight checks to rank verified working streams.
+ * 1. Queries target provider from ProviderRegistry.
+ * 2. Runs extractors (StreamWish, Filemoon, StreamTape, MixDrop, Dood, Rabbitstream, VidHide, etc.).
+ * 3. Resolves M3U8 multi-quality playlists into individual 1080p, 720p, 480p streams.
+ * 4. Extracts and aggregates subtitle tracks.
+ * 5. Sanitizes and rejects non-video HTML pages.
+ * 6. Injects mandatory HTTP headers (User-Agent, Referer, Origin) to bypass 403 Forbidden.
+ * 7. Runs concurrent pre-flight checks to rank verified working streams.
  */
 object CloudStreamLinkManager {
-    private const val TAG = "CloudStreamLinkManager"
-
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private const val TAG = "CineHub:LinkResolution"
 
     /**
-     * Resolves all available stream candidates for a media request across all providers.
+     * Resolves all available stream candidates for a media request across installed providers.
      */
     suspend fun resolveStreamCandidates(request: CloudStreamRequest): List<StreamCandidate> = withContext(Dispatchers.IO) {
         val candidates = mutableListOf<StreamCandidate>()
+        val collectedSubtitles = mutableListOf<String>()
+
+        Log.i(TAG, "Starting link resolution for: ${request.getFormattedDisplayName()} (providerId=${request.providerId}, dataUrl=${request.dataUrl})")
 
         // 1. Check if direct file path is a valid local file
         if (!request.directFilePath.isNullOrBlank()) {
             val file = File(request.directFilePath)
             if (file.exists() && file.length() > 0) {
+                Log.d(TAG, "Using local file: ${file.absolutePath}")
                 candidates.add(
                     StreamCandidate(
                         url = file.absolutePath,
@@ -92,43 +90,12 @@ object CloudStreamLinkManager {
             }
         }
 
-        // Direct http/https stream URL
-        if (!request.dataUrl.isNullOrBlank() && (request.dataUrl.startsWith("http://") || request.dataUrl.startsWith("https://"))) {
-            candidates.add(
-                StreamCandidate(
-                    url = request.dataUrl,
-                    name = "Direct Stream (${request.title})",
-                    quality = "1080p",
-                    isM3u8 = request.dataUrl.contains(".m3u8")
-                )
-            )
-        }
-
-        // Direct CineCloud / Netmirror URL resolution
-        if (!request.dataUrl.isNullOrBlank() && (request.dataUrl.startsWith("cnc_stream:") || request.dataUrl.startsWith("cnc_tv:") || request.dataUrl.startsWith("vidsrc_") || request.dataUrl.startsWith("stream_tv:"))) {
-            try {
-                val direct = CineCloudRepoClient.resolveMediaUri(request.dataUrl)
-                if (direct.isNotBlank() && (direct.startsWith("http://") || direct.startsWith("https://"))) {
-                    candidates.add(
-                        StreamCandidate(
-                            url = direct,
-                            name = "CineHub Primary Server (Fast)",
-                            quality = "1080p",
-                            isM3u8 = direct.contains(".m3u8")
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to resolve media URI ${request.dataUrl}: ${e.message}")
-            }
-        }
-
         // 2. Query extension providers
         val providerRegistry = runCatching {
             KoinJavaComponent.get<ProviderRegistry>(ProviderRegistry::class.java)
         }.getOrNull()
 
-        val providerTasks = mutableListOf<suspend () -> List<CineHubStreamLink>>()
+        val providerStreamLinks = mutableListOf<CineHubStreamLink>()
 
         if (providerRegistry != null) {
             val providersToQuery = if (!request.providerId.isNullOrBlank()) {
@@ -137,91 +104,139 @@ object CloudStreamLinkManager {
                 providerRegistry.getEnabledProviders()
             }
 
-            for (targetProvider in providersToQuery) {
-                providerTasks.add {
+            Log.d(TAG, "Querying ${providersToQuery.size} active providers for streams")
+
+            val deferredProviders = providersToQuery.map { targetProvider ->
+                async {
                     try {
                         val queryData = request.dataUrl
                             ?: if (request.isMovie) request.tmdbId.ifBlank { request.title }
                             else "${request.tmdbId.ifBlank { request.title }}:${request.seasonNumber ?: 1}:${request.episodeNumber ?: 1}"
-                        targetProvider.loadStreams(queryData)
+                        
+                        Log.d(TAG, "Querying provider '${targetProvider.name}' with data: $queryData")
+                        val streams = targetProvider.loadStreams(queryData)
+                        val subs = runCatching { targetProvider.loadSubtitles(queryData) }.getOrDefault(emptyList())
+                        Pair(streams, subs)
                     } catch (e: Exception) {
-                        Log.w(TAG, "Provider ${targetProvider.name} failed to load streams: ${e.message}")
-                        emptyList()
+                        Log.w(TAG, "Provider '${targetProvider.name}' failed to load streams: ${e.message}")
+                        Pair(emptyList<CineHubStreamLink>(), emptyList<CineHubSubtitleTrack>())
+                    }
+                }
+            }
+
+            val results = deferredProviders.awaitAll()
+            for ((streams, subs) in results) {
+                providerStreamLinks.addAll(streams)
+                subs.forEach { track ->
+                    if (track.url.isNotBlank()) {
+                        collectedSubtitles.add(track.url)
                     }
                 }
             }
         }
 
+        // If request had a direct URL, also include it for extraction/probing
+        if (!request.dataUrl.isNullOrBlank() && (request.dataUrl.startsWith("http://") || request.dataUrl.startsWith("https://"))) {
+            providerStreamLinks.add(
+                CineHubStreamLink(
+                    name = "Direct Stream",
+                    url = request.dataUrl,
+                    quality = "Auto",
+                    isM3u8 = request.dataUrl.contains(".m3u8")
+                )
+            )
+        }
 
-        // 4. Query Netmirror/CineCloud resolver if available
-        if (!request.tmdbId.isNullOrBlank() || !request.imdbId.isNullOrBlank()) {
-            providerTasks.add {
-                try {
-                    val id = request.imdbId.ifBlank { request.tmdbId }
-                    val direct = if (request.isMovie) {
-                        CineCloudRepoClient.resolveDirectStreamUrl(id, "nf")
-                            ?: CineCloudRepoClient.resolveDirectStreamUrl(id, "pv")
-                    } else {
-                        CineCloudRepoClient.resolveDirectStreamUrl(id, "hs")
-                            ?: CineCloudRepoClient.resolveDirectStreamUrl(id, "dp")
-                    }
-                    if (!direct.isNullOrBlank() && isValidMediaStreamUrl(direct)) {
-                        listOf(
-                            CineHubStreamLink(
-                                name = "CloudStream Mirror (Fast)",
-                                url = direct,
-                                quality = "1080p",
-                                isM3u8 = direct.contains(".m3u8")
+        Log.d(TAG, "Collected ${providerStreamLinks.size} initial stream links from providers. Starting extractor resolution...")
+
+        // 3. Process links through CloudStream Extractors
+        val extractorTasks = providerStreamLinks.map { streamLink ->
+            async {
+                val extractedList = mutableListOf<StreamCandidate>()
+                val url = streamLink.url
+
+                // Check if an extractor exists for this host or if it's an embed
+                if (ExtractorManager.findExtractor(url) != null) {
+                    ExtractorManager.extract(
+                        url = url,
+                        referer = streamLink.headers["Referer"],
+                        onSubtitle = { sub ->
+                            if (sub.url.isNotBlank()) {
+                                synchronized(collectedSubtitles) {
+                                    collectedSubtitles.add(sub.url)
+                                }
+                            }
+                        },
+                        onLink = { link ->
+                            extractedList.add(
+                                StreamCandidate(
+                                    url = link.url,
+                                    name = link.name,
+                                    quality = link.quality,
+                                    isM3u8 = link.isM3u8,
+                                    headers = link.headers.ifEmpty { streamLink.headers }
+                                )
+                            )
+                        }
+                    )
+                } else if (url.contains(".m3u8")) {
+                    // M3U8 Master playlist resolution
+                    val multiQualities = M3u8Helper.generateM3u8(
+                        source = streamLink.name,
+                        streamUrl = url,
+                        referer = streamLink.headers["Referer"],
+                        headers = streamLink.headers,
+                        name = streamLink.name
+                    )
+                    multiQualities.forEach { qLink ->
+                        extractedList.add(
+                            StreamCandidate(
+                                url = qLink.url,
+                                name = qLink.name,
+                                quality = qLink.quality,
+                                isM3u8 = true,
+                                headers = qLink.headers
                             )
                         )
-                    } else {
-                        emptyList()
                     }
-                } catch (e: Exception) {
-                    emptyList()
+                } else if (isValidMediaStreamUrl(url)) {
+                    // Direct playable media file
+                    extractedList.add(
+                        StreamCandidate(
+                            url = url,
+                            name = streamLink.name.ifBlank { "Direct Stream" },
+                            quality = streamLink.quality.ifBlank { "1080p" },
+                            isM3u8 = streamLink.isM3u8,
+                            headers = streamLink.headers
+                        )
+                    )
+                }
+                extractedList
+            }
+        }
+
+        val allExtracted = extractorTasks.awaitAll().flatten()
+        candidates.addAll(allExtracted)
+
+        // 4. Attach discovered subtitles to all candidates and filter valid media streams
+        val validCandidates = candidates.filter { isValidMediaStreamUrl(it.url) }
+            .distinctBy { it.url }
+            .map { candidate ->
+                if (collectedSubtitles.isNotEmpty() && candidate.subtitles.isEmpty()) {
+                    candidate.copy(subtitles = collectedSubtitles.distinct())
+                } else {
+                    candidate
                 }
             }
-        }
 
-        // Execute all provider tasks in parallel
-        val deferredList = providerTasks.map { task ->
-            async { task() }
-        }
-        val providerResults = deferredList.awaitAll().flatten()
-
-        for (link in providerResults) {
-            if (isValidMediaStreamUrl(link.url)) {
-                candidates.add(
-                    StreamCandidate(
-                        url = link.url,
-                        name = link.name.ifBlank { "Server Stream" },
-                        quality = link.quality.ifBlank { "Auto" },
-                        isM3u8 = link.isM3u8 || link.url.contains(".m3u8"),
-                        headers = link.headers
-                    )
-                )
-            }
-        }
-
-        // 5. Query Multi-Source Video Extractors (Archive.org, Direct HLS / Video endpoints)
-        val extractedLinks = queryVideoExtractors(request)
-        for (candidate in extractedLinks) {
-            if (candidates.none { it.url == candidate.url } && isValidMediaStreamUrl(candidate.url)) {
-                candidates.add(candidate)
-            }
-        }
-
-        // 6. Deduplicate & inject required HTTP headers
-        val uniqueCandidates = candidates.distinctBy { it.url }
-
-        if (uniqueCandidates.isEmpty()) {
+        if (validCandidates.isEmpty()) {
             Log.w(TAG, "No playable media streams found for ${request.title}")
             return@withContext emptyList()
         }
 
-        // 7. Perform asynchronous health pre-flight check and rank
-        val ranked = StreamHealthResolver.resolveAndRankCandidates(uniqueCandidates)
-        Log.i(TAG, "Resolved ${ranked.size} stream candidates for ${request.title}")
+        // 5. Perform asynchronous health pre-flight check and rank
+        val ranked = StreamHealthResolver.resolveAndRankCandidates(validCandidates)
+        Log.i(TAG, "Successfully resolved ${ranked.size} stream candidates for ${request.title}")
         ranked
     }
 
@@ -249,76 +264,5 @@ object CloudStreamLinkManager {
                lower.startsWith("content://") || 
                lower.startsWith("file://") || 
                lower.startsWith("/")
-    }
-
-    /**
-     * Queries multi-source public stream extractors (Internet Archive metadata, direct HLS mirrors).
-     */
-    private suspend fun queryVideoExtractors(request: CloudStreamRequest): List<StreamCandidate> = withContext(Dispatchers.IO) {
-        val results = mutableListOf<StreamCandidate>()
-
-        try {
-            // Query Archive.org public domain media API
-            val query = if (request.isMovie) {
-                val cleanTitle = request.title.replace("[^a-zA-Z0-9 ]".toRegex(), " ").trim()
-                val encoded = URLEncoder.encode("title:($cleanTitle) AND mediatype:(movies)", "UTF-8")
-                "https://archive.org/advancedsearch.php?q=$encoded&fl[]=identifier,title,downloads&sort[]=downloads+desc&rows=3&output=json"
-            } else null
-
-            if (query != null) {
-                val req = Request.Builder().url(query).build()
-                httpClient.newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        val body = resp.body?.string() ?: ""
-                        val json = JSONObject(body)
-                        val docs = json.optJSONObject("response")?.optJSONArray("docs")
-                        if (docs != null && docs.length() > 0) {
-                            for (i in 0 until docs.length().coerceAtMost(2)) {
-                                val doc = docs.getJSONObject(i)
-                                val identifier = doc.optString("identifier", "")
-                                if (identifier.isNotBlank()) {
-                                    // Fetch file metadata
-                                    val metaUrl = "https://archive.org/metadata/$identifier"
-                                    val metaReq = Request.Builder().url(metaUrl).build()
-                                    httpClient.newCall(metaReq).execute().use { mResp ->
-                                        if (mResp.isSuccessful) {
-                                            val mBody = mResp.body?.string() ?: ""
-                                            val mJson = JSONObject(mBody)
-                                            val files = mJson.optJSONArray("files")
-                                            if (files != null) {
-                                                for (f in 0 until files.length()) {
-                                                    val fileObj = files.getJSONObject(f)
-                                                    val name = fileObj.optString("name", "")
-                                                    val format = fileObj.optString("format", "")
-                                                    if (format.contains("h.264", ignoreCase = true) || 
-                                                        format.contains("mp4", ignoreCase = true) || 
-                                                        name.endsWith(".mp4", ignoreCase = true)) {
-                                                        val directStreamUrl = "https://archive.org/download/$identifier/$name"
-                                                        val quality = if (name.contains("1080")) "1080p" else if (name.contains("720")) "720p" else "HD"
-                                                        results.add(
-                                                            StreamCandidate(
-                                                                url = directStreamUrl,
-                                                                name = "Archive Direct ($quality)",
-                                                                quality = quality,
-                                                                isM3u8 = false
-                                                            )
-                                                        )
-                                                        break
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Extractor probe exception: ${e.message}")
-        }
-
-        results
     }
 }

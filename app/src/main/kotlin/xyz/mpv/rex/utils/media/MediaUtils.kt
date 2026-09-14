@@ -504,6 +504,20 @@ object MediaUtils : KoinComponent {
         putExtra("headers", flatHeaders)
       }
 
+      // Subtitles discovered from extractors/providers
+      if (primaryCandidate.subtitles.isNotEmpty()) {
+        val subUris = primaryCandidate.subtitles.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+        if (subUris.isNotEmpty()) {
+          putParcelableArrayListExtra("subs", ArrayList(subUris))
+          android.util.Log.d("CineHub:PlayerHandoff", "Attached ${subUris.size} subtitle tracks to player intent")
+        }
+      }
+
+      android.util.Log.i(
+        "CineHub:PlayerHandoff",
+        "Launching player for: $title, url=${primaryCandidate.url}, quality=${primaryCandidate.quality}, headers=${primaryCandidate.headers.keys}"
+      )
+
       // Backup candidates
       if (backupCandidates.isNotEmpty()) {
         putStringArrayListExtra("backup_stream_urls", ArrayList(backupCandidates.map { it.url }))

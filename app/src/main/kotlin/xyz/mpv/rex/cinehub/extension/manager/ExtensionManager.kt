@@ -1,6 +1,7 @@
 package xyz.mpv.rex.cinehub.extension.manager
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,7 +15,6 @@ import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
-import xyz.mpv.rex.cinehub.extension.providers.CineOnlineBridgeProvider
 import xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.database.MpvExDatabase
@@ -31,6 +31,10 @@ class ExtensionManager(
     private val repositoryManager: RepositoryManager,
     private val client: OkHttpClient
 ) {
+    companion object {
+        private const val TAG = "CineHub:Provider"
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val extensionDir = File(context.filesDir, "cinehub_extensions")
 
@@ -39,8 +43,6 @@ class ExtensionManager(
 
     init {
         if (!extensionDir.exists()) extensionDir.mkdirs()
-        // Register built-in providers immediately
-        registry.register(CineOnlineBridgeProvider(context), isEnabledByDefault = true)
 
         scope.launch {
             loadInstalledExtensions()
@@ -52,13 +54,15 @@ class ExtensionManager(
     }
 
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
-        val enabledExts = db.extensionDao().getEnabledExtensionsSync()
-        for (ext in enabledExts) {
+        val allExts = db.extensionDao().getAllInstalledExtensionsSync()
+        Log.i(TAG, "Loading ${allExts.size} installed extension providers from database")
+        for (ext in allExts) {
             try {
                 val provider = DeclarativeCineHubProvider(ext, client)
                 registry.register(provider, isEnabledByDefault = ext.isEnabled)
+                Log.d(TAG, "Registered provider: ${provider.name} (id=${provider.id}, enabled=${ext.isEnabled})")
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to instantiate provider for ${ext.name}: ${e.message}", e)
             }
         }
     }
