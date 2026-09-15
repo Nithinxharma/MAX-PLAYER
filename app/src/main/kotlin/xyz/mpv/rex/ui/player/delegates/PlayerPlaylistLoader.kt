@@ -387,28 +387,14 @@ class PlayerPlaylistLoader(
       }
     }
 
-    // 2. If activity.fileName is a human-readable title (not a raw URL/m3u8), prioritize it
-    val isActivityFileNameUrl = activity.fileName.isBlank() || 
-        activity.fileName.startsWith("http://", ignoreCase = true) || 
-        activity.fileName.startsWith("https://", ignoreCase = true) || 
-        activity.fileName.endsWith(".m3u8", ignoreCase = true) ||
-        activity.fileName.contains(".m3u8?", ignoreCase = true)
-    if (!isActivityFileNameUrl) {
-      return activity.fileName
-    }
-
-    // 3. For m3u/m3u8 streams, check if MPV provides a descriptive title (not a URL)
-    val rawTitle = MPVLib.getPropertyString("media-title")
-    if (!rawTitle.isNullOrBlank()) {
-      val isRawTitleUrl = rawTitle.startsWith("http://", ignoreCase = true) || 
-          rawTitle.startsWith("https://", ignoreCase = true) || 
-          rawTitle.endsWith(".m3u8", ignoreCase = true)
-      if (!isRawTitleUrl) {
+    // For m3u/m3u8 streams, use MPV's raw media-title directly
+    if (isCurrentStreamM3U()) {
+      val rawTitle = MPVLib.getPropertyString("media-title")
+      if (!rawTitle.isNullOrBlank()) {
         return rawTitle
       }
     }
-
-    return activity.fileName.ifBlank { rawTitle ?: "Playing Media" }
+    return activity.fileName
   }
 
   /**

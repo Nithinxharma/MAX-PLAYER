@@ -1,3 +1,0 @@
-sed -i 's/TopAppBar(/BrowserTopBar(/g' app/src/main/kotlin/xyz/mpv/rex/ui/browser/shorts/OnlineShortsGridScreen.kt
-sed -i 's/title = { Text("Online Shorts (YouTube)") },/title = "RexShorts",\n                    isInSelectionMode = false,\n                    selectedCount = 0,\n                    totalCount = 0,\n                    onCancelSelection = {},\n                    isHomeScreen = true,\n                    onSearchClick = {}/g' app/src/main/kotlin/xyz/mpv/rex/ui/browser/shorts/OnlineShortsGridScreen.kt
-sed -i 's/                    }//g' app/src/main/kotlin/xyz/mpv/rex/ui/browser/shorts/OnlineShortsGridScreen.kt

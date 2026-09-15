@@ -18,6 +18,4 @@ data class StreamCandidate(
     val quality: String = "1080p",
     val isM3u8: Boolean = false,
     val headers: Map<String, String> = emptyMap(),
-    val subtitles: List<String> = emptyList(),
-    val format: String = if (isM3u8) "HLS" else "MP4"
 )

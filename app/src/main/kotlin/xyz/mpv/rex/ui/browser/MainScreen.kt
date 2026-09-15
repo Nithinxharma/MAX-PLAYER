@@ -59,7 +59,7 @@ import xyz.mpv.rex.ui.browser.folderlist.FolderListScreen
 import xyz.mpv.rex.ui.browser.networkstreaming.NetworkStreamingScreen
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
 import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
-import xyz.mpv.rex.ui.browser.shorts.OnlineShortsGridScreen
+import xyz.mpv.rex.ui.browser.shorts.ShortsScreen
 import xyz.mpv.rex.ui.browser.selection.SelectionManager
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayer
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerDefaults
@@ -202,7 +202,7 @@ object MainScreen : Screen {
         if (isShortsEnabled) {
           add(
             VisibleTab("shorts", shortsLabel, Icons.Outlined.VideoLibrary) {
-              OnlineShortsGridScreen.Content()
+              ShortsScreen().Content()
             }
           )
         }
@@ -238,14 +238,19 @@ object MainScreen : Screen {
               xyz.mpv.rex.cinetv.ui.LiveTvTabScreen(
                 searchQuery = "",
                 onPlayRequested = { streamUrl, title, meta ->
-                  xyz.mpv.rex.utils.media.MediaUtils.playFile(
-                    source = streamUrl,
-                    context = context,
-                    launchSource = "cinetv",
-                    title = title,
-                    posterUrl = meta["Logo"],
-                    sourceType = "cinetv"
-                  )
+                  val uri = android.net.Uri.parse(streamUrl)
+                  val playerIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                    setClass(context, xyz.mpv.rex.ui.player.PlayerActivity::class.java)
+                    putExtra("internal_launch", true)
+                    putExtra("launch_source", "cinetv")
+                    putExtra("title", title)
+                    putExtra("filename", title)
+                    putExtra("cinetv_source_type", meta["SourceType"])
+                    putExtra("cinetv_poster", meta["Logo"])
+                    setDataAndType(uri, "video/*")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                  }
+                  context.startActivity(playerIntent)
                 }
               )
             }

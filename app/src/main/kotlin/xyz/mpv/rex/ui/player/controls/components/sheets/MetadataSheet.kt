@@ -37,8 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.mpv.rex.cinehub.data.ActiveMediaResolution
-import xyz.mpv.rex.cinehub.stream.CloudStreamLinkManager
-import xyz.mpv.rex.cinehub.stream.CloudStreamRequest
+import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
 import xyz.mpv.rex.cinehub.data.NfoScanner
 import xyz.mpv.rex.cinehub.model.EpisodeItem
@@ -149,20 +148,7 @@ fun MetadataSheet(
                             isLoadingEpisodes = isLoadingTvEpisodes,
                             onPlayEpisode = { ep ->
                                 scope.launch(Dispatchers.IO) {
-                                    val resolvedUri = if (CloudStreamLinkManager.isValidMediaStreamUrl(ep.videoFilePath)) {
-                                        ep.videoFilePath
-                                    } else {
-                                        val candidates = CloudStreamLinkManager.resolveStreamCandidates(
-                                            CloudStreamRequest(
-                                                title = ep.title,
-                                                seasonNumber = ep.season,
-                                                episodeNumber = ep.episode,
-                                                dataUrl = ep.videoFilePath,
-                                                isMovie = false
-                                            )
-                                        )
-                                        candidates.firstOrNull()?.url ?: ep.videoFilePath
-                                    }
+                                    val resolvedUri = CineCloudRepoClient.resolveMediaUri(ep.videoFilePath)
                                     withContext(Dispatchers.Main) {
                                         onDismissRequest()
                                         Toast.makeText(context, "Playing ${ep.title}", Toast.LENGTH_SHORT).show()

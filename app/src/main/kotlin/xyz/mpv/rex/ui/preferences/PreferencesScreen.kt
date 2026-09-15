@@ -141,52 +141,16 @@ object PreferencesScreen : Screen {
             }
           }
 
-          // Extensions & Providers Section
+          // Extensions Section
           item {
-            PreferenceSection(title = "Extensions & Providers") {
+            PreferenceSection(title = "Extensions") {
               GroupedListColumn {
                 PreferenceItem(
-                  position = GroupPosition.FIRST,
+                  position = GroupPosition.ONLY,
                   title = "Plugin Extensions",
-                  summary = "Manage providers and plugin repositories",
+                  summary = "Manage providers and extension repositories",
                   icon = Icons.Outlined.Extension,
                   onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.MIDDLE,
-                  title = "Extension Repositories",
-                  summary = "Add, update, or remove plugin repositories",
-                  icon = Icons.Outlined.CloudDownload,
-                  onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionRepositoriesScreenRoute) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.LAST,
-                  title = "Installed Providers",
-                  summary = "View and toggle loaded CloudStream providers",
-                  icon = Icons.Outlined.CheckCircle,
-                  onClick = { backstack.add(xyz.mpv.rex.ui.preferences.InstalledExtensionsScreenRoute) },
-                )
-              }
-            }
-          }
-
-          // Downloads & Tracking Section
-          item {
-            PreferenceSection(title = "Downloads & Tracking") {
-              GroupedListColumn {
-                PreferenceItem(
-                  position = GroupPosition.FIRST,
-                  title = "CineHub Downloads",
-                  summary = "Manage downloaded episodes, movies, and background tasks",
-                  icon = Icons.Outlined.Download,
-                  onClick = { backstack.add(xyz.mpv.rex.cinehub.ui.CloudStreamDownloadsRoute) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.LAST,
-                  title = "Tracking Accounts",
-                  summary = "Sync and scrobble with AniList, MyAnimeList, SIMKL, Trakt",
-                  icon = Icons.Outlined.Sync,
-                  onClick = { backstack.add(xyz.mpv.rex.cinehub.ui.CloudStreamTrackingRoute) },
                 )
               }
             }
@@ -241,25 +205,11 @@ object PreferencesScreen : Screen {
             PreferenceSection(title = stringResource(R.string.pref_media_library_title)) {
               GroupedListColumn {
                 PreferenceItem(
-                  position = GroupPosition.FIRST,
-                  title = "Unified Media Library",
-                  summary = "Watchlist, In-Progress, and Completed titles across all sources",
-                  icon = Icons.Outlined.VideoLibrary,
-                  onClick = { backstack.add(xyz.mpv.rex.cinehub.ui.UnifiedLibraryRoute) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.MIDDLE,
-                  title = "Local Media & Kodi Scraper",
+                  position = GroupPosition.ONLY,
+                  title = stringResource(R.string.pref_media_library_title),
                   summary = stringResource(R.string.pref_media_library_summary),
-                  icon = Icons.Outlined.Folder,
+                  icon = Icons.Outlined.VideoLibrary,
                   onClick = { backstack.add(MediaLibraryPreferencesScreen) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.LAST,
-                  title = "Network Shares (SMB / FTP / WebDAV)",
-                  summary = "Configure remote server streaming and credentials",
-                  icon = Icons.Outlined.Dns,
-                  onClick = { backstack.add(xyz.mpv.rex.ui.browser.networkstreaming.NetworkStreamingScreen) },
                 )
               }
             }
@@ -315,20 +265,6 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
-                  title = "CineTV",
-                  summary = "Manage live TV integration settings",
-                  icon = Icons.Outlined.Tv,
-                  onClick = { backstack.add(CineTvPreferencesScreen) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.MIDDLE,
-                  title = "CineTube (Invidious)",
-                  summary = "Switch Invidious client or choose best instance",
-                  icon = Icons.Outlined.SmartDisplay,
-                  onClick = { backstack.add(CineTubePreferencesScreen) },
-                )
-                PreferenceItem(
-                  position = GroupPosition.MIDDLE,
                   title = "Jellyfin",
                   summary = "External player sync",
                   icon = Icons.Outlined.VideoLibrary,

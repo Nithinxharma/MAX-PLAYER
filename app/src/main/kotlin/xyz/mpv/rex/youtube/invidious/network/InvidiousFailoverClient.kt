@@ -101,14 +101,7 @@ class InvidiousFailoverClient(
 
                 if (response.isSuccessful) {
                     val body = response.body?.string()
-                    val trimmed = body?.trimStart() ?: ""
-                    val isJson = trimmed.startsWith("[") || trimmed.startsWith("{")
-                    val isBlocked = trimmed.contains("Endpoint disabled") ||
-                            trimmed.contains("<html", ignoreCase = true) ||
-                            trimmed.contains("<!doctype", ignoreCase = true) ||
-                            trimmed.contains("Auth with CAPTCHA", ignoreCase = true)
-
-                    if (isJson && !isBlocked) {
+                    if (!body.isNullOrBlank()) {
                         // Success! Save this working instance as primary for subsequent calls
                         if (activeBaseUrl != baseUrl) {
                             activeBaseUrl = baseUrl
@@ -116,8 +109,6 @@ class InvidiousFailoverClient(
                         }
                         Log.d(TAG, "Success on instance $baseUrl")
                         return@withContext body
-                    } else {
-                        Log.w(TAG, "Instance $baseUrl returned HTML/blocked response. Switching to next instance...")
                     }
                 } else {
                     Log.w(TAG, "Instance $baseUrl returned unexpected HTTP ${response.code}. Switching...")
@@ -147,49 +138,5 @@ class InvidiousFailoverClient(
      */
     fun getActiveBaseUrl(): String {
         return activeBaseUrl ?: cacheService.getSavedPrimaryUrl() ?: "https://yewtu.be"
-    }
-
-    /**
-     * Explicitly switches the active instance and persists it to local settings.
-     */
-    fun setActiveBaseUrl(url: String) {
-        val clean = url.trim().trimEnd('/')
-        activeBaseUrl = clean
-        cacheService.savePrimaryUrl(clean)
-        Log.i(TAG, "Switched active Invidious instance to: $clean")
-    }
-
-    /**
-     * Measures response latency to an Invidious instance in milliseconds.
-     */
-    suspend fun pingInstance(baseUrl: String): Long? = withContext(Dispatchers.IO) {
-        val testUrl = baseUrl.trimEnd('/') + "/api/v1/stats"
-        val start = System.currentTimeMillis()
-        try {
-            val req = Request.Builder()
-                .url(testUrl)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                .build()
-            httpClient.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    return@withContext (System.currentTimeMillis() - start)
-                }
-            }
-        } catch (e: Exception) {
-            // Fallback ping to trending
-            try {
-                val fbUrl = baseUrl.trimEnd('/') + "/api/v1/trending?type=Music"
-                val fbReq = Request.Builder()
-                    .url(fbUrl)
-                    .header("User-Agent", "Mozilla/5.0")
-                    .build()
-                httpClient.newCall(fbReq).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        return@withContext (System.currentTimeMillis() - start)
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-        return@withContext null
     }
 }

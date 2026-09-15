@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import xyz.mpv.rex.R
 import xyz.mpv.rex.database.dao.ShortsMediaDao
 import xyz.mpv.rex.presentation.Screen
-import xyz.mpv.rex.ui.browser.shorts.ShortsPagerScreen
+import xyz.mpv.rex.ui.browser.shorts.ShortsScreen
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -106,7 +106,7 @@ object BlockedShortsScreen : Screen {
                                 .padding(vertical = 4.dp)
                                 .clickable {
                                     // Launch this video in a 'Blocked Only' shorts session
-                                    backstack.add(ShortsPagerScreen(initialVideoPath = media.path, blockedOnly = true))
+                                    backstack.add(ShortsScreen(initialVideoPath = media.path, blockedOnly = true))
                                 },
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer

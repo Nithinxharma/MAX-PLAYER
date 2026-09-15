@@ -51,19 +51,19 @@ fun ExtensionRepositoriesScreen(
                 actions = {
                     IconButton(
                         onClick = {
+                            isSyncingAll = true
                             scope.launch(Dispatchers.IO) {
-                                isSyncingAll = true
-                                repositoryManager.syncAllRepositories()
+                                val results = repositoryManager.syncAllRepositories()
                                 withContext(Dispatchers.Main) {
                                     isSyncingAll = false
-                                    Toast.makeText(context, "Repositories Synced", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Synced ${results.size} repositories", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         },
                         enabled = !isSyncingAll
                     ) {
                         if (isSyncingAll) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
                             Icon(Icons.Outlined.Sync, contentDescription = "Sync All")
                         }
@@ -72,24 +72,54 @@ fun ExtensionRepositoriesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Outlined.Add, contentDescription = "Add Repository")
-            }
+            ExtendedFloatingActionButton(
+                onClick = { showAddDialog = true },
+                icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
+                text = { Text("Add Repository") }
+            )
         }
-    ) { padding ->
+    ) { paddingValues ->
         if (repos.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.Source, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("No Repositories", style = MaterialTheme.typography.titleLarge)
-                    Text("Add a repository to install extensions", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.CloudQueue,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "No Repositories Added",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Add CloudStream or community repositories to discover and install provider extensions.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(onClick = { showAddDialog = true }) {
+                        Icon(Icons.Outlined.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Repository Now")
+                    }
                 }
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = padding.calculateTopPadding() + 16.dp, bottom = 80.dp, start = 16.dp, end = 16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(repos, key = { it.url }) { repo ->
@@ -97,108 +127,144 @@ fun ExtensionRepositoriesScreen(
                         repo = repo,
                         onSync = {
                             scope.launch(Dispatchers.IO) {
-                                repositoryManager.syncRepository(repo.url)
+                                val result = repositoryManager.syncRepository(repo.url)
                                 withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Synced ${repo.name}", Toast.LENGTH_SHORT).show()
+                                    if (result.error == null) {
+                                        Toast.makeText(context, "Synced ${result.plugins.size} plugins from ${repo.name}", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Sync error: ${result.error}", Toast.LENGTH_LONG).show()
+                                    }
                                 }
                             }
                         },
                         onDelete = { repoToDelete = repo }
                     )
                 }
+                item {
+                    Spacer(modifier = Modifier.height(72.dp))
+                }
             }
         }
+    }
 
-        if (showAddDialog) {
-            AddRepositoryDialog(
-                onDismiss = { showAddDialog = false },
-                onAdd = { url, name ->
-                    scope.launch(Dispatchers.IO) {
-                        repositoryManager.addRepository(url, name ?: "Custom Repo")
-                        withContext(Dispatchers.Main) {
-                            showAddDialog = false
-                            Toast.makeText(context, "Repository Added", Toast.LENGTH_SHORT).show()
+    if (showAddDialog) {
+        AddRepositoryDialog(
+            onDismiss = { showAddDialog = false },
+            onAdd = { url, name ->
+                showAddDialog = false
+                scope.launch(Dispatchers.IO) {
+                    repositoryManager.addRepository(url, name)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Repository added & syncing…", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    repoToDelete?.let { repo ->
+        AlertDialog(
+            onDismissRequest = { repoToDelete = null },
+            title = { Text("Remove Repository") },
+            text = { Text("Are you sure you want to remove \"${repo.name}\"? Installed extensions from this repository will remain installed.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = repoToDelete
+                        repoToDelete = null
+                        if (target != null) {
+                            scope.launch(Dispatchers.IO) {
+                                repositoryManager.removeRepository(target)
+                            }
                         }
                     }
+                ) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
                 }
-            )
-        }
-
-        repoToDelete?.let { repo ->
-            AlertDialog(
-                onDismissRequest = { repoToDelete = null },
-                title = { Text("Remove Repository?") },
-                text = { Text("Are you sure you want to remove '${repo.name}'? Installed extensions will remain but won't receive updates.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            scope.launch(Dispatchers.IO) {
-                                repositoryManager.removeRepository(repo.url)
-                                withContext(Dispatchers.Main) {
-                                    repoToDelete = null
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Remove")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { repoToDelete = null }) {
-                        Text("Cancel")
-                    }
+            },
+            dismissButton = {
+                TextButton(onClick = { repoToDelete = null }) {
+                    Text("Cancel")
                 }
-            )
-        }
+            }
+        )
     }
 }
 
 @Composable
-fun RepositoryCard(
+private fun RepositoryCard(
     repo: ExtensionRepo,
     onSync: () -> Unit,
     onDelete: () -> Unit
 ) {
-    var isSyncing by remember { mutableStateOf(false) }
+    val dateStr = remember(repo.lastSync) {
+        if (repo.lastSync > 0) {
+            SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault()).format(Date(repo.lastSync))
+        } else "Never"
+    }
 
-    Card(
+    OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = repo.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = repo.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-            }
-            IconButton(
-                onClick = {
-                    isSyncing = true
-                    onSync()
-                    isSyncing = false // Usually handled by callback, simplified for demo
-                },
-                enabled = !isSyncing
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                if (isSyncing) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Outlined.Sync, contentDescription = "Sync")
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = repo.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = repo.url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+
+            if (!repo.description.isNullOrBlank()) {
+                Text(
+                    text = repo.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Last synced: $dateStr",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(onClick = onSync) {
+                        Icon(Icons.Outlined.Sync, contentDescription = "Sync", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun AddRepositoryDialog(
+private fun AddRepositoryDialog(
     onDismiss: () -> Unit,
     onAdd: (url: String, name: String?) -> Unit
 ) {
@@ -207,9 +273,17 @@ fun AddRepositoryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Repository") },
+        title = { Text("Add Extension Repository") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Enter a repository URL (repo.json or plugins.json) or pick a popular community repository preset below:",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
                 OutlinedTextField(
                     value = repoUrl,
                     onValueChange = { repoUrl = it },
@@ -218,6 +292,7 @@ fun AddRepositoryDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
                 OutlinedTextField(
                     value = repoName,
                     onValueChange = { repoName = it },
@@ -225,6 +300,30 @@ fun AddRepositoryDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Text(
+                    text = "Popular Community Presets:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                RepositoryManager.POPULAR_PRESETS.forEach { preset ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                repoUrl = preset.url
+                                repoName = preset.name
+                            },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(preset.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            Text(preset.description ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                }
             }
         },
         confirmButton = {

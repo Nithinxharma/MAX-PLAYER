@@ -11,9 +11,6 @@ interface ExtensionDao {
     @Query("SELECT * FROM extension_repositories")
     fun getAllRepositories(): Flow<List<ExtensionRepo>>
 
-    @Query("SELECT * FROM extension_repositories")
-    suspend fun getAllRepositoriesSync(): List<ExtensionRepo>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRepository(repo: ExtensionRepo)
 
@@ -25,12 +22,6 @@ interface ExtensionDao {
 
     @Query("SELECT * FROM installed_extensions WHERE isEnabled = 1")
     suspend fun getEnabledExtensionsSync(): List<InstalledExtension>
-
-    @Query("SELECT * FROM installed_extensions")
-    suspend fun getAllInstalledExtensionsSync(): List<InstalledExtension>
-
-    @Query("SELECT * FROM installed_extensions WHERE pkgName = :pkgName LIMIT 1")
-    suspend fun getExtensionSync(pkgName: String): InstalledExtension?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExtension(ext: InstalledExtension)
