@@ -248,6 +248,9 @@ object CineHubScreen : Screen {
             }
           }
 
+          // Ensure extension runtime is initialized
+          runCatching { extensionManager.initialize() }
+
           // Query dynamic home rows from all enabled extension providers via CloudStreamHomeManager
           val extHomeLists = homeManager.loadAllHomePages()
           withContext(Dispatchers.Main) {
@@ -350,12 +353,34 @@ object CineHubScreen : Screen {
             }
             IconButton(
               onClick = {
+                showScraperSheet = true
+              },
+              modifier = Modifier.testTag("cinehub_kodi_scraper_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.Folder,
+                contentDescription = "Kodi Media Scraper",
+              )
+            }
+            IconButton(
+              onClick = {
+                backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
+              },
+              modifier = Modifier.testTag("cinehub_extensions_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.Extension,
+                contentDescription = "Extensions",
+              )
+            }
+            IconButton(
+              onClick = {
                 backstack.add(CloudStreamDownloadsRoute)
               },
               modifier = Modifier.testTag("cinehub_downloads_button"),
             ) {
               Icon(
-                imageVector = Icons.Outlined.CloudDownload,
+                imageVector = Icons.Outlined.Download,
                 contentDescription = "Downloads",
               )
             }
@@ -372,17 +397,6 @@ object CineHubScreen : Screen {
             }
             IconButton(
               onClick = {
-                showScraperSheet = true
-              },
-              modifier = Modifier.testTag("cinehub_kodi_scraper_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Outlined.Folder,
-                contentDescription = "Kodi Media Scraper",
-              )
-            }
-            IconButton(
-              onClick = {
                 isRefreshing = true
                 loadMedia()
                 Toast.makeText(context, "Refreshing catalog…", Toast.LENGTH_SHORT).show()
@@ -392,28 +406,6 @@ object CineHubScreen : Screen {
               Icon(
                 imageVector = Icons.Default.Refresh,
                 contentDescription = "Refresh",
-              )
-            }
-            IconButton(
-              onClick = {
-                backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
-              },
-              modifier = Modifier.testTag("cinehub_extensions_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Outlined.Extension,
-                contentDescription = "Extensions",
-              )
-            }
-            IconButton(
-              onClick = {
-                backstack.add(xyz.mpv.rex.cinehub.ui.CloudStreamDownloadsRoute)
-              },
-              modifier = Modifier.testTag("cinehub_downloads_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Outlined.Download,
-                contentDescription = "Downloads",
               )
             }
             IconButton(

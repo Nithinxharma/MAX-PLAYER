@@ -45,6 +45,10 @@ class ExtensionManager(
 
     suspend fun toggleExtension(pkgName: String, enabled: Boolean) = withContext(Dispatchers.IO) {
         db.extensionDao().updateExtensionState(pkgName, enabled)
+        val ext = db.extensionDao().getExtensionSync(pkgName)
+        val providerId = ext?.name?.lowercase()?.replace("\\s+".toRegex(), "_") ?: pkgName
+        registry.setProviderEnabled(providerId, enabled)
+        registry.setProviderEnabled(pkgName, enabled)
     }
 
     suspend fun initialize() = withContext(Dispatchers.IO) {
