@@ -32,6 +32,7 @@ val domainModule = module {
     single { xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry() }
     single { xyz.mpv.rex.cinehub.extension.manager.RepositoryManager(androidContext(), get(), get()) }
     single(createdAtStart = true) { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.extension.manager.PluginManager(androidContext(), get(), get(), get()) }
     single { xyz.mpv.rex.cinehub.stream.CloudStreamHomeManager(get()) }
     single { xyz.mpv.rex.cinehub.stream.CloudStreamSearchManager(get()) }
     single { xyz.mpv.rex.cinehub.stream.CloudStreamDownloadManager(androidContext(), get()) }

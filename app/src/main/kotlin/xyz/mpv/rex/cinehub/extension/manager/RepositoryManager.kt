@@ -45,8 +45,32 @@ class RepositoryManager(
         }
     }
     
+    suspend fun validateRepository(url: String): Result<Pair<String, Int>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error ${response.code}"))
+                }
+                val body = response.body?.string() ?: return@withContext Result.failure(Exception("Empty response body"))
+                val plugins = parseRepositoryBody(body, url)
+                if (plugins.isEmpty()) {
+                    return@withContext Result.failure(Exception("No valid plugins found in repository"))
+                }
+                val repoName = runCatching {
+                    if (body.trimStart().startsWith("{")) {
+                        JSONObject(body).optString("name", "Repository")
+                    } else "Repository"
+                }.getOrDefault("Repository")
+                Result.success(Pair(repoName, plugins.size))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun syncRepository(url: String) = withContext(Dispatchers.IO) {
-        syncAllRepositories() // Simplified for now
+        syncAllRepositories()
     }
     
     suspend fun syncAllRepositories() = withContext(Dispatchers.IO) {
@@ -56,26 +80,10 @@ class RepositoryManager(
         for (repo in repos) {
             try {
                 val request = Request.Builder().url(repo.url).build()
-                val response = client.newCall(request).execute()
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: continue
-                    val array = JSONArray(body)
-                    for (i in 0 until array.length()) {
-                        val obj = array.getJSONObject(i)
-                        val plugin = AvailablePlugin(
-                            internalName = obj.optString("internalName"),
-                            name = obj.optString("name"),
-                            version = obj.optString("version"),
-                            versionCode = obj.optInt("versionCode", 1),
-                            description = obj.optString("description"),
-                            iconUrl = obj.optString("iconUrl"),
-                            authors = obj.optJSONArray("authors")?.let { arr ->
-                                List(arr.length()) { arr.optString(it) }
-                            } ?: emptyList(),
-                            url = obj.optString("url"),
-                            repositoryUrl = repo.url
-                        )
-                        allPlugins.add(plugin)
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        allPlugins.addAll(parseRepositoryBody(body, repo.url))
                     }
                 }
             } catch (e: Exception) {
@@ -84,6 +92,48 @@ class RepositoryManager(
         }
         
         saveCache(allPlugins)
+    }
+
+    private fun parseRepositoryBody(body: String, repoUrl: String): List<AvailablePlugin> {
+        val list = mutableListOf<AvailablePlugin>()
+        val trimmed = body.trim()
+        try {
+            val array = if (trimmed.startsWith("[")) {
+                JSONArray(trimmed)
+            } else if (trimmed.startsWith("{")) {
+                val obj = JSONObject(trimmed)
+                when {
+                    obj.has("plugins") -> obj.getJSONArray("plugins")
+                    obj.has("pluginLists") -> obj.getJSONArray("pluginLists")
+                    else -> JSONArray()
+                }
+            } else {
+                JSONArray()
+            }
+
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val plugin = AvailablePlugin(
+                    internalName = item.optString("internalName"),
+                    name = item.optString("name"),
+                    version = item.optString("version"),
+                    versionCode = item.optInt("versionCode", 1),
+                    description = item.optString("description"),
+                    iconUrl = item.optString("iconUrl"),
+                    authors = item.optJSONArray("authors")?.let { arr ->
+                        List(arr.length()) { arr.optString(it) }
+                    } ?: emptyList(),
+                    url = item.optString("url"),
+                    repositoryUrl = repoUrl
+                )
+                if (plugin.internalName.isNotBlank() && plugin.name.isNotBlank()) {
+                    list.add(plugin)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error parsing repo json: ${e.message}")
+        }
+        return list
     }
     
     private fun saveCache(plugins: List<AvailablePlugin>) {
