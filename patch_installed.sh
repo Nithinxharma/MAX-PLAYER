@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/kotlin/xyz/mpv/rex/ui/preferences/InstalledExtensionsScreen.kt
 package xyz.mpv.rex.ui.preferences
 
 import android.widget.Toast
@@ -209,9 +210,7 @@ fun AvailablePluginCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(plugin.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (!plugin.description.isNullOrBlank()) {
-                    Text(plugin.description, style = MaterialTheme.typography.bodySmall, maxLines = 2)
-                }
+                Text(plugin.description, style = MaterialTheme.typography.bodySmall, maxLines = 2)
             }
             if (isInstalled) {
                 Text("Installed", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
@@ -234,3 +233,4 @@ fun AvailablePluginCard(
         }
     }
 }
+INNER_EOF

@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/kotlin/xyz/mpv/rex/cinehub/extension/manager/RepositoryManager.kt
 package xyz.mpv.rex.cinehub.extension.manager
 
 import android.content.Context
@@ -21,10 +22,6 @@ class RepositoryManager(
 ) {
     companion object {
         private const val TAG = "CineHub:RepoManager"
-        val POPULAR_PRESETS = listOf(
-            PresetRepo("English Providers", "https://raw.githubusercontent.com/recloudstream/cloudstream-extensions/builds/repo.json", "Official English"),
-            PresetRepo("Hexated Providers", "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json", "Hexated Plugins")
-        )
     }
 
     private val cacheFile = File(context.cacheDir, "plugin_cache.json")
@@ -136,4 +133,4 @@ class RepositoryManager(
         }
     }
 }
-data class PresetRepo(val name: String, val url: String, val description: String?)
+INNER_EOF

@@ -23,7 +23,7 @@ dependencyResolutionManagement {
     mavenLocal()
     mavenCentral()
     maven(url = "https://mpvrex.github.io/mpvRex-libmpv")
-    maven(url = "https://jitpack.io") {
+    maven(url = "https://www.jitpack.io") {
       content {
         // Only use JitPack for specific dependencies to avoid unnecessary checks
         includeGroup("com.github.sfsakhawat999")

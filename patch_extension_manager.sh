@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/kotlin/xyz/mpv/rex/cinehub/extension/manager/ExtensionManager.kt
 package xyz.mpv.rex.cinehub.extension.manager
 
 import android.content.Context
@@ -138,3 +139,4 @@ class ExtensionManager(
         db.extensionDao().updateExtensionState(pkgName, false)
     }
 }
+INNER_EOF

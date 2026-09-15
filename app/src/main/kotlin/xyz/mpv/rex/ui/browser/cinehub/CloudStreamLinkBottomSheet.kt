@@ -85,8 +85,10 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
 import xyz.mpv.rex.cinehub.failover.StreamCandidate
 import xyz.mpv.rex.cinehub.failover.StreamHealthResolver
+import xyz.mpv.rex.cinehub.stream.CloudStreamDownloadManager
 import xyz.mpv.rex.cinehub.stream.CloudStreamLinkManager
 import xyz.mpv.rex.cinehub.stream.CloudStreamRequest
 import xyz.mpv.rex.utils.media.MediaUtils
@@ -111,6 +113,7 @@ fun CloudStreamLinkBottomSheet(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val cineDownloadManager = koinInject<CloudStreamDownloadManager>()
 
     var isDownloadMode by remember { mutableStateOf(initialDownloadMode) }
     var candidates by remember { mutableStateOf<List<StreamCandidate>>(emptyList()) }
@@ -190,21 +193,31 @@ fun CloudStreamLinkBottomSheet(
 
     fun startNativeDownload(candidate: StreamCandidate) {
         try {
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val safeTitle = request.getFormattedDisplayName().replace(Regex("[^a-zA-Z0-9.-]"), "_")
-            val extension = if (candidate.isM3u8) ".m3u8" else ".mp4"
-            val downloadRequest = DownloadManager.Request(Uri.parse(candidate.url))
-                .setTitle(request.getFormattedDisplayName())
-                .setDescription("Downloading ${candidate.quality} via CineHub")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "$safeTitle$extension")
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
-            candidate.headers.forEach { (k, v) -> downloadRequest.addRequestHeader(k, v) }
-            dm.enqueue(downloadRequest)
-            Toast.makeText(context, "Download enqueued for ${request.title}", Toast.LENGTH_LONG).show()
+            cineDownloadManager.startDownload(
+                request = request,
+                streamUrl = candidate.url,
+                headers = candidate.headers,
+                subtitles = emptyList()
+            )
+            Toast.makeText(context, "Added to CineHub Downloads: ${request.title}", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            try {
+                val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val safeTitle = request.getFormattedDisplayName().replace(Regex("[^a-zA-Z0-9.-]"), "_")
+                val extension = if (candidate.isM3u8) ".m3u8" else ".mp4"
+                val downloadRequest = DownloadManager.Request(Uri.parse(candidate.url))
+                    .setTitle(request.getFormattedDisplayName())
+                    .setDescription("Downloading ${candidate.quality} via CineHub")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "$safeTitle$extension")
+                    .setAllowedOverMetered(true)
+                    .setAllowedOverRoaming(true)
+                candidate.headers.forEach { (k, v) -> downloadRequest.addRequestHeader(k, v) }
+                dm.enqueue(downloadRequest)
+                Toast.makeText(context, "Download enqueued for ${request.title}", Toast.LENGTH_LONG).show()
+            } catch (ex: Exception) {
+                Toast.makeText(context, "Download failed: ${ex.message}", Toast.LENGTH_SHORT).show()
+            }
         }
         selectedMirrorForAction = null
     }

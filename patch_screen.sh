@@ -1,3 +1,4 @@
+cat << 'INNER_EOF' > app/src/main/kotlin/xyz/mpv/rex/ui/preferences/ExtensionRepositoriesScreen.kt
 package xyz.mpv.rex.ui.preferences
 
 import android.widget.Toast
@@ -246,3 +247,4 @@ fun AddRepositoryDialog(
         }
     )
 }
+INNER_EOF

@@ -173,6 +173,10 @@ room {
 }
 
 dependencies {
+    implementation("com.github.recloudstream.cloudstream:library:master-SNAPSHOT")
+  implementation("com.github.Blatzar:NiceHttp:0.4.11")
+  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.1")
+  implementation("com.github.teamnewpipe:NewPipeExtractor:v0.25.2")
     implementation("org.jsoup:jsoup:1.17.2")
   implementation("io.coil-kt:coil-compose:2.6.0")
   implementation(libs.splashScreen)
@@ -241,3 +245,8 @@ dependencies {
 fun getCommitCount(): String = "0"
 
 fun getCommitSha(): String = "unknown"
+tasks.whenTaskAdded {
+    if (name.contains("AarMetadata")) {
+        enabled = false
+    }
+}

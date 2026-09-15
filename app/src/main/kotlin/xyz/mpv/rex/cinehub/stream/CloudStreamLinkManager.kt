@@ -164,8 +164,9 @@ object CloudStreamLinkManager {
 
                 try {
                     val extractor = ExtractorManager.findExtractor(url)
+                    var handledByCloudStream = false
                     if (extractor != null) {
-                        Log.d(TAG, "[EXTRACTOR HIT] Invoking ${extractor.name} for: $url")
+                        Log.d(TAG, "[EXTRACTOR HIT] Invoking CineHub ${extractor.name} for: $url")
                         ExtractorManager.extract(
                             url = url,
                             referer = streamLink.headers["Referer"],
@@ -186,36 +187,66 @@ object CloudStreamLinkManager {
                                 )
                             }
                         )
-                    } else if (url.contains(".m3u8")) {
-                        Log.d(TAG, "[HLS RESOLVER] Parsing M3U8 playlist: $url")
-                        val multiQualities = M3u8Helper.generateM3u8(
-                            source = streamLink.name,
-                            streamUrl = url,
-                            referer = streamLink.headers["Referer"],
-                            headers = streamLink.headers,
-                            name = streamLink.name
-                        )
-                        multiQualities.forEach { qLink ->
+                    } else {
+                        // Attempt CloudStream Core Extractor
+                        try {
+                            handledByCloudStream = com.lagradost.cloudstream3.utils.loadExtractor(
+                                url = url,
+                                referer = streamLink.headers["Referer"],
+                                subtitleCallback = { sub: com.lagradost.cloudstream3.SubtitleFile ->
+                                    if (sub.url.isNotBlank()) {
+                                        synchronized(collectedSubtitles) { collectedSubtitles.add(sub.url) }
+                                    }
+                                },
+                                callback = { link: com.lagradost.cloudstream3.utils.ExtractorLink ->
+                                    extractedList.add(
+                                        StreamCandidate(
+                                            url = link.url,
+                                            name = link.name,
+                                            quality = link.quality.toString(),
+                                            isM3u8 = link.isM3u8,
+                                            headers = if (link.headers.isNotEmpty()) link.headers else streamLink.headers
+                                        )
+                                    )
+                                }
+                            )
+                        } catch (e: Exception) {
+                            Log.d(TAG, "[CLOUDSTREAM EXTRACTOR] Not handled by CloudStream core: ${e.message}")
+                        }
+                    }
+
+                    if (extractedList.isEmpty() && !handledByCloudStream) {
+                        if (url.contains(".m3u8")) {
+                            Log.d(TAG, "[HLS RESOLVER] Parsing M3U8 playlist: $url")
+                            val multiQualities = M3u8Helper.generateM3u8(
+                                source = streamLink.name,
+                                streamUrl = url,
+                                referer = streamLink.headers["Referer"],
+                                headers = streamLink.headers,
+                                name = streamLink.name
+                            )
+                            multiQualities.forEach { qLink ->
+                                extractedList.add(
+                                    StreamCandidate(
+                                        url = qLink.url,
+                                        name = qLink.name,
+                                        quality = qLink.quality,
+                                        isM3u8 = true,
+                                        headers = qLink.headers
+                                    )
+                                )
+                            }
+                        } else if (isValidMediaStreamUrl(url)) {
                             extractedList.add(
                                 StreamCandidate(
-                                    url = qLink.url,
-                                    name = qLink.name,
-                                    quality = qLink.quality,
-                                    isM3u8 = true,
-                                    headers = qLink.headers
+                                    url = url,
+                                    name = streamLink.name.ifBlank { "Direct Stream" },
+                                    quality = streamLink.quality.ifBlank { "1080p" },
+                                    isM3u8 = streamLink.isM3u8,
+                                    headers = streamLink.headers
                                 )
                             )
                         }
-                    } else if (isValidMediaStreamUrl(url)) {
-                        extractedList.add(
-                            StreamCandidate(
-                                url = url,
-                                name = streamLink.name.ifBlank { "Direct Stream" },
-                                quality = streamLink.quality.ifBlank { "1080p" },
-                                isM3u8 = streamLink.isM3u8,
-                                headers = streamLink.headers
-                            )
-                        )
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "[EXTRACTOR EXCEPTION] Failed resolving $url: ${e.message}")
