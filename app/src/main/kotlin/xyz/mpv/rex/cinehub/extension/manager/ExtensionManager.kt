@@ -60,7 +60,7 @@ class ExtensionManager(
                 val provider = when {
                     ext.name.lowercase().contains("archive") -> xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(ext, client)
                     ext.name.lowercase().contains("bolly") -> xyz.mpv.rex.cinehub.extension.providers.BollyflixProvider(ext, client)
-                    else -> xyz.mpv.rex.cinehub.extension.providers.SflixProvider(ext, client)
+                    else -> xyz.mpv.rex.cinehub.extension.providers.VidsrcProvider()
                 }
                 registry.register(provider, isEnabledByDefault = ext.isEnabled)
                 Log.d(TAG, "Registered provider: ${provider.name} (id=${provider.id}, enabled=${ext.isEnabled})")
@@ -89,7 +89,7 @@ class ExtensionManager(
             val provider = when {
                 installed.name.lowercase().contains("archive") -> xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(installed, client)
                 installed.name.lowercase().contains("bolly") -> xyz.mpv.rex.cinehub.extension.providers.BollyflixProvider(installed, client)
-                else -> xyz.mpv.rex.cinehub.extension.providers.SflixProvider(installed, client)
+                else -> xyz.mpv.rex.cinehub.extension.providers.VidsrcProvider()
             }
             registry.register(provider, isEnabledByDefault = true)
             true
