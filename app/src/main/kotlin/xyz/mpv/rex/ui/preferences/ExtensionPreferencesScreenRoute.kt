@@ -13,7 +13,8 @@ object ExtensionPreferencesScreenRoute : Screen {
         ExtensionPreferencesScreen(
             onNavigateBack = { backstack.removeLastOrNull() },
             onNavigateToRepositories = { backstack.add(ExtensionRepositoriesScreenRoute) },
-            onNavigateToInstalled = { backstack.add(InstalledExtensionsScreenRoute) }
+            onNavigateToInstalled = { backstack.add(InstalledExtensionsScreenRoute) },
+            onNavigateToValidation = { backstack.add(xyz.mpv.rex.cinehub.ui.CloudStreamValidationRoute) }
         )
     }
 }
