@@ -138,93 +138,7 @@ object CloudStreamLinkManager {
             }
         }
 
-        // 3. Multi-Source Streaming Scrapers (AutoEmbed, VidSrc, Smashy, MultiEmbed, 2Embed)
-        val rawTmdb = request.tmdbId.filter { it.isDigit() }
-        val effectiveTmdb = rawTmdb.ifBlank { "550" } // Fallback ID if TMDB is blank
-        val season = request.seasonNumber ?: 1
-        val episode = request.episodeNumber ?: 1
-
-        Log.d(TAG, "[MULTI-SOURCE] Generating scraper links for TMDB=$effectiveTmdb (isMovie=${request.isMovie}, S=$season, E=$episode)")
-
-        val scraperLinks = mutableListOf<CineHubStreamLink>()
-        if (request.isMovie) {
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "AutoEmbed Cloud (1080p)",
-                    url = "https://player.autoembed.cc/embed/movie/$effectiveTmdb",
-                    quality = "1080p",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://autoembed.cc/")
-                )
-            )
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "VidSrc Stream (1080p)",
-                    url = "https://vidsrc.xyz/embed/movie/$effectiveTmdb",
-                    quality = "1080p",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://vidsrc.xyz/")
-                )
-            )
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "SmashyStream Fast (HD)",
-                    url = "https://player.smashy.stream/movie/$effectiveTmdb",
-                    quality = "720p",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://smashystream.com/")
-                )
-            )
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "MultiEmbed Fast (Auto)",
-                    url = "https://multiembed.mov/?video_id=$effectiveTmdb&tmdb=1",
-                    quality = "Auto",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://multiembed.mov/")
-                )
-            )
-        } else {
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "AutoEmbed Cloud (1080p)",
-                    url = "https://player.autoembed.cc/embed/tv/$effectiveTmdb/$season/$episode",
-                    quality = "1080p",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://autoembed.cc/")
-                )
-            )
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "VidSrc Stream (1080p)",
-                    url = "https://vidsrc.xyz/embed/tv/$effectiveTmdb/$season/$episode",
-                    quality = "1080p",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://vidsrc.xyz/")
-                )
-            )
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "SmashyStream Fast (HD)",
-                    url = "https://player.smashy.stream/tv/$effectiveTmdb/$season/$episode",
-                    quality = "720p",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://smashystream.com/")
-                )
-            )
-            scraperLinks.add(
-                CineHubStreamLink(
-                    name = "MultiEmbed Fast (Auto)",
-                    url = "https://multiembed.mov/?video_id=$effectiveTmdb&tmdb=1&s=$season&e=$episode",
-                    quality = "Auto",
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to "https://multiembed.mov/")
-                )
-            )
-        }
-
-        // Add scraper links to provider links pool
-        providerStreamLinks.addAll(scraperLinks)
+        // Only use what the Provider or Direct URL gave us. No hardcoded scraper injection.
 
         // If request had a direct URL, also include it
         if (!request.dataUrl.isNullOrBlank() && (request.dataUrl.startsWith("http://") || request.dataUrl.startsWith("https://"))) {
@@ -311,10 +225,6 @@ object CloudStreamLinkManager {
         val allExtracted = extractorTasks.awaitAll().flatten()
         candidates.addAll(allExtracted)
 
-        // 5. Always inject high-speed verified fallback streams for zero playback failures
-        val safeFallbackStreams = getVerifiedFallbackStreams(request)
-        candidates.addAll(safeFallbackStreams)
-
         Log.i(TAG, "[DEDUPLICATION] Raw candidates count: ${candidates.size}")
 
         // 6. Deduplicate by URL and attach discovered subtitles
@@ -357,37 +267,6 @@ object CloudStreamLinkManager {
             q.contains("auto") -> 500
             else -> 100
         }
-    }
-
-    /**
-     * Supplies high-speed, 100% playable HLS and MP4 streams as reliable backups.
-     * Guarantees that "No working streams found" is NEVER shown to the user.
-     */
-    private fun getVerifiedFallbackStreams(request: CloudStreamRequest): List<StreamCandidate> {
-        val title = request.title
-        return listOf(
-            StreamCandidate(
-                url = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-                name = "CloudStream Multi-CDN (1080p HLS)",
-                quality = "1080p",
-                isM3u8 = true,
-                headers = mapOf("User-Agent" to "Mozilla/5.0")
-            ),
-            StreamCandidate(
-                url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                name = "Global Edge Mirror (1080p Fast)",
-                quality = "1080p",
-                isM3u8 = false,
-                headers = mapOf("User-Agent" to "Mozilla/5.0")
-            ),
-            StreamCandidate(
-                url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                name = "Backup Stream Server (720p)",
-                quality = "720p",
-                isM3u8 = false,
-                headers = mapOf("User-Agent" to "Mozilla/5.0")
-            )
-        )
     }
 
     /**

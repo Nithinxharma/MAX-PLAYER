@@ -209,9 +209,35 @@ class DeclarativeCineHubProvider(
                         )
                     }
                 }
+                lowerName.contains("archive") || lowerName.contains("classic") -> {
+                    val classicMovies = CineOnlineScraper.executeDiscoverMovies(sortBy = "vote_average.desc")
+                    if (classicMovies.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Classic Films",
+                                classicMovies.take(15).map { node ->
+                                    val title = node.title ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.Movie,
+                                        year = node.release_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                }
                 else -> {
-                    // General Movie & TV Provider
-                    val popMovies = CineOnlineScraper.executeDiscoverMovies(sortBy = "popularity.desc")
+                    // General Movie & TV Provider - Unique per provider
+                    val seed = name.hashCode().toLong()
+                    val random = java.util.Random(seed)
+                    val popMovies = CineOnlineScraper.executeDiscoverMovies(sortBy = "popularity.desc").shuffled(random)
                     if (popMovies.isNotEmpty()) {
                         sections.add(
                             CineHubHomePageList(
@@ -233,7 +259,7 @@ class DeclarativeCineHubProvider(
                             )
                         )
                     }
-                    val topTv = CineOnlineScraper.executeDiscoverTv(sortBy = "popularity.desc")
+                    val topTv = CineOnlineScraper.executeDiscoverTv(sortBy = "popularity.desc").shuffled(random)
                     if (topTv.isNotEmpty()) {
                         sections.add(
                             CineHubHomePageList(
@@ -385,37 +411,46 @@ class DeclarativeCineHubProvider(
         val episode = params["e"] ?: "1"
         val isTv = params.containsKey("s") || clean.startsWith("tv_")
 
-        // 1. VidSrc / Pro Stream embed link (can be extracted by Rabbitstream / ExtractorManager)
-        val vidsrcUrl = if (isTv) {
-            "https://vidsrc.me/embed/tv?tmdb=$rawId&season=$season&episode=$episode"
-        } else {
-            "https://vidsrc.me/embed/movie?tmdb=$rawId"
+        // 1. Determine which embed source to use based on provider name
+        val lowerName = name.lowercase()
+        val embedHost = when {
+            lowerName.contains("bolly") || lowerName.contains("hindi") -> "autoembed.cc"
+            lowerName.contains("anime") || lowerName.contains("aniwave") -> "multiembed.mov"
+            lowerName.contains("archive") -> "smashy.stream"
+            else -> "vidsrc.me"
         }
-        streams.add(
-            CineHubStreamLink(
-                name = "$name Primary Server (HD)",
-                url = vidsrcUrl,
-                quality = "1080p",
-                isM3u8 = false,
-                headers = mapOf("Referer" to "https://vidsrc.me/")
-            )
-        )
 
-        // 2. Multi-source backup server
-        val secondaryUrl = if (isTv) {
-            "https://embed.su/embed/tv/$rawId/$season/$episode"
-        } else {
-            "https://embed.su/embed/movie/$rawId"
+        // 2. Add primary stream
+        if (embedHost == "vidsrc.me") {
+            val vidsrcUrl = if (isTv) "https://vidsrc.me/embed/tv?tmdb=$rawId&season=$season&episode=$episode"
+            else "https://vidsrc.me/embed/movie?tmdb=$rawId"
+            streams.add(CineHubStreamLink("$name Primary Server (HD)", vidsrcUrl, "1080p", false, mapOf("Referer" to "https://vidsrc.me/")))
+        } else if (embedHost == "autoembed.cc") {
+            val autoUrl = if (isTv) "https://player.autoembed.cc/embed/tv/$rawId/$season/$episode"
+            else "https://player.autoembed.cc/embed/movie/$rawId"
+            streams.add(CineHubStreamLink("$name Auto Server (HD)", autoUrl, "1080p", false, mapOf("Referer" to "https://autoembed.cc/")))
+        } else if (embedHost == "multiembed.mov") {
+            val multiUrl = if (isTv) "https://multiembed.mov/?video_id=$rawId&tmdb=1&s=$season&e=$episode"
+            else "https://multiembed.mov/?video_id=$rawId&tmdb=1"
+            streams.add(CineHubStreamLink("$name Multi Server (Auto)", multiUrl, "Auto", false, mapOf("Referer" to "https://multiembed.mov/")))
+        } else if (embedHost == "smashy.stream") {
+            val smashyUrl = if (isTv) "https://player.smashy.stream/tv/$rawId/$season/$episode"
+            else "https://player.smashy.stream/movie/$rawId"
+            streams.add(CineHubStreamLink("$name Smashy Server (HD)", smashyUrl, "720p", false, mapOf("Referer" to "https://smashystream.com/")))
         }
-        streams.add(
-            CineHubStreamLink(
-                name = "$name Mirror Server (720p)",
-                url = secondaryUrl,
-                quality = "720p",
-                isM3u8 = false,
-                headers = mapOf("Referer" to "https://embed.su/")
-            )
-        )
+
+        // 3. Add a fallback mirror based on hash code to simulate multiple sources
+        val secondaryHost = listOf("embed.su", "vidsrc.xyz", "vidbinge.com")[Math.abs(name.hashCode()) % 3]
+        if (secondaryHost == "embed.su") {
+            val embedSuUrl = if (isTv) "https://embed.su/embed/tv/$rawId/$season/$episode" else "https://embed.su/embed/movie/$rawId"
+            streams.add(CineHubStreamLink("$name Mirror Server (720p)", embedSuUrl, "720p", false, mapOf("Referer" to "https://embed.su/")))
+        } else if (secondaryHost == "vidsrc.xyz") {
+            val vidsrcXyzUrl = if (isTv) "https://vidsrc.xyz/embed/tv/$rawId/$season/$episode" else "https://vidsrc.xyz/embed/movie/$rawId"
+            streams.add(CineHubStreamLink("$name Backup Server (1080p)", vidsrcXyzUrl, "1080p", false, mapOf("Referer" to "https://vidsrc.xyz/")))
+        } else if (secondaryHost == "vidbinge.com") {
+             val vidBingeUrl = if (isTv) "https://vidbinge.com/embed/tv/$rawId/$season/$episode" else "https://vidbinge.com/embed/movie/$rawId"
+             streams.add(CineHubStreamLink("$name Alt Server (HD)", vidBingeUrl, "720p", false, mapOf("Referer" to "https://vidbinge.com/")))
+        }
 
         streams
     }
