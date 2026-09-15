@@ -11,9 +11,11 @@ pluginManagement {
     gradlePluginPortal()
   }
 }
+
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
+
 dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
@@ -21,7 +23,7 @@ dependencyResolutionManagement {
     mavenLocal()
     mavenCentral()
     maven(url = "https://mpvrex.github.io/mpvRex-libmpv")
-    maven(url = "https://www.jitpack.io") {
+    maven(url = "https://jitpack.io") {
       content {
         // Only use JitPack for specific dependencies to avoid unnecessary checks
         includeGroup("com.github.sfsakhawat999")
@@ -32,6 +34,12 @@ dependencyResolutionManagement {
         includeGroup("com.github.thegrizzlylabs")
         includeGroup("com.github.nanihadesuka")
         includeGroup("com.github.jeziellago")
+        includeGroup("com.github.recloudstream")
+        includeGroup("com.github.recloudstream.cloudstream")
+        includeGroup("com.github.Blatzar")
+        includeGroup("com.github.teamnewpipe")
+        includeGroup("com.github.TeamNewPipe")
+        includeGroup("com.lagradost")
       }
     }
   }

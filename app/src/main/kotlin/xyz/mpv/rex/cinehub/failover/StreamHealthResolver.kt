@@ -193,4 +193,30 @@ object StreamHealthResolver {
 
         return builder.build()
     }
+
+    data class ScannedStream(
+        val candidate: StreamCandidate,
+        val isHealthy: Boolean,
+        val latencyMs: Long,
+        val statusMessage: String
+    )
+
+    /**
+     * Actively scans all candidate stream links, measures response latency,
+     * and returns structured status for each link (working vs failed).
+     */
+    suspend fun scanStreamsHealth(candidates: List<StreamCandidate>): List<ScannedStream> = withContext(Dispatchers.IO) {
+        if (candidates.isEmpty()) return@withContext emptyList()
+        val enriched = candidates.map { injectRequiredHeaders(it) }
+        val deferred = enriched.map { candidate ->
+            async {
+                val start = System.currentTimeMillis()
+                val healthy = verifyStreamHealth(candidate)
+                val latency = System.currentTimeMillis() - start
+                val msg = if (healthy) "Active (${latency}ms)" else "Unreachable / 403"
+                ScannedStream(candidate, healthy, latency, msg)
+            }
+        }
+        deferred.awaitAll()
+    }
 }

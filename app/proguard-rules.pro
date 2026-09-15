@@ -73,3 +73,42 @@
     java.lang.Object writeReplace();
     java.lang.Object readResolve();
 }
+
+# Rhino / JavaScript Engine (used by NewPipeExtractor)
+-dontwarn java.beans.**
+-dontwarn javax.script.**
+-dontwarn org.mozilla.javascript.**
+-keep class org.mozilla.javascript.** { *; }
+
+# NewPipeExtractor
+-keep class org.schabi.newpipe.extractor.** { *; }
+-dontwarn org.schabi.newpipe.extractor.**
+
+# CloudStream & CineHub Extensions
+-keep class com.lagradost.cloudstream3.** { *; }
+-dontwarn com.lagradost.cloudstream3.**
+-keep class com.lagradost.nicehttp.** { *; }
+-dontwarn com.lagradost.nicehttp.**
+-keep class xyz.mpv.rex.cinehub.** { *; }
+
+# Jackson JSON
+-dontwarn com.fasterxml.jackson.**
+-keep class com.fasterxml.jackson.** { *; }
+
+# Jsoup
+-keep class org.jsoup.** { *; }
+-dontwarn org.jsoup.**
+
+# org.json
+-keep class org.json.** { *; }
+-dontwarn org.json.**
+
+# Kotlinx Serialization
+-keepattributes *Annotation*,InnerClasses
+-dontnote kotlinx.serialization.**
+-keepclassmembers class * {
+    *** Companion;
+}
+-keepclasseswithmembers class * {
+    kotlinx.serialization.KSerializer serializer(...);
+}

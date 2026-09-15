@@ -1,0 +1,3 @@
+sed -i 's/title = node.title ?: "Untitled",/title = node.name ?: "Untitled",/g' app/src/main/kotlin/xyz/mpv/rex/cinehub/extension/providers/DeclarativeCineHubProvider.kt
+sed -i 's/title=${java.net.URLEncoder.encode(node.title ?: "", "UTF-8")}/title=${java.net.URLEncoder.encode(node.name ?: "", "UTF-8")}/g' app/src/main/kotlin/xyz/mpv/rex/cinehub/extension/providers/DeclarativeCineHubProvider.kt
+sed -i 's/year = node.release_date?.take(4)?.toIntOrNull(),/year = node.first_air_date?.take(4)?.toIntOrNull(),/g' app/src/main/kotlin/xyz/mpv/rex/cinehub/extension/providers/DeclarativeCineHubProvider.kt

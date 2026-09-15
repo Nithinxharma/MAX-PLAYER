@@ -48,13 +48,12 @@ object InvidiousFilterRankEngine {
                 val type = config.optString("type", "").lowercase().trim()
                 if (type != "https") continue
 
-                // 2. Strict Condition: api == true
-                val hasApi = config.optBoolean("api", false)
-                if (!hasApi) continue
+                // 2. Tolerant API check (some modern registries omit api flag or set it as string)
+                val hasApi = if (config.has("api")) config.optBoolean("api", true) else true
 
-                // 3. Strict Condition: monitor.dailyRatios[0].ratio > 95.0
-                val healthRatio = extractFirstDailyRatio(config)
-                if (healthRatio == null || healthRatio <= MIN_HEALTH_RATIO) continue
+                // 3. Health ratio: fallback to 95.0 if monitor is missing
+                val healthRatio = extractFirstDailyRatio(config) ?: 95.0
+                if (healthRatio < 70.0) continue
 
                 // Optional latency detection
                 val latencyMs = extractLatency(config)

@@ -2,6 +2,7 @@ package xyz.mpv.rex.cinehub.extension.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 @Entity(tableName = "extension_repositories")
 data class ExtensionRepo(
@@ -36,6 +37,7 @@ data class LibraryItem(
     val addedAt: Long = System.currentTimeMillis()
 )
 
+@Serializable
 data class AvailablePlugin(
     val name: String,
     val internalName: String,

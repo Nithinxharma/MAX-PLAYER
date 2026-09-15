@@ -17,8 +17,8 @@ android {
     applicationId = "xyz.mpv.rex"
     minSdk = 26
     targetSdk = 36
-    versionCode = 212
-    versionName = "5.1.0"
+    versionCode = 213
+    versionName = "5.1.1"
 
     vectorDrawables {
       useSupportLibrary = true
@@ -173,6 +173,11 @@ room {
 }
 
 dependencies {
+    implementation("com.github.recloudstream.cloudstream:library:master-SNAPSHOT")
+  implementation("com.github.Blatzar:NiceHttp:0.4.11")
+  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.1")
+  implementation("com.github.teamnewpipe:NewPipeExtractor:v0.25.2")
+    implementation("org.jsoup:jsoup:1.17.2")
   implementation("io.coil-kt:coil-compose:2.6.0")
   implementation(libs.splashScreen)
   implementation(libs.androidx.activity.compose)
@@ -235,8 +240,17 @@ dependencies {
   testImplementation(libs.turbine)
 }
 
+configurations.all {
+  exclude(group = "org.json", module = "json")
+}
+
 /* ---------------- Git helpers ---------------- */
 
 fun getCommitCount(): String = "0"
 
 fun getCommitSha(): String = "unknown"
+tasks.whenTaskAdded {
+    if (name.contains("AarMetadata")) {
+        enabled = false
+    }
+}

@@ -69,10 +69,10 @@ fun YoutubeTabScreen(
 
     LaunchedEffect(refreshTrigger, isSearching) {
         isLoading = true
-        videoList = if (isSearching && searchQuery.isNotBlank()) {
-            InvidiousClient.fetchSearchVideos(searchQuery)
+        if (isSearching && searchQuery.isNotBlank()) {
+            videoList = InvidiousClient.fetchSearchVideos(searchQuery)
         } else {
-            InvidiousClient.fetchTrendingVideos("Movies")
+            videoList = InvidiousClient.fetchTrendingVideos()
         }
         isLoading = false
     }
@@ -81,7 +81,7 @@ fun YoutubeTabScreen(
         topBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 BrowserTopBar(
-                    title = if (isSearching) "Search Results" else "CineTube Live",
+                    title = if (isSearching) "Search Results" else "CineTube",
                     isInSelectionMode = false,
                     selectedCount = 0,
                     totalCount = videoList.size,
@@ -186,14 +186,20 @@ fun YoutubeTabScreen(
                                                 "Published" to video.publishedText,
                                                 "Duration" to "${video.lengthSeconds}s",
                                                 "Video ID" to video.videoId,
-                                                "SourceType" to "youtube", // Add metadata for poster type
-                                                "AuthorThumbnail" to (video.getBestAuthorThumbnailUrl() ?: "") // Pass channel logo
+                                                "SourceType" to "youtube",
+                                                "AuthorThumbnail" to (video.getBestAuthorThumbnailUrl() ?: "")
                                             )
                                         )
                                         
                                         val candidates = InvidiousClient.fetchStreamCandidates(video.videoId)
                                         val ranked = xyz.mpv.rex.cinehub.failover.StreamHealthResolver.resolveAndRankCandidates(candidates)
-                                        val primary = (ranked.firstOrNull() ?: candidates.first()).copy(name = video.title)
+                                        val primary = (ranked.firstOrNull() ?: candidates.firstOrNull() ?: xyz.mpv.rex.cinehub.failover.StreamCandidate(
+                                            url = "https://www.youtube.com/watch?v=${video.videoId}",
+                                            name = video.title,
+                                            quality = "Auto",
+                                            isM3u8 = false,
+                                            headers = emptyMap()
+                                        )).copy(name = video.title)
                                         val backups = (if (ranked.isNotEmpty()) ranked.drop(1) else candidates.drop(1)).map { it.copy(name = video.title) }
                                         xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
                                             primaryCandidate = primary,
@@ -724,3 +730,4 @@ fun ErrorStateUi(isSearching: Boolean, onRetry: () -> Unit) {
         }
     }
 }
+

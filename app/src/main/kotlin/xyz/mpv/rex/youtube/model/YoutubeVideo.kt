@@ -20,7 +20,7 @@ data class YoutubeVideo(
     val subCountText: String = ""
 ) {
     fun getBestThumbnailUrl(): String {
-        return videoThumbnails.maxByOrNull { it.width }?.url 
+        return "https://img.youtube.com/vi/$videoId/hqdefault.jpg" 
             ?: "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
     }
 
