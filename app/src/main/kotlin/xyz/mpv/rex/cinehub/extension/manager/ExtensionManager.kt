@@ -15,7 +15,6 @@ import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
-import xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.database.MpvExDatabase
 import java.io.File
@@ -58,10 +57,10 @@ class ExtensionManager(
         Log.i(TAG, "Loading ${allExts.size} installed extension providers from database")
         for (ext in allExts) {
             try {
-                val provider = if (ext.name.lowercase().contains("archive")) {
-                    xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(ext, client)
-                } else {
-                    xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider(ext, client)
+                val provider = when {
+                    ext.name.lowercase().contains("archive") -> xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(ext, client)
+                    ext.name.lowercase().contains("bolly") -> xyz.mpv.rex.cinehub.extension.providers.BollyflixProvider(ext, client)
+                    else -> xyz.mpv.rex.cinehub.extension.providers.SflixProvider(ext, client)
                 }
                 registry.register(provider, isEnabledByDefault = ext.isEnabled)
                 Log.d(TAG, "Registered provider: ${provider.name} (id=${provider.id}, enabled=${ext.isEnabled})")
@@ -87,10 +86,10 @@ class ExtensionManager(
             )
             db.extensionDao().insertExtension(installed)
 
-            val provider = if (installed.name.lowercase().contains("archive")) {
-                xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(installed, client)
-            } else {
-                xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider(installed, client)
+            val provider = when {
+                installed.name.lowercase().contains("archive") -> xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(installed, client)
+                installed.name.lowercase().contains("bolly") -> xyz.mpv.rex.cinehub.extension.providers.BollyflixProvider(installed, client)
+                else -> xyz.mpv.rex.cinehub.extension.providers.SflixProvider(installed, client)
             }
             registry.register(provider, isEnabledByDefault = true)
             true
