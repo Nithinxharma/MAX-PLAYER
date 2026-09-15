@@ -12,13 +12,14 @@ object ExtractorManager {
     private const val TAG = "CineHub:Extractor"
 
     private val extractors: List<ExtractorApi> = listOf(
+        RabbitstreamExtractor(),
         StreamWishExtractor(),
+        VidHideExtractor(),
         FilemoonExtractor(),
         StreamTapeExtractor(),
         MixDropExtractor(),
         DoodExtractor(),
-        RabbitstreamExtractor(),
-        VidHideExtractor(),
+        EmbedExtractor(),
         GenericExtractor()
     )
 

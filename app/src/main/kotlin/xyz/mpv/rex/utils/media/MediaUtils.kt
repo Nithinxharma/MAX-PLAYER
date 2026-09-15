@@ -484,6 +484,7 @@ object MediaUtils : KoinComponent {
     posterUrl: String? = null,
     sourceType: String? = null,
   ) {
+    android.util.Log.i("PlayerHandoff", "[PLAYER] Handing off to MPV Player. Primary stream: ${primaryCandidate.url}, Headers: ${primaryCandidate.headers}, Backup streams: ${backupCandidates.size}")
     val uri = runCatching { Uri.parse(primaryCandidate.url) }.getOrNull() ?: Uri.parse("file://${primaryCandidate.url}")
     val intent = Intent(Intent.ACTION_VIEW, uri).apply {
       setClass(context, PlayerActivity::class.java)

@@ -85,45 +85,180 @@ class DeclarativeCineHubProvider(
 
     override suspend fun getHomePage(): List<CineHubHomePageList> = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "[$name] Loading home page sections")
-            val trendingQuery = if (name.contains("Hindi", ignoreCase = true) || name.contains("Bollywood", ignoreCase = true)) "hindi" else "action"
-            val tmdbResults = CineOnlineScraper.executeManualMovieSearch(trendingQuery)
-            val movies = tmdbResults.take(15).map { node ->
-                val title = node.title ?: "Untitled"
-                CineHubSearchItem(
-                    id = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
-                    title = title,
-                    url = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
-                    providerId = id,
-                    providerName = name,
-                    posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                    type = TvType.Movie,
-                    year = node.release_date?.take(4)?.toIntOrNull(),
-                    rating = node.vote_average
-                )
+            Log.d(TAG, "[$name] Dynamically generating home page sections for provider")
+            val lowerName = name.lowercase()
+            val sections = mutableListOf<CineHubHomePageList>()
+
+            when {
+                lowerName.contains("bolly") || lowerName.contains("hindi") || lowerName.contains("desi") || lowerName.contains("vegamovies") -> {
+                    // Bollywood / Hindi Provider
+                    val bollywoodMovies = CineOnlineScraper.executeDiscoverMovies(language = "hi", sortBy = "popularity.desc")
+                    if (bollywoodMovies.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Latest Bollywood",
+                                bollywoodMovies.take(15).map { node ->
+                                    val title = node.title ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.Movie,
+                                        year = node.release_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                    val hindiSeries = CineOnlineScraper.executeDiscoverTv(language = "hi", sortBy = "popularity.desc")
+                    if (hindiSeries.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Trending Hindi Series",
+                                hindiSeries.take(15).map { node ->
+                                    val title = node.name ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.TvSeries,
+                                        year = node.first_air_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                }
+                lowerName.contains("anime") || lowerName.contains("gogo") || lowerName.contains("zoro") || lowerName.contains("aniwave") -> {
+                    // Anime Provider
+                    val animeSeries = CineOnlineScraper.executeDiscoverTv(language = "ja", genre = 16, sortBy = "popularity.desc")
+                    if (animeSeries.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Top Airing Anime",
+                                animeSeries.take(15).map { node ->
+                                    val title = node.name ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.Anime,
+                                        year = node.first_air_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                    val animeMovies = CineOnlineScraper.executeDiscoverMovies(language = "ja", genre = 16, sortBy = "popularity.desc")
+                    if (animeMovies.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Popular Anime Movies",
+                                animeMovies.take(15).map { node ->
+                                    val title = node.title ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.Anime,
+                                        year = node.release_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                }
+                lowerName.contains("drama") || lowerName.contains("asian") || lowerName.contains("kiss") -> {
+                    // Asian Drama / K-Drama Provider
+                    val kdrama = CineOnlineScraper.executeDiscoverTv(language = "ko", sortBy = "popularity.desc")
+                    if (kdrama.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Trending K-Dramas",
+                                kdrama.take(15).map { node ->
+                                    val title = node.name ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.TvSeries,
+                                        year = node.first_air_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                }
+                else -> {
+                    // General Movie & TV Provider
+                    val popMovies = CineOnlineScraper.executeDiscoverMovies(sortBy = "popularity.desc")
+                    if (popMovies.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Popular Movies",
+                                popMovies.take(15).map { node ->
+                                    val title = node.title ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/movie_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.Movie,
+                                        year = node.release_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                    val topTv = CineOnlineScraper.executeDiscoverTv(sortBy = "popularity.desc")
+                    if (topTv.isNotEmpty()) {
+                        sections.add(
+                            CineHubHomePageList(
+                                "$name - Trending Series",
+                                topTv.take(15).map { node ->
+                                    val title = node.name ?: "Untitled"
+                                    CineHubSearchItem(
+                                        id = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        title = title,
+                                        url = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
+                                        providerId = id,
+                                        providerName = name,
+                                        posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                        type = TvType.TvSeries,
+                                        year = node.first_air_date?.take(4)?.toIntOrNull(),
+                                        rating = node.vote_average
+                                    )
+                                }
+                            )
+                        )
+                    }
+                }
             }
 
-            val seriesQuery = if (name.contains("Anime", ignoreCase = true)) "anime" else "drama"
-            val tmdbShows = CineOnlineScraper.executeManualTvSearch(seriesQuery)
-            val shows = tmdbShows.take(15).map { node ->
-                val title = node.name ?: "Untitled"
-                CineHubSearchItem(
-                    id = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
-                    title = title,
-                    url = "ext://$id/tv_${node.id}?title=${URLEncoder.encode(title, "UTF-8")}",
-                    providerId = id,
-                    providerName = name,
-                    posterUrl = node.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                    type = TvType.TvSeries,
-                    year = node.first_air_date?.take(4)?.toIntOrNull(),
-                    rating = node.vote_average
-                )
-            }
-
-            listOf(
-                CineHubHomePageList("$name Popular Movies", movies),
-                CineHubHomePageList("$name TV Series", shows)
-            )
+            sections
         } catch (e: Exception) {
             Log.e(TAG, "[$name] Failed to load home page: ${e.message}", e)
             emptyList()

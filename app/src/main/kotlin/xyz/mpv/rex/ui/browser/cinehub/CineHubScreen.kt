@@ -147,6 +147,7 @@ object CineHubScreen : Screen {
 
     var selectedDetailItem by remember { mutableStateOf<Any?>(null) }
     var activeCloudStreamRequest by remember { mutableStateOf<xyz.mpv.rex.cinehub.stream.CloudStreamRequest?>(null) }
+    var activeDownloadRequest by remember { mutableStateOf<xyz.mpv.rex.cinehub.stream.CloudStreamRequest?>(null) }
 
     val navBarHeight = LocalNavigationBarHeight.current
 
@@ -174,9 +175,11 @@ object CineHubScreen : Screen {
 
           // Query dynamic home rows from all enabled extension providers
           val activeProviders = providerRegistry.getEnabledProviders()
+          android.util.Log.i("CineHubScreen", "[HOME LOADING] Fetching home page from ${activeProviders.size} providers")
           val extHomeLists = mutableListOf<xyz.mpv.rex.cinehub.extension.api.CineHubHomePageList>()
           for (provider in activeProviders) {
             val rows = runCatching { provider.getHomePage() }.getOrDefault(emptyList())
+            android.util.Log.i("CineHubScreen", "[HOME LOADING] Provider '${provider.name}' returned ${rows.size} home sections")
             extHomeLists.addAll(rows)
           }
           withContext(Dispatchers.Main) {
@@ -196,10 +199,26 @@ object CineHubScreen : Screen {
       loadMedia()
     }
 
-    // Featured Hero Movie (pick first online or local movie with backdrop)
-    val featuredMovie = remember(onlineMovies, localMovies) {
+    // Featured Hero Movie (pick first online or local movie with backdrop or from provider home rows)
+    val featuredMovie = remember(onlineMovies, localMovies, providerHomeRows) {
       onlineMovies.firstOrNull { it.backdropPath != null || it.posterPath != null }
         ?: localMovies.firstOrNull { it.backdropPath != null || it.posterPath != null }
+        ?: providerHomeRows.flatMap { it.items }.firstOrNull { !it.posterUrl.isNullOrBlank() }?.let { item ->
+            MovieItem(
+              title = item.title,
+              originalTitle = item.title,
+              posterPath = item.posterUrl,
+              backdropPath = item.posterUrl,
+              userRating = item.rating ?: 0.0,
+              premiered = (item.year ?: 0).toString(),
+              genre = item.providerName ?: "Trending",
+              director = "",
+              mpaa = "",
+              plot = "Watch directly on ${item.providerName ?: "CineHub"}",
+              tmdbId = if (item.id.startsWith("movie_")) item.id.removePrefix("movie_") else item.id,
+              videoFilePath = "ext_stream:${item.providerId}::${item.id}"
+            )
+        }
         ?: onlineMovies.firstOrNull()
     }
 
@@ -300,13 +319,16 @@ object CineHubScreen : Screen {
             CircularProgressIndicator()
           }
         } else {
-          val activeFilteredRows = remember(providerHomeRows, selectedProviderId, selectedTab) {
-            val rows = if (selectedProviderId != null) {
-              providerHomeRows.filter { it.items.firstOrNull()?.providerId == selectedProviderId }
+          val currentProviderId = selectedProviderId
+          val activeFilteredRows = remember(providerHomeRows, currentProviderId, selectedTab) {
+            val rows = if (currentProviderId != null) {
+              providerHomeRows.filter { row ->
+                row.items.any { it.providerId == currentProviderId } || row.title.contains(currentProviderId, ignoreCase = true)
+              }
             } else {
               providerHomeRows
             }
-            when (selectedTab) {
+            val filteredByTab = when (selectedTab) {
               1 -> rows.mapNotNull { r ->
                 val filtered = r.items.filter { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.Movie || r.title.contains("Movie", ignoreCase = true) }
                 if (filtered.isNotEmpty()) r.copy(items = filtered) else null
@@ -329,6 +351,8 @@ object CineHubScreen : Screen {
               }
               else -> rows
             }
+            // Strict deduplication by row title to eliminate duplicate sections
+            filteredByTab.distinctBy { it.title }
           }
 
           LazyColumn(
@@ -507,13 +531,13 @@ object CineHubScreen : Screen {
                 }
               }
 
-              // Featured Hero Banner (if available and tab == 0 or 1)
-              if ((selectedTab == 0 || selectedTab == 1) && featuredMovie != null) {
+              // Featured Hero Banner (if available and tab == 0, 1, or 2)
+              if ((selectedTab in 0..2) && featuredMovie != null) {
                 item {
                   FeaturedHeroCard(
                     movie = featuredMovie,
                     onPlayClick = {
-                      playMediaItem(context, featuredMovie, scope)
+                      playMediaItem(context, featuredMovie, scope, onOpenStreamSelector = { activeCloudStreamRequest = it })
                     },
                     onDetailClick = {
                       selectedDetailItem = featuredMovie
@@ -581,12 +605,14 @@ object CineHubScreen : Screen {
                               year = item.year?.toString() ?: "",
                               onClick = {
                                 scope.launch(Dispatchers.IO) {
+                                  android.util.Log.i("CineHubScreen", "[DETAILS LOADING] Fetching details for '${item.title}' from provider '${item.providerName}'")
                                   val provider = providerRegistry.getProvider(item.providerId)
                                   val details = provider?.loadDetails(item.url)
+                                  android.util.Log.i("CineHubScreen", "[DETAILS LOADING] Provider '${item.providerName}' returned details: ${details != null}")
                                   withContext(Dispatchers.Main) {
                                     if (item.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) {
                                       selectedDetailItem = TvShowItem(
-                                        folderPath = "",
+                                        folderPath = "ext_stream:${item.providerId}::${item.url}",
                                         title = details?.title ?: item.title,
                                         plot = details?.overview ?: "Content provided by ${item.providerName}",
                                         userRating = details?.rating ?: item.rating ?: 0.0,
@@ -816,6 +842,10 @@ object CineHubScreen : Screen {
             onRequestStream = { request ->
               selectedDetailItem = null
               activeCloudStreamRequest = request
+            },
+            onRequestDownload = { request ->
+              selectedDetailItem = null
+              activeDownloadRequest = request
             }
           )
         }
@@ -824,7 +854,17 @@ object CineHubScreen : Screen {
         activeCloudStreamRequest?.let { req ->
           CloudStreamLinkBottomSheet(
             request = req,
-            onDismiss = { activeCloudStreamRequest = null }
+            onDismiss = { activeCloudStreamRequest = null },
+            initialDownloadMode = false
+          )
+        }
+
+        // CloudStream Mirror Download Bottom Sheet
+        activeDownloadRequest?.let { req ->
+          CloudStreamLinkBottomSheet(
+            request = req,
+            onDismiss = { activeDownloadRequest = null },
+            initialDownloadMode = true
           )
         }
 
@@ -1040,11 +1080,12 @@ private fun FeaturedHeroCard(
   Card(
     modifier = Modifier
       .fillMaxWidth()
-      .height(240.dp)
+      .height(280.dp)
       .padding(horizontal = 16.dp, vertical = 8.dp)
-      .clip(RoundedCornerShape(20.dp))
+      .clip(RoundedCornerShape(24.dp))
       .clickable { onDetailClick() },
-    shape = RoundedCornerShape(20.dp),
+    shape = RoundedCornerShape(24.dp),
+    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
   ) {
     Box(modifier = Modifier.fillMaxSize()) {
       AsyncImage(
@@ -1054,14 +1095,18 @@ private fun FeaturedHeroCard(
         modifier = Modifier.fillMaxSize(),
       )
 
-      // Gradient overlay for readability
+      // CloudStream deep cinematic gradient
       Box(
         modifier = Modifier
           .fillMaxSize()
           .background(
             Brush.verticalGradient(
-              colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-              startY = 80f,
+              colors = listOf(
+                Color.Transparent,
+                Color.Black.copy(alpha = 0.4f),
+                Color.Black.copy(alpha = 0.95f)
+              ),
+              startY = 60f,
             )
           ),
       )
@@ -1070,36 +1115,72 @@ private fun FeaturedHeroCard(
       Column(
         modifier = Modifier
           .align(Alignment.BottomStart)
-          .padding(16.dp),
+          .padding(18.dp),
       ) {
-        if (movie.userRating > 0.0) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier
-              .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f), CircleShape)
-              .padding(horizontal = 8.dp, vertical = 2.dp),
-          ) {
-            Icon(
-              imageVector = Icons.Default.Star,
-              contentDescription = null,
-              tint = Color(0xFFFFB800),
-              modifier = Modifier.size(14.dp),
-            )
-            Text(
-              text = String.format("%.1f", movie.userRating),
-              style = MaterialTheme.typography.labelSmall,
-              fontWeight = FontWeight.Bold,
-              color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          modifier = Modifier.padding(bottom = 6.dp)
+        ) {
+          if (movie.userRating > 0.0) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              modifier = Modifier
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+              Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = null,
+                tint = Color(0xFFFFB800),
+                modifier = Modifier.size(14.dp),
+              )
+              Text(
+                text = String.format("%.1f", movie.userRating),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+              )
+            }
           }
-          Spacer(modifier = Modifier.height(4.dp))
+
+          if (movie.premiered.isNotBlank()) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color.White.copy(alpha = 0.2f),
+              modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+              Text(
+                text = movie.premiered,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+              )
+            }
+          }
+
+          if (movie.genre.isNotBlank()) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)
+            ) {
+              Text(
+                text = movie.genre.split(",").firstOrNull()?.trim() ?: movie.genre,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+              )
+            }
+          }
         }
 
         Text(
           text = movie.title,
-          style = MaterialTheme.typography.titleLarge,
-          fontWeight = FontWeight.Bold,
+          style = MaterialTheme.typography.headlineSmall,
+          fontWeight = FontWeight.ExtraBold,
           color = Color.White,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
@@ -1109,7 +1190,7 @@ private fun FeaturedHeroCard(
           Text(
             text = movie.plot,
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.8f),
+            color = Color.White.copy(alpha = 0.85f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(vertical = 4.dp),
@@ -1118,36 +1199,38 @@ private fun FeaturedHeroCard(
 
         Row(
           horizontalArrangement = Arrangement.spacedBy(10.dp),
-          modifier = Modifier.padding(top = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.padding(top = 8.dp),
         ) {
           Button(
             onClick = onPlayClick,
-            shape = RoundedCornerShape(12.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-            modifier = Modifier.height(36.dp),
+            shape = RoundedCornerShape(14.dp),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+            modifier = Modifier.height(40.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
           ) {
             Icon(
               imageVector = Icons.Default.PlayArrow,
               contentDescription = null,
-              modifier = Modifier.size(18.dp),
+              modifier = Modifier.size(20.dp),
             )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(text = "Watch", fontSize = 13.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(text = "Watch", fontSize = 14.sp, fontWeight = FontWeight.Bold)
           }
 
           FilledTonalButton(
             onClick = onDetailClick,
-            shape = RoundedCornerShape(12.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-            modifier = Modifier.height(36.dp),
+            shape = RoundedCornerShape(14.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.height(40.dp),
           ) {
             Icon(
               imageVector = Icons.Default.Info,
               contentDescription = null,
               modifier = Modifier.size(18.dp),
             )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(text = "Details", fontSize = 13.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(text = "Details", fontSize = 14.sp, fontWeight = FontWeight.Medium)
           }
         }
       }
@@ -1407,6 +1490,7 @@ private fun CineDetailBottomSheet(
   onPlay: () -> Unit,
   onRefreshItem: (Any) -> Unit = {},
   onRequestStream: ((xyz.mpv.rex.cinehub.stream.CloudStreamRequest) -> Unit)? = null,
+  onRequestDownload: ((xyz.mpv.rex.cinehub.stream.CloudStreamRequest) -> Unit)? = null,
 ) {
   val database = koinInject<xyz.mpv.rex.database.MpvExDatabase>()
   val libraryDao = database.cineLibraryDao()
@@ -1655,6 +1739,32 @@ private fun CineDetailBottomSheet(
               Text(text = "Play Movie", fontWeight = FontWeight.Bold)
             }
 
+            OutlinedButton(
+              onClick = {
+                val req = xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+                  title = title,
+                  tmdbId = item.tmdbId,
+                  year = year.toIntOrNull(),
+                  posterUrl = posterPath,
+                  isMovie = true,
+                  providerId = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringBefore("::") else null,
+                  dataUrl = if (item.videoFilePath.startsWith("ext_stream:")) item.videoFilePath.removePrefix("ext_stream:").substringAfter("::") else item.videoFilePath,
+                  directFilePath = null
+                )
+                if (onRequestDownload != null) {
+                  onRequestDownload(req)
+                } else if (onRequestStream != null) {
+                  onRequestStream(req)
+                }
+              },
+              modifier = Modifier.height(50.dp),
+              shape = RoundedCornerShape(16.dp),
+            ) {
+              Icon(imageVector = Icons.Default.Download, contentDescription = "Download")
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(text = "Download", fontWeight = FontWeight.SemiBold)
+            }
+
             var isScrapingMovie by remember { mutableStateOf(false) }
 
             OutlinedButton(
@@ -1748,8 +1858,9 @@ private fun CineDetailBottomSheet(
               val onlineSeasons = onlineDetails?.seasons?.map { it.season_number }?.filter { it > 0 }?.distinct()?.sorted().orEmpty()
 
               var providerSeasons = emptyList<Int>()
+              val targetUrl = if (item.folderPath.startsWith("ext_stream:")) item.folderPath.substringAfter("::") else item.title
               for (p in providerRegistry.getEnabledProviders()) {
-                val eps = runCatching { p.loadEpisodes(item.title) }.getOrDefault(emptyList())
+                val eps = runCatching { p.loadEpisodes(targetUrl) }.getOrDefault(emptyList())
                 if (eps.isNotEmpty()) {
                   providerSeasons = eps.map { it.season }.distinct().sorted()
                   break
@@ -1805,9 +1916,12 @@ private fun CineDetailBottomSheet(
               } else {
                 // Query enabled providers for season episodes
                 val providerEps = mutableListOf<EpisodeItem>()
+                val targetUrl = if (item.folderPath.startsWith("ext_stream:")) item.folderPath.substringAfter("::") else item.title
+                android.util.Log.i("CineHubScreen", "[EPISODE LOADING] Fetching episodes for '${item.title}' (S$selectedSeason) using targetUrl: $targetUrl")
                 for (p in providerRegistry.getEnabledProviders()) {
-                  val eps = runCatching { p.loadEpisodes(item.title) }.getOrDefault(emptyList())
+                  val eps = runCatching { p.loadEpisodes(targetUrl) }.getOrDefault(emptyList())
                   if (eps.isNotEmpty()) {
+                    android.util.Log.i("CineHubScreen", "[EPISODE LOADING] Provider '${p.name}' returned ${eps.size} total episodes")
                     val filtered = eps.filter { it.season == selectedSeason }
                     if (filtered.isNotEmpty()) {
                       providerEps.addAll(
@@ -1913,6 +2027,34 @@ private fun CineDetailBottomSheet(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
               )
+            }
+
+            OutlinedButton(
+              onClick = {
+                if (nextEpisodeToPlay != null) {
+                  val req = xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+                    title = title,
+                    tmdbId = tmdbId,
+                    isMovie = false,
+                    seasonNumber = nextEpisodeToPlay.season,
+                    episodeNumber = nextEpisodeToPlay.episode,
+                    episodeTitle = nextEpisodeToPlay.title,
+                    posterUrl = nextEpisodeToPlay.stillPath?.takeIf { it.isNotBlank() } ?: posterPath,
+                    dataUrl = nextEpisodeToPlay.videoFilePath
+                  )
+                  if (onRequestDownload != null) {
+                    onRequestDownload(req)
+                  } else if (onRequestStream != null) {
+                    onRequestStream(req)
+                  }
+                }
+              },
+              modifier = Modifier.height(50.dp),
+              shape = RoundedCornerShape(16.dp),
+            ) {
+              Icon(imageVector = Icons.Default.Download, contentDescription = "Download")
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Download", fontWeight = FontWeight.SemiBold)
             }
 
             var isScrapingTv by remember { mutableStateOf(false) }
@@ -2155,6 +2297,33 @@ private fun CineDetailBottomSheet(
                           modifier = Modifier.padding(top = 2.dp)
                         )
                       }
+                    }
+
+                    IconButton(
+                      onClick = {
+                        val req = xyz.mpv.rex.cinehub.stream.CloudStreamRequest(
+                          title = title,
+                          tmdbId = tmdbId,
+                          isMovie = false,
+                          seasonNumber = ep.season,
+                          episodeNumber = ep.episode,
+                          episodeTitle = ep.title,
+                          posterUrl = ep.stillPath?.takeIf { it.isNotBlank() } ?: posterPath,
+                          dataUrl = ep.videoFilePath
+                        )
+                        if (onRequestDownload != null) {
+                          onRequestDownload(req)
+                        } else if (onRequestStream != null) {
+                          onRequestStream(req)
+                        }
+                      }
+                    ) {
+                      Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download Episode",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                      )
                     }
                   }
                 }
