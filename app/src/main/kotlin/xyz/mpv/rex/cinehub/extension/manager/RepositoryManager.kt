@@ -1,5 +1,7 @@
 package xyz.mpv.rex.cinehub.extension.manager
 
+import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -9,234 +11,179 @@ import org.json.JSONArray
 import org.json.JSONObject
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.ExtensionRepo
-import xyz.mpv.rex.cinehub.extension.model.RepositorySyncResult
 import xyz.mpv.rex.database.MpvExDatabase
-import java.util.concurrent.ConcurrentHashMap
+import java.io.File
 
-/**
- * RepositoryManager manages remote extension repositories,
- * manifest synchronization, and plugin catalog discovery.
- */
 class RepositoryManager(
-    private val client: OkHttpClient,
-    private val db: MpvExDatabase
+    private val context: Context,
+    private val db: MpvExDatabase,
+    private val client: OkHttpClient
 ) {
-    private val pluginCache = ConcurrentHashMap<String, List<AvailablePlugin>>()
-
     companion object {
+        private const val TAG = "CineHub:RepoManager"
         val POPULAR_PRESETS = listOf(
-            ExtensionRepo(
-                url = "https://raw.githubusercontent.com/recloudstream/extensions/builds/repo.json",
-                name = "CloudStream English Repository",
-                description = "Official community repository with popular english provider extensions."
-            ),
-            ExtensionRepo(
-                url = "https://raw.githubusercontent.com/recloudstream/multilingual-providers/builds/repo.json",
-                name = "CloudStream Multilingual Repository",
-                description = "Multilingual provider plugins covering global regions and languages."
-            ),
-            ExtensionRepo(
-                url = "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json",
-                name = "Hexated Community Providers",
-                description = "High quality multimedia sources and extractors."
-            )
+            PresetRepo("English Providers", "https://raw.githubusercontent.com/recloudstream/cloudstream-extensions/builds/repo.json", "Official English"),
+            PresetRepo("Hexated Providers", "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json", "Hexated Plugins")
         )
     }
 
+    private val cacheFile = File(context.cacheDir, "plugin_cache.json")
+    
     fun getAllRepositories(): Flow<List<ExtensionRepo>> {
         return db.extensionDao().getAllRepositories()
     }
-
-    suspend fun addRepository(url: String, name: String? = null, description: String? = null): Boolean = withContext(Dispatchers.IO) {
-        val cleanUrl = url.trim()
-        if (cleanUrl.isBlank()) return@withContext false
-
-        val initialName = name?.ifBlank { null } ?: "Repository (${cleanUrl.takeLast(24)})"
-        val repo = ExtensionRepo(
-            url = cleanUrl,
-            name = initialName,
-            description = description,
-            lastSync = System.currentTimeMillis()
-        )
-        db.extensionDao().insertRepository(repo)
-        syncRepository(cleanUrl)
-        true
+    
+    suspend fun addRepository(url: String, name: String) = withContext(Dispatchers.IO) {
+        db.extensionDao().insertRepository(ExtensionRepo(url = url, name = name))
+        syncRepository(url)
     }
-
-    suspend fun removeRepository(repo: ExtensionRepo) = withContext(Dispatchers.IO) {
-        db.extensionDao().deleteRepository(repo)
-        pluginCache.remove(repo.url)
-    }
-
-    suspend fun syncAllRepositories(): List<RepositorySyncResult> = withContext(Dispatchers.IO) {
-        val repos = mutableListOf<ExtensionRepo>()
-        val resultList = mutableListOf<RepositorySyncResult>()
-        // Collect current list
-        val currentRepos = db.extensionDao().getAllRepositories()
-        // Synchronous snapshot
-        val enabledExts = db.extensionDao().getEnabledExtensionsSync()
-        // Iterate through DB repositories
-        val allRepos = db.openHelper.readableDatabase.query("SELECT url, name, description, lastSync FROM extension_repositories")
-        try {
-            while (allRepos.moveToNext()) {
-                val url = allRepos.getString(0)
-                val name = allRepos.getString(1)
-                val desc = allRepos.getString(2)
-                val sync = allRepos.getLong(3)
-                repos.add(ExtensionRepo(url, name, desc, sync))
-            }
-        } finally {
-            allRepos.close()
+    
+    suspend fun removeRepository(url: String) = withContext(Dispatchers.IO) {
+        val repo = db.extensionDao().getAllRepositoriesSync().find { it.url == url }
+        if (repo != null) {
+            db.extensionDao().deleteRepository(repo)
         }
+    }
+    
+    suspend fun validateRepository(url: String): Result<Pair<String, Int>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP error ${response.code}"))
+                }
+                val body = response.body?.string() ?: return@withContext Result.failure(Exception("Empty response body"))
+                val plugins = parseRepositoryBody(body, url)
+                if (plugins.isEmpty()) {
+                    return@withContext Result.failure(Exception("No valid plugins found in repository"))
+                }
+                val repoName = runCatching {
+                    if (body.trimStart().startsWith("{")) {
+                        JSONObject(body).optString("name", "Repository")
+                    } else "Repository"
+                }.getOrDefault("Repository")
+                Result.success(Pair(repoName, plugins.size))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
+    suspend fun syncRepository(url: String) = withContext(Dispatchers.IO) {
+        syncAllRepositories()
+    }
+    
+    suspend fun syncAllRepositories() = withContext(Dispatchers.IO) {
+        val repos = db.extensionDao().getAllRepositoriesSync()
+        val allPlugins = mutableListOf<AvailablePlugin>()
+        
         for (repo in repos) {
-            resultList.add(syncRepository(repo.url))
+            try {
+                val request = Request.Builder().url(repo.url).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: return@use
+                        allPlugins.addAll(parseRepositoryBody(body, repo.url))
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to sync repo ${repo.name}", e)
+            }
         }
-        resultList
+        
+        saveCache(allPlugins)
     }
 
-    suspend fun syncRepository(repoUrl: String): RepositorySyncResult = withContext(Dispatchers.IO) {
+    private fun parseRepositoryBody(body: String, repoUrl: String): List<AvailablePlugin> {
+        val list = mutableListOf<AvailablePlugin>()
+        val trimmed = body.trim()
         try {
-            val request = Request.Builder()
-                .url(repoUrl)
-                .addHeader("User-Agent", "Mozilla/5.0 (CineHub-Extension-Engine/1.0)")
-                .build()
-
-            val body = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("HTTP ${response.code}: ${response.message}")
-                response.body?.string() ?: throw Exception("Empty repository response")
+            val array = if (trimmed.startsWith("[")) {
+                JSONArray(trimmed)
+            } else if (trimmed.startsWith("{")) {
+                val obj = JSONObject(trimmed)
+                when {
+                    obj.has("plugins") -> obj.getJSONArray("plugins")
+                    obj.has("pluginLists") -> obj.getJSONArray("pluginLists")
+                    else -> JSONArray()
+                }
+            } else {
+                JSONArray()
             }
 
-            val parsedPlugins = mutableListOf<AvailablePlugin>()
-            var repoTitle = "Repository"
-            var repoDesc: String? = null
-
-            val trimmed = body.trim()
-            if (trimmed.startsWith("{")) {
-                val json = JSONObject(trimmed)
-                repoTitle = json.optString("name", repoTitle)
-                repoDesc = json.optString("description", null)
-
-                if (json.has("pluginLists")) {
-                    // CloudStream repo.json format
-                    val lists = json.optJSONArray("pluginLists")
-                    if (lists != null) {
-                        for (i in 0 until lists.length()) {
-                            val listUrl = lists.getString(i)
-                            try {
-                                val plugins = fetchPluginsList(listUrl, repoUrl)
-                                parsedPlugins.addAll(plugins)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
-                    }
-                } else if (json.has("providers")) {
-                    // Direct providers format
-                    val providers = json.optJSONArray("providers")
-                    if (providers != null) {
-                        for (i in 0 until providers.length()) {
-                            val p = providers.getJSONObject(i)
-                            parsedPlugins.add(parsePluginJson(p, repoUrl))
-                        }
-                    }
-                }
-            } else if (trimmed.startsWith("[")) {
-                // Direct plugins.json format
-                val array = JSONArray(trimmed)
-                for (i in 0 until array.length()) {
-                    val p = array.getJSONObject(i)
-                    parsedPlugins.add(parsePluginJson(p, repoUrl))
-                }
-            }
-
-            // Update database record with parsed name & timestamp
-            db.extensionDao().insertRepository(
-                ExtensionRepo(
-                    url = repoUrl,
-                    name = repoTitle,
-                    description = repoDesc,
-                    lastSync = System.currentTimeMillis()
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val plugin = AvailablePlugin(
+                    internalName = item.optString("internalName"),
+                    name = item.optString("name"),
+                    version = item.optString("version"),
+                    versionCode = item.optInt("versionCode", 1),
+                    description = item.optString("description"),
+                    iconUrl = item.optString("iconUrl"),
+                    authors = item.optJSONArray("authors")?.let { arr ->
+                        List(arr.length()) { arr.optString(it) }
+                    } ?: emptyList(),
+                    url = item.optString("url"),
+                    repositoryUrl = repoUrl
                 )
-            )
-
-            pluginCache[repoUrl] = parsedPlugins
-            RepositorySyncResult(repoUrl, repoTitle, parsedPlugins)
+                if (plugin.internalName.isNotBlank() && plugin.name.isNotBlank()) {
+                    list.add(plugin)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error parsing repo json: ${e.message}")
+        }
+        return list
+    }
+    
+    private fun saveCache(plugins: List<AvailablePlugin>) {
+        val array = JSONArray()
+        plugins.forEach { p ->
+            val obj = JSONObject()
+            obj.put("internalName", p.internalName)
+            obj.put("name", p.name)
+            obj.put("version", p.version)
+            obj.put("versionCode", p.versionCode)
+            obj.put("description", p.description)
+            obj.put("iconUrl", p.iconUrl)
+            obj.put("url", p.url)
+            obj.put("repositoryUrl", p.repositoryUrl)
+            array.put(obj)
+        }
+        cacheFile.writeText(array.toString())
+    }
+    
+    fun getCachedPlugins(): List<AvailablePlugin> {
+        if (!cacheFile.exists()) return emptyList()
+        val list = mutableListOf<AvailablePlugin>()
+        try {
+            val array = JSONArray(cacheFile.readText())
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    AvailablePlugin(
+                        internalName = obj.optString("internalName"),
+                        name = obj.optString("name"),
+                        version = obj.optString("version"),
+                        versionCode = obj.optInt("versionCode", 1),
+                        description = obj.optString("description"),
+                        iconUrl = obj.optString("iconUrl"),
+                        authors = emptyList(),
+                        url = obj.optString("url"),
+                        repositoryUrl = obj.optString("repositoryUrl")
+                    )
+                )
+            }
         } catch (e: Exception) {
             e.printStackTrace()
-            RepositorySyncResult(repoUrl, "Failed Sync", emptyList(), e.localizedMessage)
         }
+        return list
     }
-
-    private fun fetchPluginsList(listUrl: String, repoUrl: String): List<AvailablePlugin> {
-        val req = Request.Builder()
-            .url(listUrl)
-            .addHeader("User-Agent", "Mozilla/5.0 (CineHub-Extension-Engine/1.0)")
-            .build()
-        val listBody = client.newCall(req).execute().use { it.body?.string() ?: "" }
-        if (listBody.isBlank()) return emptyList()
-
-        val results = mutableListOf<AvailablePlugin>()
-        val array = JSONArray(listBody)
-        for (i in 0 until array.length()) {
-            val obj = array.getJSONObject(i)
-            results.add(parsePluginJson(obj, repoUrl))
-        }
-        return results
-    }
-
-    private fun parsePluginJson(obj: JSONObject, repoUrl: String): AvailablePlugin {
-        val name = obj.optString("name", "Unknown Plugin")
-        val internalName = obj.optString("internalName", obj.optString("id", name.lowercase().replace(" ", "_")))
-        val version = obj.optString("version", "1.0.0")
-        val versionCode = obj.optInt("versionCode", 1)
-        val description = obj.optString("description", null)
-        val url = obj.optString("url", "")
-        val tvUrl = obj.optString("tvUrl", null)
-        val iconUrl = obj.optString("iconUrl", obj.optString("icon", null))
-
-        val authors = mutableListOf<String>()
-        val authorsArr = obj.optJSONArray("authors")
-        if (authorsArr != null) {
-            for (j in 0 until authorsArr.length()) {
-                authors.add(authorsArr.getString(j))
-            }
-        } else if (obj.has("author")) {
-            authors.add(obj.optString("author"))
-        }
-
-        val tvTypes = mutableListOf<String>()
-        val typesArr = obj.optJSONArray("tvTypes")
-        if (typesArr != null) {
-            for (j in 0 until typesArr.length()) {
-                tvTypes.add(typesArr.getString(j))
-            }
-        }
-
-        return AvailablePlugin(
-            name = name,
-            internalName = internalName,
-            version = version,
-            versionCode = versionCode,
-            description = description,
-            url = url,
-            tvUrl = tvUrl,
-            iconUrl = iconUrl,
-            authors = authors,
-            tvTypes = tvTypes,
-            repositoryUrl = repoUrl
-        )
-    }
-
-    fun getCachedPlugins(): List<AvailablePlugin> {
-        return pluginCache.values.flatten()
-    }
-
-    fun getCachedPluginsForRepo(repoUrl: String): List<AvailablePlugin> {
-        return pluginCache[repoUrl] ?: emptyList()
-    }
-
+    
     fun clearCache() {
-        pluginCache.clear()
+        if (cacheFile.exists()) {
+            cacheFile.delete()
+        }
     }
 }
+data class PresetRepo(val name: String, val url: String, val description: String?)

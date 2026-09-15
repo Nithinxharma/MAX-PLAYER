@@ -620,8 +620,15 @@ class MediaPlaybackService :
     when (property) {
       "media-title" -> {
         if (value.isNotBlank()) {
-          mediaTitle = value
-          updateMediaSession()
+          val isValueUrl = value.startsWith("http://", ignoreCase = true) || 
+              value.startsWith("https://", ignoreCase = true) || 
+              value.endsWith(".m3u8", ignoreCase = true) ||
+              value.contains(".m3u8?", ignoreCase = true)
+          // Only overwrite if the new value is a real title, or if our current title is blank or a URL
+          if (!isValueUrl || mediaTitle.isBlank() || mediaTitle.startsWith("http")) {
+            mediaTitle = value
+            updateMediaSession()
+          }
         }
       }
       "metadata/artist" -> {

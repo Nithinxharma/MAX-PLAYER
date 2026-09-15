@@ -531,8 +531,23 @@ class PlayerIntentHandler(
       val fastDurationSec = if (fastDurationMs > 0L) fastDurationMs / 1000f else null
       activity.viewModel.prepareForFileLoad(fastDurationSec)
 
+      val isCineHubLaunch = intent.getStringExtra("launch_source") == "cinehub"
+      val isLocal = uriStr.startsWith("/") || uriStr.startsWith("content://") || uriStr.startsWith("file://")
       if (parsedUri != null && activity.isUriM3U(parsedUri)) {
         activity.loadM3uPlaylistOrPlayDirectly(uriStr)
+      } else if (isLocal || isCineHubLaunch || !xyz.mpv.rex.utils.media.HttpUtils.isNetworkStream(parsedUri)) {
+        activity.enableVideoAfterBackground()
+        runCatching {
+          activity.safeSetPropertyString("vid", "auto")
+          MPVLib.setPropertyBoolean("pause", false)
+        }
+        if (activity.mpvInitialized && activity.player.holder.surface.isValid) {
+          activity.lifecycleScope.launch(Dispatchers.Default) {
+            MPVLib.command("loadfile", uriStr)
+          }
+        } else {
+          activity.player.playFile(uriStr)
+        }
       } else {
         activity.loadMediaOrResolveWebStream(uriStr)
       }

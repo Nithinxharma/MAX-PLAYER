@@ -745,8 +745,14 @@ class PlayerActivity :
         enableVideoAfterBackground()
         miniPlayerStateManager.clearState()
       }
+      val isCineHubLaunch = intent.getStringExtra("launch_source") == "cinehub"
+      val isLocal = playableUri.startsWith("/") || playableUri.startsWith("content://") || playableUri.startsWith("file://")
       if (isUriM3U(playableUri)) {
         loadM3uPlaylistOrPlayDirectly(playableUri)
+      } else if (isLocal || isCineHubLaunch || !HttpUtils.isNetworkStream(runCatching { Uri.parse(playableUri) }.getOrNull())) {
+        enableVideoAfterBackground()
+        runCatching { safeSetPropertyString("vid", "auto") }
+        player.playFile(playableUri)
       } else {
         loadMediaOrResolveWebStream(playableUri)
       }
@@ -839,8 +845,9 @@ class PlayerActivity :
     } else {
       intentHandler.setHttpHeadersFromExtras(intent.extras)
     }
-    if (!playerPreferences.autoplayOnOpen.get() || playerPreferences.savePositionOnQuit.get() || playerPreferences.resumePlaybackMode.get() != ResumePlaybackMode.Never) {
-      runCatching { MPVLib.setPropertyBoolean("pause", true) }
+    enableVideoAfterBackground()
+    runCatching {
+      safeSetPropertyString("vid", "auto")
     }
     if (mpvInitialized && player.holder.surface.isValid) {
       lifecycleScope.launch(Dispatchers.Default) {
@@ -2000,10 +2007,11 @@ class PlayerActivity :
     applySubtitlePreferences()
 
     // Don't force media-title for standalone m3u/m3u8 streams - let MPV provide it
-    // But if we are playing from an M3U playlist with custom titles, we MUST set it
+    // But if we are playing with a descriptive title (Movie/Show/Channel/YouTube), we MUST set it
     val isM3uPlaylist = viewModel.playlistManager.isM3uPlaylist
     val hasCustomTitle = !viewModel.playlistManager.getTitleAt(viewModel.playlistManager.currentIndex.value).isNullOrBlank()
-    if (!isCurrentStreamM3U() || isM3uPlaylist || hasCustomTitle) {
+    val hasExplicitTitle = !fileName.isNullOrBlank() && !fileName.startsWith("http://") && !fileName.startsWith("https://") && !fileName.endsWith(".m3u8")
+    if (!isCurrentStreamM3U() || isM3uPlaylist || hasCustomTitle || hasExplicitTitle) {
       safeSetPropertyString("force-media-title", fileName)
       viewModel.setMediaTitle(fileName)
     } else {

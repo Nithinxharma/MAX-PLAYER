@@ -30,8 +30,14 @@ val domainModule = module {
     single { xyz.mpv.rex.jellyfin.remote.JellyfinRemoteClient(get(), get(), get(), androidContext()) }
     single { xyz.mpv.rex.domain.ytdl.YtDlClient(androidContext(), get()) }
     single { xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry() }
-    single { xyz.mpv.rex.cinehub.extension.manager.RepositoryManager(get(), get()) }
-    single { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.extension.manager.RepositoryManager(androidContext(), get(), get()) }
+    single(createdAtStart = true) { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.extension.manager.PluginManager(androidContext(), get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.stream.CloudStreamHomeManager(get()) }
+    single { xyz.mpv.rex.cinehub.stream.CloudStreamSearchManager(get()) }
+    single { xyz.mpv.rex.cinehub.stream.CloudStreamDownloadManager(androidContext(), get()) }
+    single { xyz.mpv.rex.cinehub.tracking.CloudStreamTrackingManager(androidContext(), get()) }
+    single { xyz.mpv.rex.cinehub.search.UnifiedSearchManager(androidContext(), get(), get(), get()) }
 }
 
 
