@@ -21,7 +21,6 @@ class ProviderRegistry {
     val registeredProviders: StateFlow<List<CineHubProvider>> = _registeredProviders.asStateFlow()
 
     fun register(provider: CineHubProvider, isEnabledByDefault: Boolean = true) {
-        android.util.Log.i("ProviderRegistry", "[PROVIDER] Registered: ${provider.name} (id=${provider.id})")
         allProviders[provider.id] = provider
         if (isEnabledByDefault) {
             enabledProviderIds.add(provider.id)

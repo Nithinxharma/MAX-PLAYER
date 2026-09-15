@@ -2,6 +2,7 @@ package xyz.mpv.rex.cinetv.model
 
 enum class LiveTab(val label: String) {
     CHANNELS("Live Channels"),
+    JIO_LOGIN("Jio Authentication")
 }
 
 data class ChannelVariant(

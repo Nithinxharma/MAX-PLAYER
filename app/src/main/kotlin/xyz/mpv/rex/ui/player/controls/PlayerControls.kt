@@ -436,9 +436,7 @@ fun PlayerControls(
               if (raw != null && raw.isNotBlank() && !raw.startsWith("http://") && !raw.startsWith("https://") && !raw.contains(".m3u8") && !raw.contains(".m3u")) {
                 raw
               } else {
-                val intentTitle = activity.intent.getStringExtra("title")?.takeIf { !it.startsWith("http") && !it.contains(".m3u8") }
-                  ?: activity.intent.getStringExtra("filename")?.takeIf { !it.startsWith("http") && !it.contains(".m3u8") }
-                intentTitle ?: title
+                title
               }
             } else {
               title
