@@ -58,7 +58,11 @@ class ExtensionManager(
         Log.i(TAG, "Loading ${allExts.size} installed extension providers from database")
         for (ext in allExts) {
             try {
-                val provider = DeclarativeCineHubProvider(ext, client)
+                val provider = if (ext.name.lowercase().contains("archive")) {
+                    xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(ext, client)
+                } else {
+                    xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider(ext, client)
+                }
                 registry.register(provider, isEnabledByDefault = ext.isEnabled)
                 Log.d(TAG, "Registered provider: ${provider.name} (id=${provider.id}, enabled=${ext.isEnabled})")
             } catch (e: Exception) {
@@ -83,7 +87,11 @@ class ExtensionManager(
             )
             db.extensionDao().insertExtension(installed)
 
-            val provider = DeclarativeCineHubProvider(installed, client)
+            val provider = if (installed.name.lowercase().contains("archive")) {
+                xyz.mpv.rex.cinehub.extension.providers.ArchiveOrgProvider(installed, client)
+            } else {
+                xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider(installed, client)
+            }
             registry.register(provider, isEnabledByDefault = true)
             true
         } catch (e: Exception) {

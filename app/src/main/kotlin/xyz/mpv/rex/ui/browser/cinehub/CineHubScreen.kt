@@ -369,21 +369,15 @@ object CineHubScreen : Screen {
                     isSearchActive = true
                     isSearchingOnline = true
                     scope.launch(Dispatchers.IO) {
-                      val tmdbDeferred = async {
-                        runCatching {
-                          CineOnlineScraper.executeManualMovieSearch(query)
-                        }.getOrDefault(emptyList())
-                      }
                       val activeProviders = providerRegistry.getEnabledProviders()
                       val extDeferreds = activeProviders.map { provider ->
                         async {
                           runCatching { provider.search(query) }.getOrDefault(emptyList())
                         }
                       }
-                      val res = tmdbDeferred.await()
                       val extRes = extDeferreds.awaitAll().flatten()
                       withContext(Dispatchers.Main) {
-                        searchResults = res
+                        searchResults = emptyList() // Clear TMDB results entirely
                         extensionSearchResults = extRes
                         isSearchingOnline = false
                       }

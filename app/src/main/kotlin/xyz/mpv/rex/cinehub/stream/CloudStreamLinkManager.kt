@@ -114,8 +114,10 @@ object CloudStreamLinkManager {
                 async {
                     try {
                         val queryData = request.dataUrl
-                            ?: if (request.isMovie) request.tmdbId.ifBlank { request.title }
-                            else "${request.tmdbId.ifBlank { request.title }}:${request.seasonNumber ?: 1}:${request.episodeNumber ?: 1}"
+                        if (queryData.isNullOrBlank()) {
+                            Log.e(TAG, "[PROVIDER QUERY] Error: Empty dataUrl. Provider '${targetProvider.name}' cannot resolve streams without a provider-issued dataUrl.")
+                            return@async Pair(emptyList<CineHubStreamLink>(), emptyList<CineHubSubtitleTrack>())
+                        }
 
                         Log.d(TAG, "[PROVIDER QUERY] Sending '$queryData' to provider '${targetProvider.name}'")
                         val streams = targetProvider.loadStreams(queryData)
