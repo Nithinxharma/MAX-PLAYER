@@ -101,14 +101,7 @@ class InvidiousFailoverClient(
 
                 if (response.isSuccessful) {
                     val body = response.body?.string()
-                    val trimmed = body?.trimStart() ?: ""
-                    val isJson = trimmed.startsWith("[") || trimmed.startsWith("{")
-                    val isBlocked = trimmed.contains("Endpoint disabled") ||
-                            trimmed.contains("<html", ignoreCase = true) ||
-                            trimmed.contains("<!doctype", ignoreCase = true) ||
-                            trimmed.contains("Auth with CAPTCHA", ignoreCase = true)
-
-                    if (isJson && !isBlocked) {
+                    if (!body.isNullOrBlank()) {
                         // Success! Save this working instance as primary for subsequent calls
                         if (activeBaseUrl != baseUrl) {
                             activeBaseUrl = baseUrl
@@ -116,8 +109,6 @@ class InvidiousFailoverClient(
                         }
                         Log.d(TAG, "Success on instance $baseUrl")
                         return@withContext body
-                    } else {
-                        Log.w(TAG, "Instance $baseUrl returned HTML/blocked response. Switching to next instance...")
                     }
                 } else {
                     Log.w(TAG, "Instance $baseUrl returned unexpected HTTP ${response.code}. Switching...")

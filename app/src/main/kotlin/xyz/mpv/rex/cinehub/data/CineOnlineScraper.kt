@@ -352,52 +352,6 @@ object CineOnlineScraper {
         return@withContext emptyList()
     }
 
-    suspend fun executeDiscoverMovies(
-        language: String? = null,
-        genre: Int? = null,
-        sortBy: String = "popularity.desc",
-        context: Context? = null
-    ): List<TMDBMovieNode> = withContext(Dispatchers.IO) {
-        try {
-            val key = getEffectiveApiKey(context)
-            var url = "$TMDB_BASE_URL/discover/movie?api_key=$key&language=en-US&sort_by=$sortBy&include_adult=false"
-            if (!language.isNullOrBlank()) url += "&with_original_language=$language"
-            if (genre != null && genre > 0) url += "&with_genres=$genre"
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: return@use emptyList<TMDBMovieNode>()
-                    val parsed = jsonParser.decodeFromString<TMDBMovieSearchWrapper>(body)
-                    return@withContext parsed.results
-                }
-            }
-        } catch (e: Exception) {}
-        return@withContext emptyList()
-    }
-
-    suspend fun executeDiscoverTv(
-        language: String? = null,
-        genre: Int? = null,
-        sortBy: String = "popularity.desc",
-        context: Context? = null
-    ): List<TMDBTvNode> = withContext(Dispatchers.IO) {
-        try {
-            val key = getEffectiveApiKey(context)
-            var url = "$TMDB_BASE_URL/discover/tv?api_key=$key&language=en-US&sort_by=$sortBy&include_adult=false"
-            if (!language.isNullOrBlank()) url += "&with_original_language=$language"
-            if (genre != null && genre > 0) url += "&with_genres=$genre"
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: return@use emptyList<TMDBTvNode>()
-                    val parsed = jsonParser.decodeFromString<TMDBTvSearchWrapper>(body)
-                    return@withContext parsed.results
-                }
-            }
-        } catch (e: Exception) {}
-        return@withContext emptyList()
-    }
-
     fun searchOnlineMovieMetadata(fileName: String): OnlineMediaMetadata? {
         return runBlocking {
             val movie = getOrFetchMovie(null, fileName, null, false)

@@ -484,7 +484,6 @@ object MediaUtils : KoinComponent {
     posterUrl: String? = null,
     sourceType: String? = null,
   ) {
-    android.util.Log.i("PlayerHandoff", "[PLAYER] Handing off to MPV Player. Primary stream: ${primaryCandidate.url}, Headers: ${primaryCandidate.headers}, Backup streams: ${backupCandidates.size}")
     val uri = runCatching { Uri.parse(primaryCandidate.url) }.getOrNull() ?: Uri.parse("file://${primaryCandidate.url}")
     val intent = Intent(Intent.ACTION_VIEW, uri).apply {
       setClass(context, PlayerActivity::class.java)
@@ -504,20 +503,6 @@ object MediaUtils : KoinComponent {
       if (flatHeaders.isNotEmpty()) {
         putExtra("headers", flatHeaders)
       }
-
-      // Subtitles discovered from extractors/providers
-      if (primaryCandidate.subtitles.isNotEmpty()) {
-        val subUris = primaryCandidate.subtitles.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
-        if (subUris.isNotEmpty()) {
-          putParcelableArrayListExtra("subs", ArrayList(subUris))
-          android.util.Log.d("CineHub:PlayerHandoff", "Attached ${subUris.size} subtitle tracks to player intent")
-        }
-      }
-
-      android.util.Log.i(
-        "CineHub:PlayerHandoff",
-        "Launching player for: $title, url=${primaryCandidate.url}, quality=${primaryCandidate.quality}, headers=${primaryCandidate.headers.keys}"
-      )
 
       // Backup candidates
       if (backupCandidates.isNotEmpty()) {

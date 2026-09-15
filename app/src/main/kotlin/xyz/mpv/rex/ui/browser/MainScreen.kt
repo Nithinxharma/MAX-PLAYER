@@ -59,7 +59,7 @@ import xyz.mpv.rex.ui.browser.folderlist.FolderListScreen
 import xyz.mpv.rex.ui.browser.networkstreaming.NetworkStreamingScreen
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
 import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
-import xyz.mpv.rex.ui.browser.shorts.OnlineShortsGridScreen
+import xyz.mpv.rex.ui.browser.shorts.ShortsScreen
 import xyz.mpv.rex.ui.browser.selection.SelectionManager
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayer
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerDefaults
@@ -202,7 +202,7 @@ object MainScreen : Screen {
         if (isShortsEnabled) {
           add(
             VisibleTab("shorts", shortsLabel, Icons.Outlined.VideoLibrary) {
-              OnlineShortsGridScreen.Content()
+              ShortsScreen().Content()
             }
           )
         }

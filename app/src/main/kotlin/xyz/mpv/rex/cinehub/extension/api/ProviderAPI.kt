@@ -1,17 +1,93 @@
 package xyz.mpv.rex.cinehub.extension.api
 
-import com.lagradost.cloudstream3.AnimeLoadResponse
-import com.lagradost.cloudstream3.HomePageList
-import com.lagradost.cloudstream3.HomePageResponse
-import com.lagradost.cloudstream3.LiveStreamLoadResponse
-import com.lagradost.cloudstream3.LoadResponse
-import com.lagradost.cloudstream3.MainAPI
-import com.lagradost.cloudstream3.MainPageRequest
-import com.lagradost.cloudstream3.MovieLoadResponse
-import com.lagradost.cloudstream3.SearchResponse
-import com.lagradost.cloudstream3.TvSeriesLoadResponse
-import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.utils.ExtractorLink
+/**
+ * The base provider interface that all extensions must implement.
+ * This mimics the structure used by CloudStream.
+ */
+interface MainAPI {
+    val name: String
+    val mainUrl: String
+    val supportedTypes: Set<TvType>
+    val lang: String
+    val hasMainPage: Boolean
+
+    suspend fun search(query: String): List<SearchResponse>
+    suspend fun loadMainPage(page: Int, name: String): HomePageResponse?
+    suspend fun load(url: String): LoadResponse?
+    suspend fun loadLinks(data: String, isCasting: Boolean, callback: (ExtractorLink) -> Unit): Boolean
+}
+
+enum class TvType {
+    Movie, TvSeries, Anime, LiveTv, Others
+}
+
+open class SearchResponse(
+    val name: String,
+    val url: String,
+    val apiName: String,
+    val type: TvType,
+    val posterUrl: String? = null,
+    val id: Int? = null
+)
+
+class HomePageResponse(
+    val items: List<HomePageList>
+)
+
+class HomePageList(
+    val name: String,
+    val list: List<SearchResponse>
+)
+
+abstract class LoadResponse(
+    val name: String,
+    val url: String,
+    val apiName: String,
+    val type: TvType,
+    val posterUrl: String?,
+    val year: Int?,
+    val plot: String?
+)
+
+class MovieLoadResponse(
+    name: String,
+    url: String,
+    apiName: String,
+    type: TvType,
+    val dataUrl: String,
+    posterUrl: String? = null,
+    year: Int? = null,
+    plot: String? = null
+) : LoadResponse(name, url, apiName, type, posterUrl, year, plot)
+
+class TvSeriesLoadResponse(
+    name: String,
+    url: String,
+    apiName: String,
+    type: TvType,
+    val episodes: List<Episode>,
+    posterUrl: String? = null,
+    year: Int? = null,
+    plot: String? = null
+) : LoadResponse(name, url, apiName, type, posterUrl, year, plot)
+
+class Episode(
+    val data: String,
+    val name: String? = null,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val posterUrl: String? = null
+)
+
+class ExtractorLink(
+    val source: String,
+    val name: String,
+    val url: String,
+    val referer: String,
+    val quality: Int,
+    val isM3u8: Boolean = false,
+    val headers: Map<String, String> = emptyMap()
+)
 
 /**
  * CineHub native provider interface offering unified abstraction
@@ -104,133 +180,53 @@ class MainApiProviderAdapter(private val api: MainAPI) : CineHubProvider {
     override val hasMainPage: Boolean = api.hasMainPage
 
     override suspend fun search(query: String): List<CineHubSearchItem> {
-        return try {
-            api.search(query)?.map { item ->
-                CineHubSearchItem(
-                    id = item.url,
-                    title = item.name,
-                    url = item.url,
-                    providerId = id,
-                    providerName = api.name,
-                    posterUrl = item.posterUrl,
-                    type = item.type ?: TvType.Movie
-                )
-            } ?: emptyList()
-        } catch (e: Exception) {
-            emptyList()
+        return api.search(query).map { item ->
+            CineHubSearchItem(
+                id = item.url,
+                title = item.name,
+                url = item.url,
+                providerId = id,
+                providerName = api.name,
+                posterUrl = item.posterUrl,
+                type = item.type
+            )
         }
     }
 
     override suspend fun getHomePage(): List<CineHubHomePageList> {
-        if (!api.hasMainPage) return emptyList()
-        val lists = mutableListOf<CineHubHomePageList>()
-        try {
-            val mainPages = api.mainPage
-            for (pageData in mainPages) {
-                try {
-                    val req = MainPageRequest(
-                        name = pageData.name,
-                        data = pageData.data,
-                        horizontalImages = pageData.horizontalImages
+        val page = api.loadMainPage(1, "") ?: return emptyList()
+        return page.items.map { group ->
+            CineHubHomePageList(
+                title = group.name,
+                items = group.list.map { item ->
+                    CineHubSearchItem(
+                        id = item.url,
+                        title = item.name,
+                        url = item.url,
+                        providerId = id,
+                        providerName = api.name,
+                        posterUrl = item.posterUrl,
+                        type = item.type
                     )
-                    val resp = api.getMainPage(1, req)
-                    resp?.items?.forEach { hpList ->
-                        val searchItems = hpList.list.map { sr ->
-                            CineHubSearchItem(
-                                id = sr.url,
-                                title = sr.name,
-                                url = sr.url,
-                                providerId = id,
-                                providerName = api.name,
-                                posterUrl = sr.posterUrl,
-                                type = sr.type ?: TvType.Movie
-                            )
-                        }
-                        if (searchItems.isNotEmpty()) {
-                            lists.add(CineHubHomePageList(title = hpList.name, items = searchItems))
-                        }
-                    }
-                } catch (_: Exception) {
-                    // Skip failing individual section
                 }
-            }
-        } catch (_: Exception) {
+            )
         }
-        return lists
     }
 
     override suspend fun loadDetails(url: String): CineHubMediaDetails? {
-        val res = try {
-            api.load(url)
-        } catch (e: Exception) {
-            null
-        } ?: return null
-
-        val episodes = when (res) {
-            is TvSeriesLoadResponse -> {
-                res.episodes.mapIndexed { index, ep ->
-                    CineHubEpisode(
-                        id = "$url#ep_$index",
-                        name = ep.name ?: "Episode ${ep.episode ?: (index + 1)}",
-                        season = ep.season ?: 1,
-                        episode = ep.episode ?: (index + 1),
-                        data = ep.data,
-                        posterUrl = ep.posterUrl,
-                        description = ep.description
-                    )
-                }
-            }
-            is AnimeLoadResponse -> {
-                val allEps = mutableListOf<CineHubEpisode>()
-                var counter = 1
-                res.episodes.forEach { (status, epList) ->
-                    epList.forEachIndexed { index, ep ->
-                        allEps.add(
-                            CineHubEpisode(
-                                id = "$url#anime_${status.name}_$index",
-                                name = ep.name ?: "Episode ${ep.episode ?: counter}",
-                                season = ep.season ?: 1,
-                                episode = ep.episode ?: counter,
-                                data = ep.data,
-                                posterUrl = ep.posterUrl ?: res.posterUrl,
-                                description = ep.description
-                            )
-                        )
-                        counter++
-                    }
-                }
-                allEps
-            }
-            is MovieLoadResponse -> {
-                listOf(
-                    CineHubEpisode(
-                        id = "$url#movie",
-                        name = res.name,
-                        season = 1,
-                        episode = 1,
-                        data = res.dataUrl
-                    )
+        val res = api.load(url) ?: return null
+        val episodes = if (res is TvSeriesLoadResponse) {
+            res.episodes.mapIndexed { index, ep ->
+                CineHubEpisode(
+                    id = "$url#ep_$index",
+                    name = ep.name ?: "Episode ${ep.episode ?: (index + 1)}",
+                    season = ep.season ?: 1,
+                    episode = ep.episode ?: (index + 1),
+                    data = ep.data,
+                    posterUrl = ep.posterUrl
                 )
             }
-            is LiveStreamLoadResponse -> {
-                listOf(
-                    CineHubEpisode(
-                        id = "$url#live",
-                        name = res.name,
-                        season = 1,
-                        episode = 1,
-                        data = res.dataUrl
-                    )
-                )
-            }
-            else -> emptyList()
-        }
-
-        val castNames = runCatching {
-            res.actors?.map { it.actor.name } ?: emptyList()
-        }.getOrDefault(emptyList())
-
-        val mediaRating = runCatching { res.score?.toDouble(1) }.getOrNull()
+        } else emptyList()
 
         return CineHubMediaDetails(
             id = res.url,
@@ -239,12 +235,8 @@ class MainApiProviderAdapter(private val api: MainAPI) : CineHubProvider {
             providerId = id,
             providerName = api.name,
             posterUrl = res.posterUrl,
-            backdropUrl = res.backgroundPosterUrl,
             overview = res.plot,
             year = res.year,
-            rating = mediaRating,
-            genres = res.tags ?: emptyList(),
-            cast = castNames,
             type = res.type,
             episodes = episodes
         )
@@ -257,37 +249,17 @@ class MainApiProviderAdapter(private val api: MainAPI) : CineHubProvider {
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> {
         val links = mutableListOf<CineHubStreamLink>()
-        try {
-            api.loadLinks(data, false, { _ -> 
-                // Subtitles handled in loadSubtitles
-            }, { extractor ->
-                links.add(
-                    CineHubStreamLink(
-                        name = extractor.name,
-                        url = extractor.url,
-                        quality = extractor.quality.toString(),
-                        isM3u8 = extractor.isM3u8,
-                        headers = extractor.headers ?: emptyMap()
-                    )
+        api.loadLinks(data, false) { extractor ->
+            links.add(
+                CineHubStreamLink(
+                    name = extractor.name,
+                    url = extractor.url,
+                    quality = "${extractor.quality}p",
+                    isM3u8 = extractor.isM3u8,
+                    headers = extractor.headers
                 )
-            })
-        } catch (e: Exception) {
-            // Ignore
+            )
         }
         return links
-    }
-
-    override suspend fun loadSubtitles(data: String): List<CineHubSubtitleTrack> {
-        val subs = mutableListOf<CineHubSubtitleTrack>()
-        try {
-            api.loadLinks(data, false, { subtitle ->
-                if (!subtitle.url.isNullOrBlank()) {
-                    subs.add(CineHubSubtitleTrack(language = subtitle.lang ?: "en", url = subtitle.url))
-                }
-            }, { _ -> })
-        } catch (e: Exception) {
-            // Ignore
-        }
-        return subs
     }
 }
