@@ -74,7 +74,6 @@ object MediaLibraryPreferencesScreen : Screen {
     
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
     val enableLocalTvShows by browserPreferences.enableLocalTvShows.collectAsState()
-    val enableOnlineCatalog by browserPreferences.enableOnlineCatalog.collectAsState()
     val enableMetadataScraping by browserPreferences.enableMetadataScraping.collectAsState()
     val enableArtworkDownloads by browserPreferences.enableArtworkDownloads.collectAsState()
     val enableAutoRefresh by browserPreferences.enableAutoRefresh.collectAsState()
@@ -161,13 +160,6 @@ object MediaLibraryPreferencesScreen : Screen {
                               value = enableLocalTvShows,
                               onValueChange = { browserPreferences.enableLocalTvShows.set(it) },
                               title = { Text(text = stringResource(R.string.pref_enable_local_tv_shows)) }
-                          )
-                      }
-                      GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {
-                          SwitchPreference(
-                              value = enableOnlineCatalog,
-                              onValueChange = { browserPreferences.enableOnlineCatalog.set(it) },
-                              title = { Text(text = stringResource(R.string.pref_enable_online_catalog)) }
                           )
                       }
                       GroupedPreferenceCard(position = GroupPosition.MIDDLE, highlightKey = null) {

@@ -31,11 +31,11 @@
     <string name="cinehub">CineHub</string>
     <string name="cinetv">CineTV</string>
     <string name="pref_appearance_tab_cinehub_title">CineHub</string>
-    <string name="pref_appearance_tab_cinehub_summary">Movies, TV shows catalog &amp; streaming</string>
+    <string name="pref_appearance_tab_cinehub_summary">Movies, TV shows library &amp; extensions</string>
     <string name="pref_appearance_tab_cinetv_title">CineTV</string>
     <string name="pref_appearance_tab_cinetv_summary">Live TV channels &amp; IPTV</string>
     <string name="pref_cinehub_title">CineHub</string>
-    <string name="pref_cinehub_summary">Media library engine, metadata scraper &amp; catalogs</string>
+    <string name="pref_cinehub_summary">Media library engine, metadata scraper &amp; extensions</string>
     <string name="pref_appearance_summary">Dark mode, Material You</string>
     <string name="pref_appearance_category_theme">Theme</string>
     <string name="pref_appearance_darkmode_system">System</string>
@@ -1505,7 +1505,6 @@
 
   <string name="pref_enable_local_movies">Enable Local Movies</string>
   <string name="pref_enable_local_tv_shows">Enable Local TV Shows</string>
-  <string name="pref_enable_online_catalog">Enable Online Catalog</string>
   <string name="pref_enable_metadata_scraping">Enable Metadata Scraping</string>
   <string name="pref_enable_artwork_downloads">Enable Artwork Downloads</string>
   <string name="pref_enable_auto_refresh">Enable Auto Refresh</string>

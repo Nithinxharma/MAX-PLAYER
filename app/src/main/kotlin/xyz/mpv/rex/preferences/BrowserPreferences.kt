@@ -82,7 +82,6 @@ class BrowserPreferences(
   // CineHub Library Sources
   val enableLocalMovies = preferenceStore.getBoolean("enable_local_movies", true)
   val enableLocalTvShows = preferenceStore.getBoolean("enable_local_tv_shows", true)
-  val enableOnlineCatalog = preferenceStore.getBoolean("enable_online_catalog", true)
   val enableMetadataScraping = preferenceStore.getBoolean("enable_metadata_scraping", true)
   val enableArtworkDownloads = preferenceStore.getBoolean("enable_artwork_downloads", true)
   val enableAutoRefresh = preferenceStore.getBoolean("enable_auto_refresh", true)

@@ -77,7 +77,6 @@ object CineHubScreen : Screen {
     val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
     val providerRegistry = koinInject<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>()
 
-    val enableOnlineCatalog by browserPreferences.enableOnlineCatalog.collectAsState()
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
     val enableLocalTvShows by browserPreferences.enableLocalTvShows.collectAsState()
     val enableMetadataScraping by browserPreferences.enableMetadataScraping.collectAsState()
@@ -197,7 +196,7 @@ object CineHubScreen : Screen {
               onClick = {
                 isRefreshing = true
                 loadMedia()
-                Toast.makeText(context, "Refreshing catalog…", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Refreshing library…", Toast.LENGTH_SHORT).show()
               },
               modifier = Modifier.testTag("cinehub_refresh_button"),
             ) {
