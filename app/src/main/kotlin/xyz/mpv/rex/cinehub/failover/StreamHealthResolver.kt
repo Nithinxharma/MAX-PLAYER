@@ -99,18 +99,18 @@ object StreamHealthResolver {
         val uri = runCatching { Uri.parse(candidate.url) }.getOrNull()
         val host = uri?.host ?: ""
         val scheme = uri?.scheme ?: "https"
-        val origin = if (host.isNotBlank()) "$scheme://$host" else "https://vidsrc.to"
-        val referer = "$origin/"
+        val origin = if (host.isNotBlank()) "$scheme://$host" else ""
+        val referer = if (origin.isNotBlank()) "$origin/" else ""
 
         val updatedHeaders = candidate.headers.toMutableMap()
 
         if (!updatedHeaders.keys.any { it.equals("User-Agent", ignoreCase = true) }) {
             updatedHeaders["User-Agent"] = DEFAULT_USER_AGENT
         }
-        if (!updatedHeaders.keys.any { it.equals("Referer", ignoreCase = true) }) {
+        if (referer.isNotBlank() && !updatedHeaders.keys.any { it.equals("Referer", ignoreCase = true) }) {
             updatedHeaders["Referer"] = referer
         }
-        if (!updatedHeaders.keys.any { it.equals("Origin", ignoreCase = true) }) {
+        if (origin.isNotBlank() && !updatedHeaders.keys.any { it.equals("Origin", ignoreCase = true) }) {
             updatedHeaders["Origin"] = origin
         }
 

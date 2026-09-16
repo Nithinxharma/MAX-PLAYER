@@ -205,7 +205,7 @@ object MediaLibraryPreferencesScreen : Screen {
                               title = { Text(text = stringResource(R.string.pref_custom_movies_folder)) },
                               summary = {
                                   Text(
-                                      text = if (customMoviesFolder.isNotBlank()) customMoviesFolder else "Default (CineRex/movies, Movies)",
+                                      text = if (customMoviesFolder.isNotBlank()) customMoviesFolder else "Default (MaxStream/movies, Movies)",
                                       color = MaterialTheme.colorScheme.outline
                                   )
                               }
@@ -219,7 +219,7 @@ object MediaLibraryPreferencesScreen : Screen {
                               title = { Text(text = stringResource(R.string.pref_custom_tv_shows_folder)) },
                               summary = {
                                   Text(
-                                      text = if (customTvShowsFolder.isNotBlank()) customTvShowsFolder else "Default (CineRex/tvshows, TV Shows)",
+                                      text = if (customTvShowsFolder.isNotBlank()) customTvShowsFolder else "Default (MaxStream/tvshows, TV Shows)",
                                       color = MaterialTheme.colorScheme.outline
                                   )
                               }
@@ -340,6 +340,7 @@ object MediaLibraryPreferencesScreen : Screen {
                                       if (customMoviesFolder.isNotBlank()) {
                                           movieRoots.add(java.io.File(customMoviesFolder.trim()))
                                       } else {
+                                          movieRoots.add(java.io.File(extStorage, "MaxStream/movies"))
                                           movieRoots.add(java.io.File(extStorage, "CineRex/movies"))
                                           movieRoots.add(java.io.File(extStorage, "Movies"))
                                       }
@@ -348,6 +349,7 @@ object MediaLibraryPreferencesScreen : Screen {
                                       if (customTvShowsFolder.isNotBlank()) {
                                           tvRoots.add(java.io.File(customTvShowsFolder.trim()))
                                       } else {
+                                          tvRoots.add(java.io.File(extStorage, "MaxStream/tvshows"))
                                           tvRoots.add(java.io.File(extStorage, "CineRex/tvshows"))
                                           tvRoots.add(java.io.File(extStorage, "TV Shows"))
                                       }

@@ -22,7 +22,10 @@ object CineFolderMetadataManager {
      */
     fun isUnderCineRex(path: String): Boolean {
         val normalized = path.replace("\\", "/").trimEnd('/')
-        return normalized.contains("/CineRex", ignoreCase = true) ||
+        return normalized.contains("/MaxStream", ignoreCase = true) ||
+                normalized.endsWith("/MaxStream", ignoreCase = true) ||
+                normalized.equals("MaxStream", ignoreCase = true) ||
+                normalized.contains("/CineRex", ignoreCase = true) ||
                 normalized.endsWith("/CineRex", ignoreCase = true) ||
                 normalized.equals("CineRex", ignoreCase = true)
     }
@@ -36,12 +39,12 @@ object CineFolderMetadataManager {
         val file = File(normalized)
         val name = file.name
 
-        // Root CineRex folder itself
-        if (name.equals("CineRex", ignoreCase = true)) return true
+        // Root CineRex/MaxStream folder itself
+        if (name.equals("MaxStream", ignoreCase = true) || name.equals("CineRex", ignoreCase = true)) return true
 
-        // Direct container directories under CineRex: tvshows, movies, shows
+        // Direct container directories under CineRex/MaxStream: tvshows, movies, shows
         val parent = file.parentFile?.name
-        if (parent != null && parent.equals("CineRex", ignoreCase = true)) {
+        if (parent != null && (parent.equals("MaxStream", ignoreCase = true) || parent.equals("CineRex", ignoreCase = true))) {
             if (name.equals("tvshows", ignoreCase = true) ||
                 name.equals("shows", ignoreCase = true) ||
                 name.equals("movies", ignoreCase = true)

@@ -1,6 +1,7 @@
 package xyz.mpv.rex.cinehub.extension.manager
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -10,20 +11,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
+import xyz.mpv.rex.cinehub.extension.api.MainAPI
+import xyz.mpv.rex.cinehub.extension.api.MainApiProviderAdapter
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
-import xyz.mpv.rex.cinehub.extension.providers.CineOnlineBridgeProvider
-import xyz.mpv.rex.cinehub.extension.providers.DeclarativeCineHubProvider
-import xyz.mpv.rex.cinehub.extension.providers.OpenArchiveProvider
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.database.MpvExDatabase
 import java.io.File
+import java.util.zip.ZipFile
 
 /**
  * ExtensionManager coordinates installed extensions, life-cycles,
  * updates, and provider registrations.
+ * Only real installed extensions are registered.
  */
 class ExtensionManager(
     private val context: Context,
@@ -40,10 +44,6 @@ class ExtensionManager(
 
     init {
         if (!extensionDir.exists()) extensionDir.mkdirs()
-        // Register built-in providers immediately
-        registry.register(OpenArchiveProvider(client), isEnabledByDefault = true)
-        registry.register(CineOnlineBridgeProvider(context), isEnabledByDefault = true)
-
         scope.launch {
             loadInstalledExtensions()
         }
@@ -56,17 +56,91 @@ class ExtensionManager(
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
         val enabledExts = db.extensionDao().getEnabledExtensionsSync()
         for (ext in enabledExts) {
-            try {
-                val provider = DeclarativeCineHubProvider(ext, client)
-                registry.register(provider, isEnabledByDefault = ext.isEnabled)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            loadExtensionFromDisk(ext)
+        }
+    }
+
+    private fun loadExtensionFromDisk(ext: InstalledExtension) {
+        val localPath = ext.localFilePath ?: return
+        val file = File(localPath)
+        if (!file.exists()) return
+
+        try {
+            val optDir = File(context.codeCacheDir, "opt_${ext.pkgName}").apply { mkdirs() }
+            val classLoader = dalvik.system.DexClassLoader(
+                file.absolutePath,
+                optDir.absolutePath,
+                null,
+                context.classLoader
+            )
+
+            val classNames = mutableListOf<String>()
+
+            // Inspect manifest.json / make.json in the zip archive
+            runCatching {
+                ZipFile(file).use { zip ->
+                    val entry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json")
+                    if (entry != null) {
+                        val text = zip.getInputStream(entry).bufferedReader().readText()
+                        val json = JSONObject(text)
+                        val mainClass = json.optString("pluginClassName", "")
+                        if (mainClass.isNotBlank()) {
+                            classNames.add(mainClass)
+                        }
+                        val classesArr = json.optJSONArray("classes")
+                        if (classesArr != null) {
+                            for (i in 0 until classesArr.length()) {
+                                val cName = classesArr.optString(i)
+                                if (cName.isNotBlank() && !classNames.contains(cName)) {
+                                    classNames.add(cName)
+                                }
+                            }
+                        }
+                    }
+                }
             }
+
+            // Also check classesFile recorded during install
+            ext.classesFile?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }?.forEach {
+                if (!classNames.contains(it)) classNames.add(it)
+            }
+
+            for (className in classNames) {
+                try {
+                    val clazz = classLoader.loadClass(className)
+                    val instance = clazz.getDeclaredConstructor().newInstance()
+                    if (instance is CineHubProvider) {
+                        registry.register(instance, isEnabledByDefault = ext.isEnabled)
+                    } else if (instance is MainAPI) {
+                        registry.register(MainApiProviderAdapter(instance), isEnabledByDefault = ext.isEnabled)
+                    }
+                } catch (e: Throwable) {
+                    Log.w("ExtensionManager", "Failed to load class $className for extension ${ext.pkgName}: ${e.message}")
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e("ExtensionManager", "Failed to load extension ${ext.pkgName} from $localPath", e)
         }
     }
 
     suspend fun installExtension(plugin: AvailablePlugin): Boolean = withContext(Dispatchers.IO) {
         try {
+            var localPath: String? = null
+            if (plugin.url.isNotBlank()) {
+                val targetFile = File(extensionDir, "${plugin.internalName}.cs3")
+                val request = Request.Builder().url(plugin.url).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful && response.body != null) {
+                        response.body!!.byteStream().use { input ->
+                            targetFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        localPath = targetFile.absolutePath
+                    }
+                }
+            }
+
             val installed = InstalledExtension(
                 pkgName = plugin.internalName,
                 name = plugin.name,
@@ -76,13 +150,13 @@ class ExtensionManager(
                 iconUrl = plugin.iconUrl,
                 repositoryUrl = plugin.repositoryUrl,
                 isEnabled = true,
-                localFilePath = null,
+                localFilePath = localPath,
                 classesFile = plugin.authors.joinToString(", ")
             )
             db.extensionDao().insertExtension(installed)
 
-            val provider = DeclarativeCineHubProvider(installed, client)
-            registry.register(provider, isEnabledByDefault = true)
+            // Load real runtime extension
+            loadExtensionFromDisk(installed)
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -100,6 +174,8 @@ class ExtensionManager(
             )
             db.extensionDao().deleteExtension(ext)
             registry.unregister(pkgName)
+            val file = File(extensionDir, "$pkgName.cs3")
+            if (file.exists()) file.delete()
         } catch (e: Exception) {
             e.printStackTrace()
         }

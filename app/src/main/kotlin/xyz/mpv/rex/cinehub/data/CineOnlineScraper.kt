@@ -699,7 +699,7 @@ object CineOnlineScraper {
                             mazeEpisodes.filter { it.season == seasonNumber }.forEach { ep ->
                                 resultList.add(
                                     EpisodeItem(
-                                        videoFilePath = "vidsrc_tv:${tmdbId.ifBlank { showTitle }}:$seasonNumber:${ep.number}",
+                                        videoFilePath = "",
                                         title = ep.name ?: "Episode ${ep.number}",
                                         season = seasonNumber,
                                         episode = ep.number,
@@ -715,25 +715,6 @@ object CineOnlineScraper {
                     }
                 }
             } catch (_: Exception) {}
-        }
-
-        // 3. Fallback generator so user always has working episode buttons
-        if (resultList.isEmpty()) {
-            val titlePrefix = showTitle ?: "Series"
-            for (epNum in 1..10) {
-                resultList.add(
-                    EpisodeItem(
-                        videoFilePath = "stream_tv:${tmdbId.ifBlank { "tt14674744" }}:$seasonNumber:$epNum",
-                        title = "$titlePrefix - Episode $epNum",
-                        season = seasonNumber,
-                        episode = epNum,
-                        plot = "Episode $epNum of Season $seasonNumber.",
-                        userRating = 8.0,
-                        aired = "Season $seasonNumber",
-                        sourceType = "online"
-                    )
-                )
-            }
         }
 
         if (context != null && resultList.isNotEmpty()) {

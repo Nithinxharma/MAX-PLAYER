@@ -37,7 +37,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.mpv.rex.cinehub.data.ActiveMediaResolution
-import xyz.mpv.rex.cinehub.data.CineCloudRepoClient
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
 import xyz.mpv.rex.cinehub.data.NfoScanner
 import xyz.mpv.rex.cinehub.model.EpisodeItem
@@ -148,7 +147,7 @@ fun MetadataSheet(
                             isLoadingEpisodes = isLoadingTvEpisodes,
                             onPlayEpisode = { ep ->
                                 scope.launch(Dispatchers.IO) {
-                                    val resolvedUri = CineCloudRepoClient.resolveMediaUri(ep.videoFilePath)
+                                    val resolvedUri = ep.videoFilePath
                                     withContext(Dispatchers.Main) {
                                         onDismissRequest()
                                         Toast.makeText(context, "Playing ${ep.title}", Toast.LENGTH_SHORT).show()
