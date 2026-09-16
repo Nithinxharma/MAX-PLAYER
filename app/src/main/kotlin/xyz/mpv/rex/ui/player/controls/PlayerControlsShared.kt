@@ -1399,10 +1399,9 @@ fun DynamicMediaInfoRectangle(
 
   val effectivePoster = customPoster ?: activeResolution?.posterUrl ?: localPosterSync
 
-  if (customSourceType == "cinetube" || customSourceType == "cinetv") {
-    // Normal size Info Button for YouTube / Live TV
-    val isCircular = customSourceType == "cinetube"
-    val shape = if (isCircular) CircleShape else RoundedCornerShape(10.dp)
+  if (customSourceType == "cinetv") {
+    // Normal size Info Button for Live TV
+    val shape = RoundedCornerShape(10.dp)
     Surface(
       shape = shape,
       color = Color.Black.copy(alpha = 0.75f),
@@ -1426,7 +1425,7 @@ fun DynamicMediaInfoRectangle(
           )
         } else {
           Icon(
-            imageVector = if (isCircular) Icons.Outlined.SmartDisplay else Icons.Outlined.LiveTv,
+            imageVector = Icons.Outlined.LiveTv,
             contentDescription = "Fallback Logo",
             tint = Color.White.copy(alpha = 0.90f),
             modifier = Modifier.size(24.dp)

@@ -1821,7 +1821,7 @@ class PlayerActivity :
       mediaIdentifier = getMediaIdentifier(intent, fileName)
     }
 
-    // Handle custom CineTV/CineTube metadata
+    // Handle custom CineTV metadata
     val customSourceType = intent.getStringExtra("cinetv_source_type")
     val customPoster = intent.getStringExtra("cinetv_poster")
     viewModel.setCustomMetadata(customPoster, customSourceType)

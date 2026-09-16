@@ -458,7 +458,7 @@ object MediaUtils : KoinComponent {
    * @param title Display title for the media
    * @param launchSource Analytics/tracking source string
    * @param posterUrl Optional thumbnail/poster URL
-   * @param sourceType Optional source type identifier (e.g. "cinehub", "cinetube")
+   * @param sourceType Optional source type identifier (e.g. "cinehub", "cinetv")
    */
   fun playStreamWithFailover(
     primaryCandidate: xyz.mpv.rex.cinehub.failover.StreamCandidate,

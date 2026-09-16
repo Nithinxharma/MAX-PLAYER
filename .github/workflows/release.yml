@@ -99,7 +99,7 @@ jobs:
           apks=("universal" "arm64-v8a" "armeabi-v7a" "x86" "x86_64")
           for abi in "${apks[@]}"; do
             src="app/build/outputs/apk/release/app-${abi}-release.apk"
-            dst="REX-Player-${abi}-${VERSION_TAG}.apk"
+            dst="MAX-STREAM-${abi}-${VERSION_TAG}.apk"
             if [ ! -f "$src" ]; then
               echo "::error file=$src::Signed APK for $abi was not found"
               exit 1
@@ -110,13 +110,13 @@ jobs:
             echo "$varname=$checksum" >> "$GITHUB_ENV"
           done
           
-          ls -lah REX-Player-*.apk
+          ls -lah MAX-STREAM-*.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION_TAG }}
-          name: REX Player ${{ env.VERSION_TAG }}
+          name: MAX STREAM ${{ env.VERSION_TAG }}
           body: |
             ---
             ### Checksums
@@ -129,11 +129,11 @@ jobs:
             | x86 | ${{ env.apk_x86_sha256 }} |
             | x86_64 | ${{ env.apk_x86_64_sha256 }} |
           files: |
-            REX-Player-universal-${{ env.VERSION_TAG }}.apk
-            REX-Player-arm64-v8a-${{ env.VERSION_TAG }}.apk
-            REX-Player-armeabi-v7a-${{ env.VERSION_TAG }}.apk
-            REX-Player-x86-${{ env.VERSION_TAG }}.apk
-            REX-Player-x86_64-${{ env.VERSION_TAG }}.apk
+            MAX-STREAM-universal-${{ env.VERSION_TAG }}.apk
+            MAX-STREAM-arm64-v8a-${{ env.VERSION_TAG }}.apk
+            MAX-STREAM-armeabi-v7a-${{ env.VERSION_TAG }}.apk
+            MAX-STREAM-x86-${{ env.VERSION_TAG }}.apk
+            MAX-STREAM-x86_64-${{ env.VERSION_TAG }}.apk
           draft: true
           prerelease: false
         env:

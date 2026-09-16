@@ -336,7 +336,6 @@ object AppearancePreferencesScreen : Screen {
                         val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
                         val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
                         val enableTabCineHub by browserPreferences.enableTabCineHub.collectAsState()
-                        val enableTabCineTube by browserPreferences.enableTabCineTube.collectAsState()
                         val enableTabCineTv by browserPreferences.enableTabCineTv.collectAsState()
 
                         GroupedListColumn {
@@ -437,22 +436,6 @@ object AppearancePreferencesScreen : Screen {
                                     summary = {
                                         Text(
                                             text = stringResource(id = R.string.pref_appearance_tab_cinehub_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_cinetube_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableTabCineTube,
-                                    onValueChange = { browserPreferences.enableTabCineTube.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinetube_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_cinetube_summary),
                                             color = MaterialTheme.colorScheme.outline,
                                         )
                                     }

@@ -174,14 +174,12 @@ object MainScreen : Screen {
     val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
     val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
     val enableTabCineHub by browserPreferences.enableTabCineHub.collectAsState()
-    val enableTabCineTube by browserPreferences.enableTabCineTube.collectAsState()
     val enableTabCineTv by browserPreferences.enableTabCineTv.collectAsState()
     val enableCineHubIntegration by browserPreferences.enableCineHubIntegration.collectAsState()
 
     val homeLabel = stringResource(R.string.home)
     val shortsLabel = stringResource(R.string.shorts)
     val cineHubLabel = stringResource(R.string.cinehub)
-    val cineTubeLabel = stringResource(R.string.cinetube)
     val cineTvLabel = stringResource(R.string.cinetv)
     val recentsLabel = stringResource(R.string.recents)
     val playlistsLabel = stringResource(R.string.playlists)
@@ -190,8 +188,8 @@ object MainScreen : Screen {
     val isCineHubTabVisible = enableTabCineHub && enableCineHubIntegration
 
     val visibleTabs = remember(
-      isShortsEnabled, isCineHubTabVisible, enableTabCineTube, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      homeLabel, shortsLabel, cineHubLabel, cineTubeLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, isCineHubTabVisible, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
+      homeLabel, shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
         add(
@@ -210,25 +208,6 @@ object MainScreen : Screen {
           add(
             VisibleTab("cinehub", cineHubLabel, Icons.Filled.Movie) {
               CineHubScreen.Content()
-            }
-          )
-        }
-        if (enableTabCineTube) {
-          add(
-            VisibleTab("cinetube", cineTubeLabel, Icons.Filled.SmartDisplay) {
-              xyz.mpv.rex.youtube.ui.YoutubeTabScreen(
-                onPlayRequested = { videoUrl, title, authorThumb ->
-                  xyz.mpv.rex.utils.media.MediaUtils.playStreamWithFailover(
-                    primaryCandidate = xyz.mpv.rex.cinehub.failover.StreamCandidate(url = videoUrl, name = title),
-                    backupCandidates = emptyList(),
-                    context = context,
-                    title = title,
-                    launchSource = "cinetube",
-                    posterUrl = authorThumb,
-                    sourceType = "cinetube"
-                  )
-                }
-              )
             }
           )
         }

@@ -29,12 +29,9 @@
     <string name="pref_appearance_tab_network_title">Network Streaming</string>
     <string name="pref_appearance_tab_network_summary">Access SMB, FTP, and WebDAV drives</string>
     <string name="cinehub">CineHub</string>
-    <string name="cinetube">CineTube</string>
     <string name="cinetv">CineTV</string>
     <string name="pref_appearance_tab_cinehub_title">CineHub</string>
     <string name="pref_appearance_tab_cinehub_summary">Movies, TV shows catalog &amp; streaming</string>
-    <string name="pref_appearance_tab_cinetube_title">CineTube</string>
-    <string name="pref_appearance_tab_cinetube_summary">YouTube videos &amp; trends</string>
     <string name="pref_appearance_tab_cinetv_title">CineTV</string>
     <string name="pref_appearance_tab_cinetv_summary">Live TV channels &amp; IPTV</string>
     <string name="pref_cinehub_title">CineHub</string>

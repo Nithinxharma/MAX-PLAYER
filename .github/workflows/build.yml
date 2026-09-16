@@ -59,7 +59,7 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
           echo "Using apksigner: $APKSIGNER"
 
-          find "$RELEASE_DIR" -name "app-*-release-unsigned.apk" -type f | while read -r apk; do
+          find "$RELEASE_DIR" -name "app-*-release-unsigned.apk" -o -name "app-release-unsigned.apk" | while read -r apk; do
             signed_apk="${apk/-unsigned/}"
             echo "Signing $apk -> $signed_apk"
             "$APKSIGNER" sign \
@@ -74,34 +74,34 @@ jobs:
           done
 
           rm -f release.keystore
-          ls -lh "$RELEASE_DIR"/app-*-release.apk
+          ls -lh "$RELEASE_DIR"/*.apk
 
       - name: Upload app-arm64-v8a Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mpvRex-arm64-v8a-release-${{ env.SHORT_SHA }}
+          name: MAX-STREAM-arm64-v8a-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-arm64-v8a-release.apk
 
       - name: Upload app-armeabi-v7a Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mpvRex-armeabi-v7a-release-${{ env.SHORT_SHA }}
+          name: MAX-STREAM-armeabi-v7a-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-armeabi-v7a-release.apk
 
       - name: Upload app-universal Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mpvRex-universal-release-${{ env.SHORT_SHA }}
+          name: MAX-STREAM-universal-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-universal-release.apk
 
       - name: Upload app-x86 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mpvRex-x86-release-${{ env.SHORT_SHA }}
+          name: MAX-STREAM-x86-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-x86-release.apk
 
       - name: Upload app-x86_64 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mpvRex-x86_64-release-${{ env.SHORT_SHA }}
+          name: MAX-STREAM-x86_64-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-x86_64-release.apk
