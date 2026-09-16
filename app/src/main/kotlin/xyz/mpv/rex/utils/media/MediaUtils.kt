@@ -63,6 +63,7 @@ object MediaUtils : KoinComponent {
     source: Any,
     context: Context,
     launchSource: String? = null,
+    headers: Map<String, String>? = null,
   ) {
     val intent = when (source) {
       is Video -> {
@@ -157,6 +158,23 @@ object MediaUtils : KoinComponent {
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.putExtra("internal_launch", true) // Enables subtitle autoload
     launchSource?.let { intent.putExtra("launch_source", it) }
+
+    // Pack HTTP headers for MPV PlayerActivity
+    if (!headers.isNullOrEmpty()) {
+      val headerPairs = mutableListOf<String>()
+      val ua = headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
+      if (!ua.isNullOrBlank()) {
+        headerPairs.add("User-Agent")
+        headerPairs.add(ua)
+      }
+      headers.forEach { (k, v) ->
+        if (!k.equals("User-Agent", ignoreCase = true) && k.isNotBlank() && v.isNotBlank()) {
+          headerPairs.add(k)
+          headerPairs.add(v)
+        }
+      }
+      intent.putExtra("headers", headerPairs.toTypedArray())
+    }
     
     // For playlist items, pass the title so it shows correctly in the player
     if (source is Video && launchSource != null && (launchSource.contains("playlist") || launchSource == "m3u_playlist" || launchSource == "media_library_list")) {

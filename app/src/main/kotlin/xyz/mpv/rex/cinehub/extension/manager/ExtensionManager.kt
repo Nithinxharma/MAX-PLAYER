@@ -16,6 +16,7 @@ import org.json.JSONObject
 import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
 import xyz.mpv.rex.cinehub.extension.api.MainAPI
 import xyz.mpv.rex.cinehub.extension.api.MainApiProviderAdapter
+import xyz.mpv.rex.cinehub.extension.api.CloudstreamMainApiAdapter
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
@@ -111,6 +112,9 @@ class ExtensionManager(
                     val instance = clazz.getDeclaredConstructor().newInstance()
                     if (instance is CineHubProvider) {
                         registry.register(instance, isEnabledByDefault = ext.isEnabled)
+                    } else if (instance is com.lagradost.cloudstream3.MainAPI) {
+                        com.lagradost.cloudstream3.APIHolder.addPlugin(instance)
+                        registry.register(CloudstreamMainApiAdapter(instance), isEnabledByDefault = ext.isEnabled)
                     } else if (instance is MainAPI) {
                         registry.register(MainApiProviderAdapter(instance), isEnabledByDefault = ext.isEnabled)
                     }

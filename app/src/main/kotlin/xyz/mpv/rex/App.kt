@@ -59,6 +59,9 @@ class App : Application() {
       )
     }
 
+    // Initialize Headless Cloudstream / Plugin Engine
+    xyz.mpv.rex.cinehub.bridge.CloudstreamHeadlessRunner.init(this)
+
     Thread.setDefaultUncaughtExceptionHandler(GlobalExceptionHandler(applicationContext, CrashActivity::class.java))
 
     FastThumbnails.initialize(this)

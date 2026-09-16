@@ -928,7 +928,7 @@ object CineHubScreen : Screen {
             withContext(Dispatchers.Main) {
               if (stream != null && stream.url.isNotBlank()) {
                 Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
-                MediaUtils.playFile(stream.url, context, "cinehub")
+                MediaUtils.playFile(stream.url, context, "cinehub", stream.headers)
               } else {
                 Toast.makeText(context, "No stream links found from extension", Toast.LENGTH_SHORT).show()
               }
