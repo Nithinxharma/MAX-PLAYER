@@ -1,4 +1,3 @@
-import com.android.build.api.variant.FilterConfiguration
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -34,15 +33,6 @@ android {
   dependenciesInfo {
     includeInApk = false
     includeInBundle = false
-  }
-
-  splits {
-    abi {
-      isEnable = true
-      reset()
-      include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-      isUniversalApk = true
-    }
   }
 
   signingConfigs {
@@ -127,27 +117,6 @@ android {
   @Suppress("UnstableApiUsage")
   androidResources {
     generateLocaleConfig = true
-  }
-}
-
-androidComponents {
-  val abiCodes = mapOf(
-    "armeabi-v7a" to 1,
-    "arm64-v8a" to 2,
-    "x86" to 3,
-    "x86_64" to 4
-  )
-
-  onVariants { variant ->
-    variant.outputs.forEach { output ->
-      val abi = output.filters
-        .find { it.filterType == FilterConfiguration.FilterType.ABI }
-        ?.identifier
-
-      output.versionCode.set(
-        (output.versionCode.orNull ?: 0) * 10 + (abiCodes[abi] ?: 0)
-      )
-    }
   }
 }
 

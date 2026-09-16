@@ -86,7 +86,7 @@ import xyz.mpv.rex.ui.utils.LocalBackStack
 
 @Serializable
 object YtdlSettingsScreen : Screen {
-    private const val ADDON_GITHUB_RELEASES_URL = "https://github.com/mpvRex/REX-Ytdlp/releases"
+    private const val ADDON_GITHUB_RELEASES_URL = "https://github.com/MaxStreamApp/MAX-STREAM-Ytdlp/releases"
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable

@@ -53,6 +53,7 @@ import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayer
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerDefaults
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerStateManager
 import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
+import xyz.mpv.rex.ui.splash.SplashScreen
 import xyz.mpv.rex.ui.welcome.WelcomeScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -176,14 +177,7 @@ class MainActivity : ComponentActivity() {
   @Composable
   fun Navigator() {
     val context = LocalContext.current
-    val hasCompletedOnboarding = appearancePreferences.onboardingCompleted.get()
-    val initialScreen = remember {
-      if (hasCompletedOnboarding) {
-        MainScreen
-      } else {
-        WelcomeScreen
-      }
-    }
+    val initialScreen = remember { SplashScreen }
     val backstack = rememberNavBackStack(initialScreen)
 
     @Suppress("UNCHECKED_CAST")
@@ -205,6 +199,7 @@ class MainActivity : ComponentActivity() {
     val currentRoute = typedBackstack.lastOrNull()
     val isMainScreen = currentRoute == MainScreen
     val isWelcomeScreen = currentRoute == WelcomeScreen
+    val isSplashScreen = currentRoute == SplashScreen
     
     val targetBottomPadding = if (isMainScreen && !hideNavigationBar) {
       if (miniPlayerState.isExpanded) 8.dp else 88.dp
@@ -215,7 +210,7 @@ class MainActivity : ComponentActivity() {
       label = "miniPlayerBottomPadding"
     )
 
-    val targetMiniPlayerHeight = if (miniPlayerState.isPlaybackActive) MiniPlayerDefaults.CompactHeight else 0.dp
+    val targetMiniPlayerHeight = if (miniPlayerState.isPlaybackActive && !isSplashScreen) MiniPlayerDefaults.CompactHeight else 0.dp
     val miniPlayerHeight by androidx.compose.animation.core.animateDpAsState(
       targetValue = targetMiniPlayerHeight,
       animationSpec = tween(220),
@@ -224,7 +219,7 @@ class MainActivity : ComponentActivity() {
     val navBarHeight = if (isMainScreen && !hideNavigationBar) 80.dp else 0.dp
     val totalNavigationBarHeight = navBarHeight + miniPlayerHeight
 
-    BackHandler(enabled = isMainScreen || isWelcomeScreen) {
+    BackHandler(enabled = isMainScreen || isWelcomeScreen || isSplashScreen) {
       (context as? Activity)?.moveTaskToBack(true)
     }
 
@@ -302,7 +297,7 @@ class MainActivity : ComponentActivity() {
                 context.startActivity(
                   Intent(
                     Intent.ACTION_VIEW, 
-                    (release.htmlUrl ?: "https://github.com/mpvRex/REX-Player/releases/latest").toUri()
+                    (release.htmlUrl ?: "https://github.com/MaxStreamApp/MAX-STREAM/releases/latest").toUri()
                   )
                 )
                 // updateViewModel.downloadUpdate(release) // Kept in code but disabled for now
@@ -324,7 +319,7 @@ class MainActivity : ComponentActivity() {
                 context.startActivity(
                   Intent(
                     Intent.ACTION_VIEW, 
-                    (release.htmlUrl ?: "https://github.com/mpvRex/REX-Player/releases/latest").toUri()
+                    (release.htmlUrl ?: "https://github.com/MaxStreamApp/MAX-STREAM/releases/latest").toUri()
                   )
                 )
                 // updateViewModel.installUpdate(release) // Kept in code but disabled for now

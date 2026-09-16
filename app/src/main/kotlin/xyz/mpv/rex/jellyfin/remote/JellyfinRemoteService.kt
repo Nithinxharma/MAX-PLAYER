@@ -65,7 +65,7 @@ class JellyfinRemoteService : Service() {
 
   private fun startForegroundWithNotification() {
     val notif: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-      .setContentTitle("mpvRex Jellyfin Remote")
+      .setContentTitle("MAX STREAM Jellyfin Remote")
       .setContentText("Discoverable as Play on target")
       .setSmallIcon(R.drawable.ic_launcher_foreground)
       .setOngoing(true)

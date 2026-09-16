@@ -26,14 +26,14 @@ enum class AppTheme(
 ) {
   Default(
     titleRes = R.string.theme_default,
-    primaryLight = Color(0xFF445E91),
-    primaryDark = Color(0xFFADC6FF),
-    secondaryLight = Color(0xFF575E71),
-    secondaryDark = Color(0xFFBFC6DC),
-    tertiaryLight = Color(0xFF715573),
-    tertiaryDark = Color(0xFFDEBCDF),
-    backgroundLight = Color(0xFFF9F9FF),
-    backgroundDark = Color(0xFF111318),
+    primaryLight = Color(0xFFFF3B30),
+    primaryDark = Color(0xFFFF453A),
+    secondaryLight = Color(0xFF007AFF),
+    secondaryDark = Color(0xFF32D7FF),
+    tertiaryLight = Color(0xFFA855F7),
+    tertiaryDark = Color(0xFFC084FC),
+    backgroundLight = Color(0xFFFBFBFC),
+    backgroundDark = Color(0xFF050505),
   ),
   Dynamic(
     titleRes = R.string.theme_dynamic,

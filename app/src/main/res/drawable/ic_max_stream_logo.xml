@@ -1,0 +1,136 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="260dp"
+    android:height="260dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Ambient Glow / Backdrop Flare -->
+    <path
+        android:pathData="M 256,210 m -160,0 a 160,160 0 1,1 320,0 a 160,160 0 1,1 -320,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="256"
+                android:centerY="210"
+                android:gradientRadius="160"
+                android:type="radial">
+                <item android:color="#30A855F7" android:offset="0.0" />
+                <item android:color="#10007AFF" android:offset="0.55" />
+                <item android:color="#00000000" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Center Fold Ribbon Layer (Back/Middle Depth) -->
+    <path
+        android:pathData="M 188,110 C 218,162 242,238 256,278 C 270,238 294,162 324,110 C 350,68 392,72 414,115 L 332,295 C 298,365 214,365 180,295 L 98,115 C 120,72 162,68 188,110 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="120"
+                android:startY="80"
+                android:endX="380"
+                android:endY="350"
+                android:type="linear">
+                <item android:color="#FFFF2D92" android:offset="0.0" />
+                <item android:color="#FFA855F7" android:offset="0.45" />
+                <item android:color="#FF007AFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Left Ribbon Leg (Red -> Coral -> Magenta) -->
+    <path
+        android:pathData="M 92,100 C 92,65 124,46 158,64 C 188,78 212,116 242,185 L 200,310 C 196,320 189,327 178,327 L 114,378 C 104,385 92,378 92,366 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="92"
+                android:startY="50"
+                android:endX="220"
+                android:endY="380"
+                android:type="linear">
+                <item android:color="#FFFF5E3A" android:offset="0.0" />
+                <item android:color="#FFFF3B30" android:offset="0.3" />
+                <item android:color="#FFFF2D92" android:offset="0.75" />
+                <item android:color="#FFA855F7" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Left Inner Glass Glow Edge -->
+    <path
+        android:pathData="M 98,105 C 98,76 122,58 150,72 C 176,84 198,118 225,180"
+        android:strokeWidth="3.5"
+        android:strokeColor="#66FFFFFF"
+        android:strokeLineCap="round" />
+
+    <!-- Right Ribbon Leg (Blue -> Cyan) -->
+    <path
+        android:pathData="M 420,100 C 420,65 388,46 354,64 C 324,78 300,116 270,185 L 312,310 C 316,320 323,327 334,327 L 398,378 C 408,385 420,378 420,366 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="270"
+                android:startY="120"
+                android:endX="420"
+                android:endY="380"
+                android:type="linear">
+                <item android:color="#FFA855F7" android:offset="0.0" />
+                <item android:color="#FF007AFF" android:offset="0.45" />
+                <item android:color="#FF32D7FF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Right Inner Glass Glow Edge -->
+    <path
+        android:pathData="M 414,105 C 414,76 390,58 362,72 C 336,84 314,118 287,180"
+        android:strokeWidth="3.5"
+        android:strokeColor="#6632D7FF"
+        android:strokeLineCap="round" />
+
+    <!-- Typography: MAX STREAM -->
+    <!-- M -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 68,430 L 78,430 L 88,452 L 98,430 L 108,430 L 108,464 L 99,464 L 99,441 L 91,458 L 85,458 L 77,441 L 77,464 L 68,464 Z" />
+
+    <!-- A -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 124,430 L 135,430 L 146,464 L 137,464 L 134,455 L 125,455 L 122,464 L 113,464 Z M 129,438 L 126,447 L 133,447 Z" />
+
+    <!-- X -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 154,430 L 164,430 L 171,444 L 178,430 L 188,430 L 176,447 L 189,464 L 179,464 L 171,450 L 163,464 L 153,464 L 166,447 Z" />
+
+    <!-- S -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 222,437 C 220,432 215,430 209,430 C 203,430 199,433 199,438 C 199,443 203,445 212,448 C 223,451 228,455 228,462 C 228,470 220,474 209,474 C 200,474 194,470 192,464 L 200,461 C 201,464 205,466 210,466 C 215,466 219,464 219,460 C 219,455 215,453 206,450 C 196,447 190,443 190,436 C 190,429 197,424 208,424 C 216,424 222,427 225,432 Z" />
+
+    <!-- T -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 235,430 L 257,430 L 257,437 L 250,437 L 250,464 L 242,464 L 242,437 L 235,437 Z" />
+
+    <!-- R -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 265,430 L 280,430 C 288,430 293,434 293,441 C 293,446 289,450 284,451 L 294,464 L 283,464 L 275,453 L 273,453 L 273,464 L 265,464 Z M 273,437 L 273,446 L 279,446 C 283,446 285,444 285,441 C 285,438 283,437 279,437 Z" />
+
+    <!-- E -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 302,430 L 324,430 L 324,437 L 310,437 L 310,443 L 322,443 L 322,450 L 310,450 L 310,457 L 324,457 L 324,464 L 302,464 Z" />
+
+    <!-- A -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 338,430 L 349,430 L 360,464 L 351,464 L 348,455 L 339,455 L 336,464 L 327,464 Z M 343,438 L 340,447 L 347,447 Z" />
+
+    <!-- M -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 368,430 L 378,430 L 388,452 L 398,430 L 408,430 L 408,464 L 399,464 L 399,441 L 391,458 L 385,458 L 377,441 L 377,464 L 368,464 Z" />
+
+</vector>

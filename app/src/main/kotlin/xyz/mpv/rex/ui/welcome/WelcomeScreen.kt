@@ -233,13 +233,16 @@ object WelcomeScreen : Screen {
       ) {
         item {
           // App Logo
-          if (appIconBitmap != null) {
+          Box(
+            modifier = Modifier
+              .size(80.dp)
+              .clip(RoundedCornerShape(20.dp)),
+            contentAlignment = Alignment.Center
+          ) {
             Image(
-              bitmap = appIconBitmap,
-              contentDescription = null,
-              modifier = Modifier
-                .size(80.dp)
-                .clip(RoundedCornerShape(20.dp)),
+              painter = painterResource(id = R.drawable.ic_max_stream_mark),
+              contentDescription = "MAX STREAM Logo",
+              modifier = Modifier.size(72.dp),
             )
           }
 
@@ -525,7 +528,7 @@ object WelcomeScreen : Screen {
     // Explanation Dialog
     if (showExplanationDialog) {
       val uriHandler = LocalUriHandler.current
-      val githubUrl = "https://github.com/mpvRex/REX-Player"
+      val githubUrl = "https://github.com/MaxStreamApp/MAX-STREAM"
       val isPlayStoreBuild = BuildConfig.SCOPED_STORAGE_ONLY
 
       AlertDialog(

@@ -1,0 +1,6 @@
+{
+  "name": "MAX STREAM",
+  "description": "MAX STREAM - Premium media platform combining Movies, TV Shows, Anime, Live TV, and Personal Media",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

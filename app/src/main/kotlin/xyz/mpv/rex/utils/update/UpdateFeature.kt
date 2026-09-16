@@ -91,10 +91,10 @@ class UpdateManager(
             return null
         }
         
-        val release = getLatestRelease("https://api.github.com/repos/mpvRex/REX-Player/releases/latest")
+        val release = getLatestRelease("https://api.github.com/repos/MaxStreamApp/MAX-STREAM/releases/latest")
         val currentVersion = BuildConfig.VERSION_NAME.replace("-dev", "")
         val remoteVersion = release.tagName.removePrefix("v")
-        val prefs = context.getSharedPreferences("mpvEx_prefs", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences("maxstream_prefs", Context.MODE_PRIVATE)
         val ignoredVersion = prefs.getString("ignored_version", null)
 
         // If this version was ignored, don't show it unless forced (manual check)

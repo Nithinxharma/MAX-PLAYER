@@ -268,37 +268,20 @@ private fun NormalTopBar(
           )
         }
 
-      val isAppTitleHeader = isHomeScreen || title == stringResource(R.string.app_name) || title == "mpvRex" || title == "REX Player"
+      val isAppTitleHeader = isHomeScreen || title == stringResource(R.string.app_name) || title == "MAX STREAM"
       var animatedTitleText by remember {
-        mutableStateOf(if (isAppTitleHeader && !hasHeaderAnimationPlayed) "mpvRex|" else title)
+        mutableStateOf(if (isAppTitleHeader && !hasHeaderAnimationPlayed) "MAX STREAM" else title)
       }
 
       if (isAppTitleHeader && !hasHeaderAnimationPlayed) {
         LaunchedEffect(Unit) {
-          // Initial pause showing "mpvRex|"
-          delay(600)
-
-          // Delete "mpvRex" backwards
-          val initialWord = "mpvRex"
-          for (i in (initialWord.length - 1) downTo 0) {
-            animatedTitleText = initialWord.substring(0, i) + "|"
-            delay(90)
-          }
-
-          delay(150)
-
-          // Type "REX Player" forwards
-          val targetWord = "REX Player"
+          val targetWord = "MAX STREAM"
+          animatedTitleText = "|"
+          delay(200)
           for (i in 1..targetWord.length) {
             animatedTitleText = targetWord.substring(0, i) + "|"
-            delay(85)
+            delay(60)
           }
-
-          // Finish: blink cursor, then settle on final text
-          delay(400)
-          animatedTitleText = targetWord
-          delay(300)
-          animatedTitleText = "$targetWord|"
           delay(300)
           animatedTitleText = targetWord
           hasHeaderAnimationPlayed = true

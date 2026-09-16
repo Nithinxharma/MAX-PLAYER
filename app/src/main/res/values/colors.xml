@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splash_screen_background">#F9F9FF</color>
-    <color name="splash_screen_icon_color">#3B82F6</color>
+    <!-- MAX STREAM Brand Colors -->
+    <color name="splash_screen_background">#050505</color>
+    <color name="splash_screen_icon_color">#FF3B30</color>
+
+    <color name="max_stream_red">#FF3B30</color>
+    <color name="max_stream_blue">#007AFF</color>
+    <color name="max_stream_cyan">#32D7FF</color>
+    <color name="max_stream_purple">#A855F7</color>
+    <color name="max_stream_pink">#FF2D92</color>
+    <color name="max_stream_orange">#FF5E3A</color>
+
+    <color name="max_stream_bg_dark">#050505</color>
+    <color name="max_stream_surface_dark">#101010</color>
+    <color name="max_stream_surface_elevated">#1A1A1A</color>
+
+    <color name="max_stream_text_primary">#FFFFFF</color>
+    <color name="max_stream_text_secondary">#B3B3B3</color>
+    <color name="max_stream_text_tertiary">#7A7A7A</color>
 </resources>

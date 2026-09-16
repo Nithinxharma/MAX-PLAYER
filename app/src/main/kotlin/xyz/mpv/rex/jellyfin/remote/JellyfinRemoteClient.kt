@@ -131,7 +131,7 @@ class JellyfinRemoteClient(
 
   private fun buildAuth(token: String, deviceId: String): String {
     val deviceName = prefs.deviceName.replace("\"", "'")
-    return "MediaBrowser Client=\"mpvRex\", Device=\"$deviceName\", DeviceId=\"$deviceId\", Version=\"0.1\", Token=\"$token\""
+    return "MediaBrowser Client=\"MAX STREAM\", Device=\"$deviceName\", DeviceId=\"$deviceId\", Version=\"0.1\", Token=\"$token\""
   }
 
   private fun connectWebSocket(server: String, token: String, deviceId: String) {
