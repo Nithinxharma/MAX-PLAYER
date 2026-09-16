@@ -630,7 +630,7 @@ fun MiniPlayer(
             )
 
             Text(
-              text = state.artist.ifBlank { "REX Player" },
+              text = state.artist.ifBlank { "MAX STREAM" },
               style = MaterialTheme.typography.bodySmall,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,

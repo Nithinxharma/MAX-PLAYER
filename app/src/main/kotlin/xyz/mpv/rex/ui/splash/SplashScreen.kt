@@ -48,14 +48,13 @@ import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.ui.welcome.WelcomeScreen
 
 /**
- * Premium cinematic MAX STREAM splash screen with a 7-stage sequence:
- * 1. Deep black canvas
- * 2. Soft atmospheric glow appears
- * 3. Official MAX STREAM logo fades in with smooth cinematic scale
- * 4. Gradient light ray / sheen sweep passes through the logo
- * 5. Logo emits a subtle cinematic bloom & glow pulse
- * 6. "MAX STREAM" premium typography ascends and fades in
- * 7. Seamless transition to Home / Welcome screen
+ * Premium cinematic MAX STREAM splash screen:
+ * 1. Pure black background (#050505)
+ * 2. MAX STREAM logo fades in smoothly
+ * 3. Soft atmospheric glow emerges behind logo
+ * 4. Gradient light sweep beam glides across the logo mark
+ * 5. MAX STREAM studio text ascends and illuminates
+ * 6. Seamless transition into home / welcome screen
  */
 @Serializable
 object SplashScreen : Screen {
@@ -65,47 +64,29 @@ object SplashScreen : Screen {
     val backstack = LocalBackStack.current
     val appearancePreferences = koinInject<AppearancePreferences>()
 
-    // Cinematic Animation Controls
+    // Cinematic Animation Drivers
     val backgroundGlowAlpha = remember { Animatable(0f) }
-    val backgroundGlowScale = remember { Animatable(0.7f) }
+    val backgroundGlowScale = remember { Animatable(0.75f) }
 
     val logoAlpha = remember { Animatable(0f) }
-    val logoScale = remember { Animatable(0.88f) }
+    val logoScale = remember { Animatable(0.92f) }
 
-    val sheenProgress = remember { Animatable(-0.6f) }
-    val sheenAlpha = remember { Animatable(0f) }
-
-    val bloomAlpha = remember { Animatable(0f) }
-    val bloomScale = remember { Animatable(0.95f) }
+    val sweepProgress = remember { Animatable(-0.5f) }
+    val sweepAlpha = remember { Animatable(0f) }
 
     val textAlpha = remember { Animatable(0f) }
-    val textOffsetY = remember { Animatable(18f) }
+    val textOffsetY = remember { Animatable(14f) }
     val taglineAlpha = remember { Animatable(0f) }
 
     val exitAlpha = remember { Animatable(1f) }
 
-    val cinematicEase = remember { CubicBezierEasing(0.25f, 0.1f, 0.25f, 1.0f) }
+    val cinematicEase = remember { CubicBezierEasing(0.16f, 1f, 0.3f, 1f) }
 
     LaunchedEffect(Unit) {
-      // Stage 1: Initial pure black stillness (200ms)
-      delay(200)
+      // 1. Initial Pure Black Silence (150ms)
+      delay(150)
 
-      // Stage 2: Soft atmospheric glow appears
-      launch {
-        backgroundGlowAlpha.animateTo(
-          targetValue = 0.85f,
-          animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
-        )
-      }
-      launch {
-        backgroundGlowScale.animateTo(
-          targetValue = 1.25f,
-          animationSpec = tween(durationMillis = 2200, easing = FastOutSlowInEasing)
-        )
-      }
-
-      // Stage 3: Official MAX STREAM logo fades in & settles
-      delay(300)
+      // 2. MAX STREAM Logo Fades in
       launch {
         logoAlpha.animateTo(
           targetValue = 1f,
@@ -115,68 +96,64 @@ object SplashScreen : Screen {
       launch {
         logoScale.animateTo(
           targetValue = 1.0f,
-          animationSpec = tween(durationMillis = 850, easing = cinematicEase)
+          animationSpec = tween(durationMillis = 800, easing = cinematicEase)
         )
       }
 
-      // Stage 4: Gradient light / sheen passes through logo
-      delay(550)
-      sheenAlpha.snapTo(1f)
+      // 3. Soft Glow emerges around logo
+      delay(250)
       launch {
-        sheenProgress.animateTo(
-          targetValue = 1.6f,
-          animationSpec = tween(durationMillis = 850, easing = LinearEasing)
+        backgroundGlowAlpha.animateTo(
+          targetValue = 0.9f,
+          animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
         )
-        sheenAlpha.animateTo(
+      }
+      launch {
+        backgroundGlowScale.animateTo(
+          targetValue = 1.2f,
+          animationSpec = tween(durationMillis = 1600, easing = FastOutSlowInEasing)
+        )
+      }
+
+      // 4. Gradient light sweep passes through logo
+      delay(400)
+      sweepAlpha.snapTo(1f)
+      launch {
+        sweepProgress.animateTo(
+          targetValue = 1.5f,
+          animationSpec = tween(durationMillis = 750, easing = LinearEasing)
+        )
+        sweepAlpha.animateTo(
           targetValue = 0f,
           animationSpec = tween(durationMillis = 200)
         )
       }
 
-      // Stage 5: Logo emits subtle cinematic glow / bloom
-      delay(400)
-      launch {
-        bloomAlpha.animateTo(
-          targetValue = 0.75f,
-          animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
-        )
-        bloomAlpha.animateTo(
-          targetValue = 0.35f,
-          animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
-        )
-      }
-      launch {
-        bloomScale.animateTo(
-          targetValue = 1.15f,
-          animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
-        )
-      }
-
-      // Stage 6: "MAX STREAM" text appears with graceful vertical float
+      // 5. MAX STREAM text appears
       delay(300)
       launch {
         textAlpha.animateTo(
           targetValue = 1f,
-          animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
+          animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing)
         )
       }
       launch {
         textOffsetY.animateTo(
           targetValue = 0f,
-          animationSpec = tween(durationMillis = 600, easing = cinematicEase)
+          animationSpec = tween(durationMillis = 550, easing = cinematicEase)
         )
       }
       launch {
         taglineAlpha.animateTo(
-          targetValue = 0.65f,
-          animationSpec = tween(durationMillis = 700, delayMillis = 150, easing = FastOutSlowInEasing)
+          targetValue = 0.7f,
+          animationSpec = tween(durationMillis = 600, delayMillis = 100, easing = FastOutSlowInEasing)
         )
       }
 
-      // Hold cinematic impact
-      delay(900)
+      // Hold iconic presence
+      delay(800)
 
-      // Stage 7: Smooth transition into Home / Welcome Screen
+      // 6. Smooth transition into home
       exitAlpha.animateTo(
         targetValue = 0f,
         animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
@@ -196,19 +173,19 @@ object SplashScreen : Screen {
         .graphicsLayer { alpha = exitAlpha.value },
       contentAlignment = Alignment.Center
     ) {
-      // Background Radial Atmosphere
+      // Atmospheric Soft Glow Backdrop
       Box(
         modifier = Modifier
-          .size(420.dp)
+          .size(380.dp)
           .scale(backgroundGlowScale.value)
           .alpha(backgroundGlowAlpha.value)
-          .blur(80.dp)
+          .blur(72.dp)
           .background(
             Brush.radialGradient(
               colors = listOf(
-                Color(0x55A855F7),
-                Color(0x33007AFF),
-                Color(0x1532D7FF),
+                Color(0x60A855F7),
+                Color(0x35007AFF),
+                Color(0x1232D7FF),
                 Color.Transparent
               )
             )
@@ -218,45 +195,45 @@ object SplashScreen : Screen {
       Column(
         horizontalAlignment = Alignment.CenterHorizontally
       ) {
-        // Logo container with layered bloom and light sweep
+        // Logo container with specular light sweep
         Box(
-          modifier = Modifier.size(160.dp),
+          modifier = Modifier.size(150.dp),
           contentAlignment = Alignment.Center
         ) {
-          // Subtle Bloom Halo behind Logo
+          // Ambient Bloom under logo
           Image(
             painter = painterResource(id = R.drawable.ic_max_stream_mark),
             contentDescription = null,
             modifier = Modifier
-              .size(150.dp)
-              .scale(logoScale.value * bloomScale.value)
-              .alpha(bloomAlpha.value)
-              .blur(24.dp)
+              .size(140.dp)
+              .scale(logoScale.value * 1.05f)
+              .alpha(backgroundGlowAlpha.value * 0.4f)
+              .blur(20.dp)
           )
 
           // Main Crisp Vector Mark with Light Sheen Sweep
           Box(
             modifier = Modifier
-              .size(130.dp)
+              .size(124.dp)
               .scale(logoScale.value)
               .alpha(logoAlpha.value)
               .drawWithContent {
                 drawContent()
 
-                // Draw gradient light sheen passing across the logo
-                if (sheenAlpha.value > 0f) {
-                  val sweepX = size.width * sheenProgress.value
-                  val sheenBrush = Brush.linearGradient(
+                // Specular gradient sweep
+                if (sweepAlpha.value > 0f) {
+                  val sweepX = size.width * sweepProgress.value
+                  val sweepBrush = Brush.linearGradient(
                     colors = listOf(
                       Color.Transparent,
-                      Color.White.copy(alpha = 0.55f * sheenAlpha.value),
-                      Color(0xFF32D7FF).copy(alpha = 0.4f * sheenAlpha.value),
+                      Color.White.copy(alpha = 0.65f * sweepAlpha.value),
+                      Color(0xFF32D7FF).copy(alpha = 0.45f * sweepAlpha.value),
                       Color.Transparent
                     ),
-                    start = Offset(sweepX - 80f, 0f),
-                    end = Offset(sweepX + 80f, size.height)
+                    start = Offset(sweepX - 60f, 0f),
+                    end = Offset(sweepX + 60f, size.height)
                   )
-                  drawRect(brush = sheenBrush, blendMode = BlendMode.SrcAtop)
+                  drawRect(brush = sweepBrush, blendMode = BlendMode.SrcAtop)
                 }
               }
           ) {
@@ -268,7 +245,7 @@ object SplashScreen : Screen {
           }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Typography: "MAX STREAM"
         Column(
@@ -280,10 +257,10 @@ object SplashScreen : Screen {
           Text(
             text = "MAX STREAM",
             color = Color.White,
-            fontSize = 24.sp,
+            fontSize = 25.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.SansSerif,
-            letterSpacing = 5.sp
+            letterSpacing = 6.sp
           )
 
           Spacer(modifier = Modifier.height(6.dp))
@@ -292,9 +269,9 @@ object SplashScreen : Screen {
             text = "PREMIUM MEDIA UNIVERSE",
             color = Color(0xFFB3B3B3),
             fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.SansSerif,
-            letterSpacing = 3.sp,
+            letterSpacing = 3.5.sp,
             modifier = Modifier.alpha(taglineAlpha.value)
           )
         }

@@ -51,7 +51,7 @@ class YtDlClient(
 
     /**
      * Cryptographically verifies that the installed add-on package is signed by
-     * the exact same developer certificate as REX Player.
+     * the exact same developer certificate as MAX STREAM.
      */
     fun isAddonAuthentic(): Boolean {
         if (!isAddonInstalled()) return false
@@ -187,10 +187,10 @@ class YtDlClient(
         options: StreamExtractionOptions = StreamExtractionOptions(),
     ): ResolvedStream = withContext(Dispatchers.IO) {
         if (!isAddonInstalled()) {
-            return@withContext ResolvedStream.failure("REX Ytdlp is not installed")
+            return@withContext ResolvedStream.failure("MAX STREAM Ytdlp is not installed")
         }
         val service = getService()
-            ?: return@withContext ResolvedStream.failure("Could not connect to REX Ytdlp")
+            ?: return@withContext ResolvedStream.failure("Could not connect to MAX STREAM Ytdlp")
 
         try {
             val optionsBundle = YtdlIpcConverter.toOptionsBundle(options)
@@ -207,10 +207,10 @@ class YtDlClient(
         options: StreamExtractionOptions = StreamExtractionOptions(),
     ): ResolvedPlaylist = withContext(Dispatchers.IO) {
         if (!isAddonInstalled()) {
-            return@withContext ResolvedPlaylist.failure(url, "REX Ytdlp is not installed")
+            return@withContext ResolvedPlaylist.failure(url, "MAX STREAM Ytdlp is not installed")
         }
         val service = getService()
-            ?: return@withContext ResolvedPlaylist.failure(url, "Could not connect to REX Ytdlp")
+            ?: return@withContext ResolvedPlaylist.failure(url, "Could not connect to MAX STREAM Ytdlp")
 
         try {
             val optionsBundle = YtdlIpcConverter.toOptionsBundle(options)

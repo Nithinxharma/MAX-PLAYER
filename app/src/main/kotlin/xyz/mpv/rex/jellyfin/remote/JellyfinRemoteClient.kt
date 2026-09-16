@@ -432,7 +432,7 @@ class JellyfinRemoteClient(
       } catch (e: Exception) {
         Log.w(TAG, "Failed to start PlayerActivity: ${e.message}")
       }
-      // Report Playing so dashboard shows Now Playing under mpvRex's own session
+      // Report Playing so dashboard shows Now Playing under MAX STREAM's own session
       val deviceId = prefs.deviceId
       val ok = reportPlaying(server, token, deviceId, itemId, mediaSourceId, ticks)
       Log.d(TAG, "Remote reportPlaying ${if (ok) "OK" else "failed"}")

@@ -881,10 +881,10 @@ class PlayerActivity :
 
   private fun resolveWebStream(playableUri: String) {
     if (!ytDlClient.isAddonInstalled()) {
-      Log.w(TAG, "Web stream URL requires REX Ytdlp, but addon is not installed: $playableUri")
+      Log.w(TAG, "Web stream URL requires MAX STREAM Ytdlp, but addon is not installed: $playableUri")
       android.widget.Toast.makeText(
         this,
-        "REX Ytdlp required to play YouTube and web video links",
+        "MAX STREAM Ytdlp required to play YouTube and web video links",
         android.widget.Toast.LENGTH_LONG
       ).show()
       return
@@ -895,7 +895,7 @@ class PlayerActivity :
     runCatching { MPVLib.setPropertyString("idle", "yes") }
 
     lifecycleScope.launch {
-      Log.d(TAG, "Resolving web stream URL via REX Ytdlp: $playableUri")
+      Log.d(TAG, "Resolving web stream URL via MAX STREAM Ytdlp: $playableUri")
       val resolved = ytDlClient.resolveStream(playableUri, ytdlPreferences.buildExtractionOptions())
       if (resolved.isSuccess && !resolved.videoUrl.isNullOrBlank()) {
         Log.d(TAG, "Stream resolved successfully: ${resolved.title}, isDASH=${resolved.isDASH}")

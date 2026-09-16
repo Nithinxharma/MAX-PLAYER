@@ -160,7 +160,7 @@ class WebShareServer(
     val pipedOut = PipedOutputStream()
     val pipedIn = PipedInputStream(pipedOut, 64 * 1024)
 
-    thread(name = "REXPlayer-WebShare-ZipStream") {
+    thread(name = "MAXSTREAM-WebShare-ZipStream") {
       try {
         ZipOutputStream(pipedOut.buffered()).use { zipOut ->
           val buffer = ByteArray(64 * 1024)
@@ -186,7 +186,7 @@ class WebShareServer(
     }
 
     val response = newChunkedResponse(Response.Status.OK, "application/zip", pipedIn)
-    response.addHeader("Content-Disposition", "attachment; filename=\"REX_Player_shared_files.zip\"")
+    response.addHeader("Content-Disposition", "attachment; filename=\"MAX_STREAM_shared_files.zip\"")
     return response
   }
 
@@ -228,9 +228,9 @@ class WebShareServer(
   private fun handleUpload(session: IHTTPSession): Response {
     return try {
       val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-      val rexPlayerDir = File(downloadsDir, "REX Player")
-      if (!rexPlayerDir.exists()) {
-        rexPlayerDir.mkdirs()
+      val maxStreamDir = File(downloadsDir, "MAX STREAM")
+      if (!maxStreamDir.exists()) {
+        maxStreamDir.mkdirs()
       }
 
       val contentType = session.headers["content-type"] ?: ""
@@ -247,7 +247,7 @@ class WebShareServer(
               ?: session.parameters["name"]?.firstOrNull()
               ?: session.parameters["filename"]?.firstOrNull()
               ?: tempFile.name
-            val destFile = getUniqueDestinationFile(rexPlayerDir, originalName)
+            val destFile = getUniqueDestinationFile(maxStreamDir, originalName)
             tempFile.copyTo(destFile, overwrite = true)
             tempFile.delete()
             onFileSuccessfullySaved(destFile)
@@ -268,7 +268,7 @@ class WebShareServer(
         }
 
         val contentLength = session.headers["content-length"]?.toLongOrNull() ?: -1L
-        val destFile = getUniqueDestinationFile(rexPlayerDir, decodedName)
+        val destFile = getUniqueDestinationFile(maxStreamDir, decodedName)
 
         FileOutputStream(destFile).use { fos ->
           val buffer = ByteArray(64 * 1024)
