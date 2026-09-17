@@ -213,6 +213,7 @@ dependencies {
 
   // Unit Testing
   testImplementation(libs.junit)
+    testImplementation("androidx.compose.ui:ui-test-junit4:1.7.0")
   testImplementation("org.robolectric:robolectric:4.11.1")
   testImplementation("androidx.test:core-ktx:1.5.0")
   testImplementation("androidx.test.ext:junit:1.1.5")

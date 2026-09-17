@@ -8,17 +8,17 @@ val controlColor = Color(0xFFFFFFFF)
 // ============================================================================
 // Official MAX STREAM Brand Palette
 // ============================================================================
-val MaxStreamRed = Color(0xFFFF3B30)
-val MaxStreamBlue = Color(0xFF007AFF)
-val MaxStreamCyan = Color(0xFF32D7FF)
-val MaxStreamPurple = Color(0xFFA855F7)
-val MaxStreamPink = Color(0xFFFF2D92)
-val MaxStreamOrange = Color(0xFFFF5E3A)
+val MaxStreamRed = Color(0xFFFF2A3D)
+val MaxStreamBlue = Color(0xFF2563FF)
+val MaxStreamCyan = Color(0xFF38E8FF)
+val MaxStreamPurple = Color(0xFF8B5CF6)
+val MaxStreamPink = Color(0xFFFF3EC9)
+val MaxStreamOrange = Color(0xFFFF2A3D)
 
-val MaxStreamBgDark = Color(0xFF050505)
-val MaxStreamSurfaceDark = Color(0xFF101010)
-val MaxStreamSurfaceElevated = Color(0xFF1A1A1A)
-val MaxStreamSurfaceHigh = Color(0xFF242424)
+val MaxStreamBgDark = Color(0xFF000000)
+val MaxStreamSurfaceDark = Color(0xFF0B0B0B)
+val MaxStreamSurfaceElevated = Color(0xFF111111)
+val MaxStreamSurfaceHigh = Color(0xFF1A1A1A)
 
 val MaxStreamTextPrimary = Color(0xFFFFFFFF)
 val MaxStreamTextSecondary = Color(0xFFB3B3B3)
@@ -26,11 +26,11 @@ val MaxStreamTextTertiary = Color(0xFF7A7A7A)
 
 // Signature multi-color brand gradient
 val MaxStreamGradient = listOf(
-  Color(0xFFFF3B30),
-  Color(0xFFFF2D92),
-  Color(0xFFA855F7),
-  Color(0xFF007AFF),
-  Color(0xFF32D7FF),
+  Color(0xFFFF2A3D),
+  Color(0xFFFF3EC9),
+  Color(0xFF8B5CF6),
+  Color(0xFF2563FF),
+  Color(0xFF38E8FF),
 )
 
 val MaxStreamHorizontalGradientBrush = Brush.horizontalGradient(MaxStreamGradient)

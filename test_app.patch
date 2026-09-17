@@ -1,0 +1,15 @@
+--- app/src/main/kotlin/xyz/mpv/rex/App.kt
++++ app/src/main/kotlin/xyz/mpv/rex/App.kt
+@@ -64,7 +64,11 @@
+       )
+     )
+ 
+-    FastThumbnails.initialize(this)
++    try {
++      FastThumbnails.initialize(this)
++    } catch (e: Throwable) {
++      android.util.Log.e("App", "Failed to initialize FastThumbnails", e)
++    }
+ 
+     // Launch background tasks
+     applicationScope.launch {

@@ -64,7 +64,7 @@ class App : Application() {
 
     Thread.setDefaultUncaughtExceptionHandler(GlobalExceptionHandler(applicationContext, CrashActivity::class.java))
 
-    FastThumbnails.initialize(this)
+    try { FastThumbnails.initialize(this) } catch (e: Throwable) { android.util.Log.e("App", "FastThumbnails failed", e) }
 
     // Sync MediaInfoActivity status with user preference
     advancedPreferences.syncMediaInfoActivityStatus(this)

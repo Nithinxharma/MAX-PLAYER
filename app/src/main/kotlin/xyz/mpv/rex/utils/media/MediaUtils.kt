@@ -64,6 +64,8 @@ object MediaUtils : KoinComponent {
     context: Context,
     launchSource: String? = null,
     headers: Map<String, String>? = null,
+    subtitlesJson: String? = null,
+    episodeMetadataJson: String? = null,
   ) {
     val intent = when (source) {
       is Video -> {
@@ -158,6 +160,8 @@ object MediaUtils : KoinComponent {
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.putExtra("internal_launch", true) // Enables subtitle autoload
     launchSource?.let { intent.putExtra("launch_source", it) }
+    subtitlesJson?.let { intent.putExtra("cloudstream_subtitles_json", it) }
+    episodeMetadataJson?.let { intent.putExtra("cloudstream_episode_metadata_json", it) }
 
     // Pack HTTP headers for MPV PlayerActivity
     if (!headers.isNullOrEmpty()) {

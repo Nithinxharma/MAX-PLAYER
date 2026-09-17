@@ -987,7 +987,8 @@ data class SearchScreen(
                   providerName = item.providerName.ifBlank { item.loadResponse.apiName },
                   dataUrl = item.loadResponse.dataUrl.ifBlank { item.loadResponse.url },
                   movieTitle = item.loadResponse.name,
-                  scope = coroutineScope
+                  scope = coroutineScope,
+                  onLinksLoaded = { _, _ -> }
                 )
               }
               is TvSeriesLoadResponse -> {

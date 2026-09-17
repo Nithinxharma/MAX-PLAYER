@@ -165,15 +165,19 @@ fun extractAndPlayMovie(
   movieTitle: String,
   scope: kotlinx.coroutines.CoroutineScope,
   onDismiss: () -> Unit = {},
+  onLinksLoaded: (List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>) -> Unit,
 ) {
   scope.launch(Dispatchers.IO) {
     val api = APIHolder.apis.firstOrNull { it.name.equals(providerName, true) }
       ?: APIHolder.getApi(providerName)
     val links = mutableListOf<com.lagradost.cloudstream3.utils.ExtractorLink>()
+    val subtitles = mutableListOf<com.lagradost.cloudstream3.SubtitleFile>()
 
     if (api != null) {
       try {
-        api.loadLinks(dataUrl, false, subtitleCallback = {}) { link ->
+        api.loadLinks(dataUrl, false, subtitleCallback = { sub ->
+          synchronized(subtitles) { subtitles.add(sub) }
+        }) { link ->
           synchronized(links) { links.add(link) }
         }
       } catch (e: Exception) {
@@ -201,19 +205,8 @@ fun extractAndPlayMovie(
       }
     }
 
-    val bestLink = links.maxByOrNull { it.quality }
     withContext(Dispatchers.Main) {
-      if (bestLink != null && bestLink.url.isNotBlank()) {
-        onDismiss()
-        android.widget.Toast.makeText(context, "Playing $movieTitle", android.widget.Toast.LENGTH_SHORT).show()
-        val headersMap = buildMap {
-          if (bestLink.referer.isNotBlank()) put("Referer", bestLink.referer)
-          putAll(bestLink.headers)
-        }
-        MediaUtils.playFile(bestLink.url, context, "cinehub", headersMap)
-      } else {
-        android.widget.Toast.makeText(context, "No stream links found for movie", android.widget.Toast.LENGTH_SHORT).show()
-      }
+      onLinksLoaded(links, subtitles)
     }
   }
 }
@@ -226,15 +219,19 @@ fun extractAndPlayEpisode(
   seriesTitle: String,
   scope: kotlinx.coroutines.CoroutineScope,
   onDismiss: () -> Unit = {},
+  onLinksLoaded: (List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>) -> Unit,
 ) {
   scope.launch(Dispatchers.IO) {
     val api = APIHolder.apis.firstOrNull { it.name.equals(providerName, true) }
       ?: APIHolder.getApi(providerName)
     val links = mutableListOf<com.lagradost.cloudstream3.utils.ExtractorLink>()
+    val subtitles = mutableListOf<com.lagradost.cloudstream3.SubtitleFile>()
 
     if (api != null) {
       try {
-        api.loadLinks(data, false, subtitleCallback = {}) { link ->
+        api.loadLinks(data, false, subtitleCallback = { sub ->
+          synchronized(subtitles) { subtitles.add(sub) }
+        }) { link ->
           synchronized(links) { links.add(link) }
         }
       } catch (e: Exception) {
@@ -262,20 +259,8 @@ fun extractAndPlayEpisode(
       }
     }
 
-    val bestLink = links.maxByOrNull { it.quality }
     withContext(Dispatchers.Main) {
-      if (bestLink != null && bestLink.url.isNotBlank()) {
-        onDismiss()
-        val displayName = if (!episodeTitle.isNullOrBlank()) "$seriesTitle - $episodeTitle" else seriesTitle
-        android.widget.Toast.makeText(context, "Playing $displayName", android.widget.Toast.LENGTH_SHORT).show()
-        val headersMap = buildMap {
-          if (bestLink.referer.isNotBlank()) put("Referer", bestLink.referer)
-          putAll(bestLink.headers)
-        }
-        MediaUtils.playFile(bestLink.url, context, "cinehub", headersMap)
-      } else {
-        android.widget.Toast.makeText(context, "No stream links found for episode", android.widget.Toast.LENGTH_SHORT).show()
-      }
+      onLinksLoaded(links, subtitles)
     }
   }
 }
@@ -323,6 +308,11 @@ object CineHubScreen : Screen {
 
     var selectedDetailItem by remember { mutableStateOf<Any?>(null) }
     var showCloudstreamSearch by remember { mutableStateOf(false) }
+
+    var pendingStreamTitle by remember { mutableStateOf("") }
+    var pendingStreamLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
+    var pendingSubtitles by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
+    var pendingEpisodeMetadataJson by remember { mutableStateOf<String?>(null) }
 
     val navBarHeight = LocalNavigationBarHeight.current
 
@@ -1019,12 +1009,78 @@ object CineHubScreen : Screen {
             item = item,
             onDismiss = { selectedDetailItem = null },
             onPlay = {
-              playMediaItem(context, item, scope)
+              playMediaItem(
+                context = context,
+                item = item,
+                scope = scope,
+                onLinksLoaded = { links, subs, epMetaJson ->
+                  if (links.size == 1) {
+                    val link = links.first()
+                    val headersMap = buildMap {
+                      if (link.referer.isNotBlank()) put("Referer", link.referer)
+                      putAll(link.headers)
+                    }
+                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetaJson)
+                  } else if (links.size > 1) {
+                    pendingStreamLinks = links
+                    pendingSubtitles = subs
+                    pendingEpisodeMetadataJson = epMetaJson
+                    pendingStreamTitle = if (item is MovieItem) item.title else if (item is TvShowItem) item.title else ""
+                  } else {
+                    Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                  }
+                }
+              )
             },
             onRefreshItem = { updated ->
               selectedDetailItem = updated
               loadMedia()
             },
+            onLinksLoaded = { links, subs, epMetaJson ->
+              if (links.size == 1) {
+                val link = links.first()
+                val headersMap = buildMap {
+                  if (link.referer.isNotBlank()) put("Referer", link.referer)
+                  putAll(link.headers)
+                }
+                val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetaJson)
+              } else if (links.size > 1) {
+                pendingStreamLinks = links
+                pendingSubtitles = subs
+                pendingEpisodeMetadataJson = epMetaJson
+                pendingStreamTitle = ""
+              } else {
+                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+              }
+            }
+          )
+        }
+
+        if (pendingStreamLinks.isNotEmpty()) {
+          QualitySelectorBottomSheet(
+            title = pendingStreamTitle,
+            links = pendingStreamLinks,
+            subtitles = pendingSubtitles,
+            episodeMetadataJson = pendingEpisodeMetadataJson,
+            onDismiss = { pendingStreamLinks = emptyList() },
+            onLinkSelected = { link ->
+              val headersMap = buildMap {
+                if (link.referer.isNotBlank()) put("Referer", link.referer)
+                putAll(link.headers)
+              }
+              val subtitlesJson = if (pendingSubtitles.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(pendingSubtitles.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+              MediaUtils.playFile(
+                source = link.url,
+                context = context,
+                launchSource = "cinehub",
+                headers = headersMap,
+                subtitlesJson = subtitlesJson,
+                episodeMetadataJson = pendingEpisodeMetadataJson
+              )
+              pendingStreamLinks = emptyList()
+            }
           )
         }
 
@@ -1096,6 +1152,7 @@ object CineHubScreen : Screen {
     context: android.content.Context,
     item: Any,
     scope: kotlinx.coroutines.CoroutineScope,
+    onLinksLoaded: ((List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>, String?) -> Unit)? = null
   ) {
     when (item) {
       is MovieItem -> {
@@ -1151,7 +1208,24 @@ object CineHubScreen : Screen {
               dataUrl = item.loadResponse.dataUrl.ifBlank { item.loadResponse.url },
               movieTitle = item.loadResponse.name,
               scope = scope,
-              onDismiss = {}
+              onDismiss = {},
+              onLinksLoaded = { links, subs ->
+                if (onLinksLoaded != null) {
+                  onLinksLoaded(links, subs, null)
+                } else {
+                  if (links.size == 1) {
+                    val link = links.first()
+                    val headersMap = buildMap {
+                      if (link.referer.isNotBlank()) put("Referer", link.referer)
+                      putAll(link.headers)
+                    }
+                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                  } else if (links.isEmpty()) {
+                    Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                  }
+                }
+              }
             )
           }
           is TvSeriesLoadResponse -> {
@@ -1166,7 +1240,24 @@ object CineHubScreen : Screen {
           dataUrl = item.dataUrl.ifBlank { item.url },
           movieTitle = item.name,
           scope = scope,
-          onDismiss = {}
+          onDismiss = {},
+          onLinksLoaded = { links, subs ->
+            if (onLinksLoaded != null) {
+              onLinksLoaded(links, subs, null)
+            } else {
+              if (links.size == 1) {
+                val link = links.first()
+                val headersMap = buildMap {
+                  if (link.referer.isNotBlank()) put("Referer", link.referer)
+                  putAll(link.headers)
+                }
+                val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+              } else if (links.isEmpty()) {
+                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+              }
+            }
+          }
         )
       }
       is TvSeriesLoadResponse -> {
@@ -1486,6 +1577,7 @@ fun CineDetailBottomSheet(
   onDismiss: () -> Unit,
   onPlay: () -> Unit,
   onRefreshItem: (Any) -> Unit = {},
+  onLinksLoaded: ((List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>, String?) -> Unit)? = null
 ) {
   val database = koinInject<xyz.mpv.rex.database.MpvExDatabase>()
   val libraryDao = database.cineLibraryDao()
@@ -2145,7 +2237,25 @@ fun CineDetailBottomSheet(
                   dataUrl = loadResp.dataUrl.ifBlank { loadResp.url },
                   movieTitle = loadResp.name,
                   scope = scope,
-                  onDismiss = onDismiss
+                  onDismiss = onDismiss,
+                  onLinksLoaded = { links, subs ->
+                    isExtractingMovie = false
+                    if (onLinksLoaded != null) {
+                      onLinksLoaded(links, subs, null)
+                    } else {
+                      if (links.size == 1) {
+                        val link = links.first()
+                        val headersMap = buildMap {
+                          if (link.referer.isNotBlank()) put("Referer", link.referer)
+                          putAll(link.headers)
+                        }
+                        val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                        MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                      } else if (links.isEmpty()) {
+                        Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                      }
+                    }
+                  }
                 )
               },
               modifier = Modifier
@@ -2255,6 +2365,25 @@ fun CineDetailBottomSheet(
                           onDismiss = {
                             extractingEpisodeData = null
                             onDismiss()
+                          },
+                          onLinksLoaded = { links, subs ->
+                            extractingEpisodeData = null
+                            if (onLinksLoaded != null) {
+                              onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
+                            } else {
+                              if (links.size == 1) {
+                                val link = links.first()
+                                val headersMap = buildMap {
+                                  if (link.referer.isNotBlank()) put("Referer", link.referer)
+                                  putAll(link.headers)
+                                }
+                                val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                                val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epJson)
+                              } else if (links.isEmpty()) {
+                                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                              }
+                            }
                           }
                         )
                       },
@@ -2326,6 +2455,25 @@ fun CineDetailBottomSheet(
                               onDismiss = {
                                 extractingEpisodeData = null
                                 onDismiss()
+                              },
+                              onLinksLoaded = { links, subs ->
+                                extractingEpisodeData = null
+                                if (onLinksLoaded != null) {
+                                  onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
+                                } else {
+                                  if (links.size == 1) {
+                                    val link = links.first()
+                                    val headersMap = buildMap {
+                                      if (link.referer.isNotBlank()) put("Referer", link.referer)
+                                      putAll(link.headers)
+                                    }
+                                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                                    val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epJson)
+                                  } else if (links.isEmpty()) {
+                                    Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                                  }
+                                }
                               }
                             )
                           }
@@ -2603,6 +2751,77 @@ private fun KodiScraperBottomSheet(
             text = "Start Kodi Online Scraper",
             fontWeight = FontWeight.Bold,
           )
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QualitySelectorBottomSheet(
+  title: String,
+  links: List<com.lagradost.cloudstream3.utils.ExtractorLink>,
+  subtitles: List<com.lagradost.cloudstream3.SubtitleFile>,
+  episodeMetadataJson: String?,
+  onDismiss: () -> Unit,
+  onLinkSelected: (com.lagradost.cloudstream3.utils.ExtractorLink) -> Unit,
+) {
+  val sortedLinks = links.sortedByDescending { it.quality }
+  ModalBottomSheet(
+    onDismissRequest = onDismiss,
+    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 24.dp, vertical = 16.dp)
+        .padding(bottom = 32.dp),
+    ) {
+      Text(
+        text = "Select Stream Quality",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(bottom = 16.dp)
+      )
+      
+      LazyColumn {
+        items(sortedLinks) { link ->
+          Card(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(vertical = 4.dp)
+              .clickable { onLinkSelected(link) },
+            colors = CardDefaults.cardColors(
+              containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Column {
+                Text(
+                  text = "${link.quality}p",
+                  fontWeight = FontWeight.Bold,
+                  style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                  text = link.name,
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+              if (link.isM3u8) {
+                Badge(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                  Text("M3U8", color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                }
+              }
+            }
+          }
         }
       }
     }
