@@ -32,6 +32,7 @@ dependencyResolutionManagement {
         includeGroup("com.github.thegrizzlylabs")
         includeGroup("com.github.nanihadesuka")
         includeGroup("com.github.jeziellago")
+        includeGroup("com.github.Blatzar")
       }
     }
   }

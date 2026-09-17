@@ -151,6 +151,11 @@ room {
 }
 
 dependencies {
+  // CloudStream SDK Compatibility
+  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+  implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
+  implementation("com.github.Blatzar:NiceHttp:0.4.18")
+
   implementation("io.coil-kt:coil-compose:2.6.0")
   implementation(libs.splashScreen)
   implementation(libs.androidx.activity.compose)
@@ -208,6 +213,9 @@ dependencies {
 
   // Unit Testing
   testImplementation(libs.junit)
+  testImplementation("org.robolectric:robolectric:4.11.1")
+  testImplementation("androidx.test:core-ktx:1.5.0")
+  testImplementation("androidx.test.ext:junit:1.1.5")
   testImplementation(libs.mockk)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.turbine)

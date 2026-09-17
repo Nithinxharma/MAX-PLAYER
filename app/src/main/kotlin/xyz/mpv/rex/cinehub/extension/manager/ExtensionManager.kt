@@ -61,6 +61,36 @@ class ExtensionManager(
         }
     }
 
+    private fun extractClassNamesFromZip(file: File): List<String> {
+        val classNames = mutableListOf<String>()
+        if (!file.exists()) return classNames
+        runCatching {
+            ZipFile(file).use { zip ->
+                val entry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json")
+                if (entry != null) {
+                    val text = zip.getInputStream(entry).bufferedReader().readText()
+                    val json = JSONObject(text)
+                    val mainClass = json.optString("pluginClassName", "")
+                    if (mainClass.isNotBlank()) {
+                        classNames.add(mainClass)
+                    }
+                    val classesArr = json.optJSONArray("classes")
+                    if (classesArr != null) {
+                        for (i in 0 until classesArr.length()) {
+                            val cName = classesArr.optString(i)
+                            if (cName.isNotBlank() && !classNames.contains(cName)) {
+                                classNames.add(cName)
+                            }
+                        }
+                    }
+                }
+            }
+        }.onFailure {
+            Log.w("ExtensionManager", "Failed to parse manifest from zip ${file.name}: ${it.message}")
+        }
+        return classNames
+    }
+
     private fun loadExtensionFromDisk(ext: InstalledExtension) {
         val localPath = ext.localFilePath ?: return
         val file = File(localPath)
@@ -77,33 +107,21 @@ class ExtensionManager(
 
             val classNames = mutableListOf<String>()
 
-            // Inspect manifest.json / make.json in the zip archive
-            runCatching {
-                ZipFile(file).use { zip ->
-                    val entry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json")
-                    if (entry != null) {
-                        val text = zip.getInputStream(entry).bufferedReader().readText()
-                        val json = JSONObject(text)
-                        val mainClass = json.optString("pluginClassName", "")
-                        if (mainClass.isNotBlank()) {
-                            classNames.add(mainClass)
-                        }
-                        val classesArr = json.optJSONArray("classes")
-                        if (classesArr != null) {
-                            for (i in 0 until classesArr.length()) {
-                                val cName = classesArr.optString(i)
-                                if (cName.isNotBlank() && !classNames.contains(cName)) {
-                                    classNames.add(cName)
-                                }
-                            }
-                        }
-                    }
-                }
+            // 1. Inspect manifest.json / make.json directly from the zip archive
+            classNames.addAll(extractClassNamesFromZip(file))
+
+            // 2. Also check classesFile recorded during install, filtering out any author names or non-class entries
+            ext.classesFile?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() && it.contains(".") }?.forEach {
+                if (!classNames.contains(it)) classNames.add(it)
             }
 
-            // Also check classesFile recorded during install
-            ext.classesFile?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }?.forEach {
-                if (!classNames.contains(it)) classNames.add(it)
+            // If classesFile was previously corrupted and classNames were extracted from zip, self-heal database record
+            if (classNames.isNotEmpty() && ext.classesFile != classNames.joinToString(", ")) {
+                scope.launch(Dispatchers.IO) {
+                    runCatching {
+                        db.extensionDao().insertExtension(ext.copy(classesFile = classNames.joinToString(", ")))
+                    }
+                }
             }
 
             for (className in classNames) {
@@ -130,6 +148,7 @@ class ExtensionManager(
     suspend fun installExtension(plugin: AvailablePlugin): Boolean = withContext(Dispatchers.IO) {
         try {
             var localPath: String? = null
+            var discoveredClasses: List<String> = emptyList()
             if (plugin.url.isNotBlank()) {
                 val targetFile = File(extensionDir, "${plugin.internalName}.cs3")
                 val request = Request.Builder().url(plugin.url).build()
@@ -141,6 +160,7 @@ class ExtensionManager(
                             }
                         }
                         localPath = targetFile.absolutePath
+                        discoveredClasses = extractClassNamesFromZip(targetFile)
                     }
                 }
             }
@@ -155,7 +175,7 @@ class ExtensionManager(
                 repositoryUrl = plugin.repositoryUrl,
                 isEnabled = true,
                 localFilePath = localPath,
-                classesFile = plugin.authors.joinToString(", ")
+                classesFile = if (discoveredClasses.isNotEmpty()) discoveredClasses.joinToString(", ") else null
             )
             db.extensionDao().insertExtension(installed)
 

@@ -3,6 +3,7 @@ package com.lagradost.cloudstream3
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
+import com.lagradost.cloudstream3.utils.ExtractorApi
 import dalvik.system.DexClassLoader
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -26,27 +27,50 @@ object AcraApplication {
 }
 
 object APIHolder {
+    val unixTimeMS: Long get() = System.currentTimeMillis()
+    val unixTime: Long get() = unixTimeMS / 1000L
+
     val apis = mutableListOf<MainAPI>()
+    val allProviders = mutableListOf<MainAPI>()
+    val extractorApis = mutableListOf<ExtractorApi>()
     private val apiMap = ConcurrentHashMap<String, MainAPI>()
 
     fun addPlugin(api: MainAPI) {
-        if (!apis.contains(api)) {
+        if (!allProviders.contains(api)) {
+            allProviders.add(api)
             apis.add(api)
             apiMap[api.name] = api
             Log.i("APIHolder", "Registered Cloudstream API: ${api.name} (${api.mainUrl})")
         }
     }
 
+    fun addExtractor(api: ExtractorApi) {
+        if (!extractorApis.contains(api)) {
+            extractorApis.add(api)
+            Log.i("APIHolder", "Registered Extractor API: ${api.name} (${api.mainUrl})")
+        }
+    }
+
     fun removePlugin(api: MainAPI) {
+        allProviders.remove(api)
         apis.remove(api)
         apiMap.remove(api.name)
     }
 
     fun getApi(name: String): MainAPI? = apiMap[name]
 
+    fun removePluginsBySource(sourceFilename: String) {
+        allProviders.removeAll { it.sourcePlugin == sourceFilename }
+        apis.removeAll { it.sourcePlugin == sourceFilename }
+        apiMap.entries.removeIf { it.value.sourcePlugin == sourceFilename }
+        extractorApis.removeAll { it.sourcePlugin == sourceFilename }
+    }
+
     fun clear() {
         apis.clear()
+        allProviders.clear()
         apiMap.clear()
+        extractorApis.clear()
     }
 }
 
@@ -96,8 +120,9 @@ object CloudstreamHttp {
 
 class PluginManager(private val context: Context) {
     private val pluginDir = File(context.filesDir, "cloudstream_plugins").apply { mkdirs() }
-    private val optDir = File(context.codeCacheDir, "cloudstream_opt").apply { mkdirs() }
-
+    
+    // We keep this return type to avoid breaking other files temporarily,
+    // though real APIHolder holds everything now.
     fun loadPluginFile(pluginFile: File): List<MainAPI> {
         val loadedApis = mutableListOf<MainAPI>()
         if (!pluginFile.exists() || !pluginFile.canRead()) {
@@ -106,12 +131,15 @@ class PluginManager(private val context: Context) {
         }
 
         val classNames = mutableListOf<String>()
+        var requiresResources = false
+        var manifestVersion: Int? = null
+
         try {
-            ZipFile(pluginFile).use { zip ->
+            java.util.zip.ZipFile(pluginFile).use { zip ->
                 val manifestEntry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json")
                 if (manifestEntry != null) {
                     val rawJson = zip.getInputStream(manifestEntry).bufferedReader().readText()
-                    val json = JSONObject(rawJson)
+                    val json = org.json.JSONObject(rawJson)
                     val mainClass = json.optString("pluginClassName")
                     if (!mainClass.isNullOrBlank()) classNames.add(mainClass)
                     val classesArr = json.optJSONArray("classes")
@@ -121,31 +149,58 @@ class PluginManager(private val context: Context) {
                             if (c.isNotBlank() && !classNames.contains(c)) classNames.add(c)
                         }
                     }
+                    requiresResources = json.optBoolean("requiresResources", false)
+                    manifestVersion = if (json.has("version")) json.optInt("version") else null
                 }
             }
 
-            val classLoader = DexClassLoader(
+            val classLoader = dalvik.system.PathClassLoader(
                 pluginFile.absolutePath,
-                optDir.absolutePath,
-                null,
                 context.classLoader
             )
 
             for (className in classNames) {
                 try {
-                    val clazz = classLoader.loadClass(className)
-                    val instance = clazz.getDeclaredConstructor().newInstance()
-                    if (instance is MainAPI) {
-                        APIHolder.addPlugin(instance)
-                        loadedApis.add(instance)
+                    val pluginClass = classLoader.loadClass(className) as Class<out com.lagradost.cloudstream3.plugins.BasePlugin>
+                    val pluginInstance = pluginClass.getDeclaredConstructor().newInstance()
+                    
+                    pluginInstance.filename = pluginFile.absolutePath
+
+                    if (requiresResources && pluginInstance is com.lagradost.cloudstream3.plugins.Plugin) {
+                        try {
+                            val assets = android.content.res.AssetManager::class.java.getDeclaredConstructor().newInstance()
+                            val addAssetPath = android.content.res.AssetManager::class.java.getMethod("addAssetPath", String::class.java)
+                            addAssetPath.invoke(assets, pluginFile.absolutePath)
+                            pluginInstance.resources = android.content.res.Resources(
+                                assets,
+                                context.resources.displayMetrics,
+                                context.resources.configuration
+                            )
+                        } catch(e: Exception) {
+                            Log.e("PluginManager", "Failed to load resources for ${pluginFile.name}", e)
+                        }
                     }
+
+                    if (pluginInstance is com.lagradost.cloudstream3.plugins.Plugin) {
+                        pluginInstance.load(context)
+                    } else {
+                        pluginInstance.load()
+                    }
+                    
+                    println("Successfully loaded $className from ${pluginFile.name}")
+
                 } catch (t: Throwable) {
-                    Log.w("PluginManager", "Failed instantiating $className from ${pluginFile.name}", t)
+                    t.printStackTrace()
                 }
             }
         } catch (e: Exception) {
             Log.e("PluginManager", "Error parsing plugin ${pluginFile.name}", e)
         }
+        
+        // As APIs were automatically added to APIHolder by BasePlugin.registerMainAPI,
+        // we can fetch the ones sourced from this file to fulfill the legacy return signature.
+        loadedApis.addAll(APIHolder.apis.filter { it.sourcePlugin == pluginFile.absolutePath })
+        
         return loadedApis
     }
 
