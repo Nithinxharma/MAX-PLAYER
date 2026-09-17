@@ -9,23 +9,24 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import android.content.Intent
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = App::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class ComposeUITest {
+class LaunchVerificationTest {
     @get:Rule
-    val composeTestRule = androidx.compose.ui.test.junit4.createAndroidComposeRule<MainActivity>()
+    val composeTestRule = androidx.compose.ui.test.junit4.v2.createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun testUI() {
-        println("=== STARTING COMPOSE UI LAUNCH VERIFICATION ===")
+    fun verifyAppStartupAndRendering() {
+        println("=== STARTING APP LAUNCH VERIFICATION ===")
         composeTestRule.waitForIdle()
-        println("Compose UI Tree:")
+        
+        println("=== COMPOSE UI TREE RENDERED ===")
         val tree = composeTestRule.onRoot().printToString()
         println(tree)
-        assert(tree.isNotEmpty())
-        println("=== COMPOSE UI LAUNCH VERIFICATION SUCCESSFUL ===")
+        
+        assert(tree.isNotEmpty()) { "Compose tree should not be empty!" }
+        println("=== LAUNCH VERIFICATION SUCCESSFUL ===")
     }
 }
