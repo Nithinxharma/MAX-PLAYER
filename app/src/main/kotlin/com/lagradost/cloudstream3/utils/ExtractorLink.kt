@@ -36,11 +36,36 @@ open class ExtractorLink(
     override val url: String,
     override var referer: String,
     open var quality: Int,
+    open var type: ExtractorLinkType = ExtractorLinkType.VIDEO,
     override var headers: Map<String, String> = mapOf(),
     open var extractorData: String? = null,
-    open var type: ExtractorLinkType,
+    open var errorMessage: String? = null,
     open var audioTracks: List<AudioFile> = emptyList()
 ) : IDownloadableMinimum {
+
+    // Overloaded legacy constructor using Boolean isM3u8
+    constructor(
+        source: String,
+        name: String,
+        url: String,
+        referer: String,
+        quality: Int,
+        isM3u8: Boolean = false,
+        headers: Map<String, String> = mapOf(),
+        extractorData: String? = null,
+        errorMessage: String? = null
+    ) : this(
+        source = source,
+        name = name,
+        url = url,
+        referer = referer,
+        quality = quality,
+        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
+        headers = headers,
+        extractorData = extractorData,
+        errorMessage = errorMessage
+    )
+
     val isM3u8: Boolean get() = type == ExtractorLinkType.M3U8
 }
 
@@ -55,9 +80,9 @@ data class ExtractorLinkPlayList(
     val playlist: List<PlayListItem>,
     override var referer: String,
     override var quality: Int,
+    override var type: ExtractorLinkType = ExtractorLinkType.VIDEO,
     override var headers: Map<String, String> = mapOf(),
     override var extractorData: String? = null,
-    override var type: ExtractorLinkType,
     override var audioTracks: List<AudioFile> = emptyList(),
 ) : ExtractorLink(
     source = source,
@@ -65,8 +90,9 @@ data class ExtractorLinkPlayList(
     url = "",
     referer = referer,
     quality = quality,
+    type = type,
     headers = headers,
     extractorData = extractorData,
-    type = type,
     audioTracks = audioTracks
 )
+

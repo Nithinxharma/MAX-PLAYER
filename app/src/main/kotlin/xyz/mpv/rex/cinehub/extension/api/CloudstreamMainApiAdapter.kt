@@ -31,7 +31,19 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
     }
 
     override suspend fun getHomePage(): List<CineHubHomePageList> {
-        val page = api.loadMainPage(1, null) ?: return emptyList()
+        val page = api.loadMainPage(1, null) ?: run {
+            if (api.mainPage.isNotEmpty()) {
+                val lists = mutableListOf<com.lagradost.cloudstream3.HomePageList>()
+                for (item in api.mainPage) {
+                    val req = com.lagradost.cloudstream3.MainPageRequest(item.name, item.data, item.horizontalImages)
+                    runCatching {
+                        api.getMainPage(1, req)?.items?.let { lists.addAll(it) }
+                    }
+                }
+                if (lists.isNotEmpty()) com.lagradost.cloudstream3.HomePageResponse(lists) else null
+            } else null
+        } ?: return emptyList()
+
         return page.items.map { group ->
             CineHubHomePageList(
                 title = group.name,
@@ -52,24 +64,43 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
 
     override suspend fun loadDetails(url: String): CineHubMediaDetails? {
         val res = api.load(url) ?: return null
-        val episodes = if (res is TvSeriesLoadResponse) {
-            res.episodes.mapIndexed { index, ep ->
-                CineHubEpisode(
-                    id = "$url#ep_$index",
-                    name = ep.name ?: "Episode ${ep.episode ?: (index + 1)}",
-                    season = ep.season ?: 1,
-                    episode = ep.episode ?: (index + 1),
-                    data = ep.data,
-                    posterUrl = ep.posterUrl,
-                    description = ep.description
-                )
+        val episodes = when (res) {
+            is TvSeriesLoadResponse -> {
+                res.episodes.mapIndexed { index, ep ->
+                    CineHubEpisode(
+                        id = "$url#ep_$index",
+                        name = ep.name ?: "Episode ${ep.episode ?: (index + 1)}",
+                        season = ep.season ?: 1,
+                        episode = ep.episode ?: (index + 1),
+                        data = ep.data,
+                        posterUrl = ep.posterUrl,
+                        description = ep.description
+                    )
+                }
             }
-        } else emptyList()
+            is com.lagradost.cloudstream3.AnimeLoadResponse -> {
+                val allEps = res.episodes.values.flatten().distinctBy { it.data }
+                allEps.mapIndexed { index, ep ->
+                    CineHubEpisode(
+                        id = "$url#ep_$index",
+                        name = ep.name ?: "Episode ${ep.episode ?: (index + 1)}",
+                        season = ep.season ?: 1,
+                        episode = ep.episode ?: (index + 1),
+                        data = ep.data,
+                        posterUrl = ep.posterUrl,
+                        description = ep.description
+                    )
+                }
+            }
+            else -> emptyList()
+        }
+
+        val streamData = if (res is MovieLoadResponse) res.dataUrl else res.url
 
         return CineHubMediaDetails(
             id = res.url,
             title = res.name,
-            url = res.url,
+            url = streamData,
             providerId = id,
             providerName = api.name,
             posterUrl = res.posterUrl,

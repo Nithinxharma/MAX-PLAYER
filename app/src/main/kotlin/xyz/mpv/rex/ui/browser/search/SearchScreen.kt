@@ -12,7 +12,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,12 +22,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -34,18 +39,26 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Tv
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -56,11 +69,13 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,6 +85,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -80,12 +96,20 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import xyz.mpv.rex.R
 import xyz.mpv.rex.domain.browser.FileSystemItem
 import xyz.mpv.rex.domain.media.model.Video
 import xyz.mpv.rex.feature.webshare.WebShareSheet
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
+import xyz.mpv.rex.ui.browser.cinehub.CineDetailBottomSheet
+import xyz.mpv.rex.ui.browser.cinehub.ExtensionMediaDetails
+import xyz.mpv.rex.ui.browser.cinehub.loadExtensionItemDetails
+import xyz.mpv.rex.ui.browser.cinehub.extractAndPlayMovie
 import xyz.mpv.rex.ui.browser.components.BrowserBottomBar
 import xyz.mpv.rex.ui.browser.components.BrowserTopBar
 import xyz.mpv.rex.ui.browser.components.SelectionOverflowAction
@@ -149,6 +173,12 @@ data class SearchScreen(
     val recentlyPlayedFilePath by viewModel.recentlyPlayedFilePath.collectAsState()
     val recentlyPlayedFilePaths by viewModel.recentlyPlayedFilePaths.collectAsState()
     val recentlyPlayedPaths by viewModel.recentlyPlayedPaths.collectAsState()
+
+    val isFederatedSearchEnabled by viewModel.isFederatedSearchEnabled.collectAsState()
+    val federatedResults by viewModel.federatedResults.collectAsState()
+    val isFederatedLoading by viewModel.isFederatedLoading.collectAsState()
+
+    var selectedExtensionItem by remember { mutableStateOf<Any?>(null) }
 
     // Selection managers
     val folders = searchResults.filterIsInstance<FileSystemItem.Folder>()
@@ -482,15 +512,15 @@ data class SearchScreen(
                 },
               )
 
-              // Scope filter chips if opened with initialPath
-              if (initialPath != null) {
-                Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(start = 56.dp, end = 16.dp, bottom = 8.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                ) {
+              // Scope and federated filter chips
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .horizontalScroll(rememberScrollState())
+                  .padding(start = 56.dp, end = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                if (initialPath != null) {
                   FilterChip(
                     selected = searchScope == SearchScope.CURRENT_FOLDER,
                     onClick = { viewModel.setScope(SearchScope.CURRENT_FOLDER) },
@@ -533,7 +563,37 @@ data class SearchScreen(
                       selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
                   )
+
+                  Spacer(modifier = Modifier.width(8.dp))
                 }
+
+                FilterChip(
+                  selected = isFederatedSearchEnabled,
+                  onClick = { viewModel.toggleFederatedSearch() },
+                  label = {
+                    Text(
+                      if (isFederatedSearchEnabled && federatedResults.isNotEmpty())
+                        "Online Extensions (${federatedResults.size})"
+                      else
+                        "Online Extensions"
+                    )
+                  },
+                  leadingIcon = {
+                    if (isFederatedLoading) {
+                      CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    } else {
+                      Icon(
+                        imageVector = if (isFederatedSearchEnabled) Icons.Filled.Extension else Icons.Outlined.Extension,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                      )
+                    }
+                  },
+                  colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                  ),
+                )
               }
             }
           }
@@ -545,65 +605,124 @@ data class SearchScreen(
           .fillMaxSize()
           .padding(top = padding.calculateTopPadding())
       ) {
-        UnifiedExplorerContent(
-          items = searchResults,
-          isLoading = isSearchLoading,
-          uiSettings = uiSettings,
-          isSelected = { item ->
-            when (item) {
-              is FileSystemItem.Folder -> folderSelectionManager.isSelected(item)
-              is FileSystemItem.VideoFile -> videoSelectionManager.isSelected(item.video)
-            }
-          },
-          onClick = { item ->
-            if (isInSelectionMode) {
+        if (!isFederatedSearchEnabled) {
+          UnifiedExplorerContent(
+            items = searchResults,
+            isLoading = isSearchLoading,
+            uiSettings = uiSettings,
+            isSelected = { item ->
+              when (item) {
+                is FileSystemItem.Folder -> folderSelectionManager.isSelected(item)
+                is FileSystemItem.VideoFile -> videoSelectionManager.isSelected(item.video)
+              }
+            },
+            onClick = { item ->
+              if (isInSelectionMode) {
+                when (item) {
+                  is FileSystemItem.Folder -> folderSelectionManager.toggle(item)
+                  is FileSystemItem.VideoFile -> videoSelectionManager.toggle(item.video)
+                }
+              } else {
+                when (item) {
+                  is FileSystemItem.Folder -> {
+                    backstack.add(FileSystemDirectoryScreen(item.path))
+                  }
+                  is FileSystemItem.VideoFile -> {
+                    MediaUtils.playFile(item.video, context, "search")
+                  }
+                }
+              }
+            },
+            onLongClick = { item ->
+              when (item) {
+                is FileSystemItem.Folder -> folderSelectionManager.handleLongClick(item)
+                is FileSystemItem.VideoFile -> videoSelectionManager.handleLongClick(item.video)
+              }
+            },
+            onToggleSelection = { item ->
               when (item) {
                 is FileSystemItem.Folder -> folderSelectionManager.toggle(item)
                 is FileSystemItem.VideoFile -> videoSelectionManager.toggle(item.video)
               }
+            },
+            emptyTitle = if (searchQuery.isBlank()) {
+              stringResource(R.string.search_empty_title)
             } else {
+              stringResource(R.string.search_no_results_title)
+            },
+            emptyMessage = if (searchQuery.isBlank()) {
+              stringResource(R.string.search_empty_message)
+            } else {
+              stringResource(R.string.search_no_results_message)
+            },
+            emptyIcon = Icons.Filled.Search,
+            isInSelectionMode = isInSelectionMode,
+            recentlyPlayedFilePath = recentlyPlayedFilePath,
+            recentlyPlayedFilePaths = recentlyPlayedFilePaths,
+            recentlyPlayedPaths = recentlyPlayedPaths,
+            newVideoIds = newVideoIds,
+            watchedVideoIds = watchedVideoIds,
+            videoPlaybackProgress = videoFilesWithPlayback,
+            showSections = true,
+          )
+        } else {
+          CombinedSearchResultsContent(
+            localResults = searchResults,
+            federatedResults = federatedResults,
+            isLocalLoading = isSearchLoading,
+            isFederatedLoading = isFederatedLoading,
+            uiSettings = uiSettings,
+            searchQuery = searchQuery,
+            recentlyPlayedFilePath = recentlyPlayedFilePath,
+            recentlyPlayedFilePaths = recentlyPlayedFilePaths,
+            recentlyPlayedPaths = recentlyPlayedPaths,
+            videoFilesWithPlayback = videoFilesWithPlayback,
+            newVideoIds = newVideoIds,
+            watchedVideoIds = watchedVideoIds,
+            isInSelectionMode = isInSelectionMode,
+            isSelected = { item ->
               when (item) {
-                is FileSystemItem.Folder -> {
-                  backstack.add(FileSystemDirectoryScreen(item.path))
+                is FileSystemItem.Folder -> folderSelectionManager.isSelected(item)
+                is FileSystemItem.VideoFile -> videoSelectionManager.isSelected(item.video)
+              }
+            },
+            onLocalClick = { item ->
+              if (isInSelectionMode) {
+                when (item) {
+                  is FileSystemItem.Folder -> folderSelectionManager.toggle(item)
+                  is FileSystemItem.VideoFile -> videoSelectionManager.toggle(item.video)
                 }
-                is FileSystemItem.VideoFile -> {
-                  MediaUtils.playFile(item.video, context, "search")
+              } else {
+                when (item) {
+                  is FileSystemItem.Folder -> backstack.add(FileSystemDirectoryScreen(item.path))
+                  is FileSystemItem.VideoFile -> MediaUtils.playFile(item.video, context, "search")
                 }
               }
+            },
+            onLocalLongClick = { item ->
+              when (item) {
+                is FileSystemItem.Folder -> folderSelectionManager.handleLongClick(item)
+                is FileSystemItem.VideoFile -> videoSelectionManager.handleLongClick(item.video)
+              }
+            },
+            onToggleSelection = { item ->
+              when (item) {
+                is FileSystemItem.Folder -> folderSelectionManager.toggle(item)
+                is FileSystemItem.VideoFile -> videoSelectionManager.toggle(item.video)
+              }
+            },
+            onFederatedClick = { searchResp ->
+              loadExtensionItemDetails(
+                providerId = searchResp.apiName,
+                providerName = searchResp.apiName,
+                url = searchResp.url,
+                scope = coroutineScope
+              ) { details ->
+                selectedExtensionItem = details
+              }
             }
-          },
-          onLongClick = { item ->
-            when (item) {
-              is FileSystemItem.Folder -> folderSelectionManager.handleLongClick(item)
-              is FileSystemItem.VideoFile -> videoSelectionManager.handleLongClick(item.video)
-            }
-          },
-          onToggleSelection = { item ->
-            when (item) {
-              is FileSystemItem.Folder -> folderSelectionManager.toggle(item)
-              is FileSystemItem.VideoFile -> videoSelectionManager.toggle(item.video)
-            }
-          },
-          emptyTitle = if (searchQuery.isBlank()) {
-            stringResource(R.string.search_empty_title)
-          } else {
-            stringResource(R.string.search_no_results_title)
-          },
-          emptyMessage = if (searchQuery.isBlank()) {
-            stringResource(R.string.search_empty_message)
-          } else {
-            stringResource(R.string.search_no_results_message)
-          },
-          emptyIcon = Icons.Filled.Search,
-          isInSelectionMode = isInSelectionMode,
-          recentlyPlayedFilePath = recentlyPlayedFilePath,
-          recentlyPlayedFilePaths = recentlyPlayedFilePaths,
-          recentlyPlayedPaths = recentlyPlayedPaths,
-          newVideoIds = newVideoIds,
-          watchedVideoIds = watchedVideoIds,
-          videoPlaybackProgress = videoFilesWithPlayback,
-          showSections = true,
-        )
+          )
+        }
 
         // Floating Bottom Bar for multi-selection actions
         AnimatedVisibility(
@@ -850,6 +969,375 @@ data class SearchScreen(
           showWebShareSheet = false
           videoSelectionManager.clear()
         },
+      )
+    }
+
+    if (selectedExtensionItem != null) {
+      CineDetailBottomSheet(
+        item = selectedExtensionItem!!,
+        onDismiss = { selectedExtensionItem = null },
+        onPlay = {
+          val item = selectedExtensionItem!!
+          selectedExtensionItem = null
+          if (item is ExtensionMediaDetails) {
+            when (item.loadResponse) {
+              is MovieLoadResponse -> {
+                extractAndPlayMovie(
+                  context = context,
+                  providerName = item.providerName.ifBlank { item.loadResponse.apiName },
+                  dataUrl = item.loadResponse.dataUrl.ifBlank { item.loadResponse.url },
+                  movieTitle = item.loadResponse.name,
+                  scope = coroutineScope
+                )
+              }
+              is TvSeriesLoadResponse -> {
+                Toast.makeText(context, "Please select an episode from the series menu", Toast.LENGTH_SHORT).show()
+              }
+            }
+          }
+        }
+      )
+    }
+  }
+}
+
+@Composable
+private fun CombinedSearchResultsContent(
+  localResults: List<FileSystemItem>,
+  federatedResults: List<SearchResponse>,
+  isLocalLoading: Boolean,
+  isFederatedLoading: Boolean,
+  uiSettings: xyz.mpv.rex.preferences.UiSettings,
+  searchQuery: String,
+  recentlyPlayedFilePath: String?,
+  recentlyPlayedFilePaths: Set<String>,
+  recentlyPlayedPaths: Set<String>,
+  videoFilesWithPlayback: Map<Long, Float>,
+  newVideoIds: Set<Long>,
+  watchedVideoIds: Set<Long>,
+  isInSelectionMode: Boolean,
+  isSelected: (FileSystemItem) -> Boolean,
+  onLocalClick: (FileSystemItem) -> Unit,
+  onLocalLongClick: (FileSystemItem) -> Unit,
+  onToggleSelection: (FileSystemItem) -> Unit,
+  onFederatedClick: (SearchResponse) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  var selectedTab by remember { mutableIntStateOf(0) }
+
+  Column(modifier = modifier.fillMaxSize()) {
+    if (isLocalLoading || isFederatedLoading) {
+      LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+
+    // Category Tabs
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 8.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      FilterChip(
+        selected = selectedTab == 0,
+        onClick = { selectedTab = 0 },
+        label = { Text("All (${localResults.size + federatedResults.size})") },
+        shape = RoundedCornerShape(12.dp),
+        colors = FilterChipDefaults.filterChipColors(
+          selectedContainerColor = MaterialTheme.colorScheme.primary,
+          selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+      )
+      FilterChip(
+        selected = selectedTab == 1,
+        onClick = { selectedTab = 1 },
+        label = { Text("Local (${localResults.size})") },
+        shape = RoundedCornerShape(12.dp),
+        colors = FilterChipDefaults.filterChipColors(
+          selectedContainerColor = MaterialTheme.colorScheme.primary,
+          selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+      )
+      FilterChip(
+        selected = selectedTab == 2,
+        onClick = { selectedTab = 2 },
+        label = { Text("Online (${federatedResults.size})") },
+        shape = RoundedCornerShape(12.dp),
+        colors = FilterChipDefaults.filterChipColors(
+          selectedContainerColor = MaterialTheme.colorScheme.primary,
+          selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+      )
+    }
+
+    when (selectedTab) {
+      0 -> {
+        if (localResults.isEmpty() && federatedResults.isEmpty()) {
+          if (!isLocalLoading && !isFederatedLoading) {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+              contentAlignment = Alignment.Center,
+            ) {
+              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                  imageVector = Icons.Filled.Search,
+                  contentDescription = null,
+                  modifier = Modifier.size(48.dp),
+                  tint = MaterialTheme.colorScheme.outline,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                  text = if (searchQuery.isBlank()) "Search local media & online extensions" else "No results found for \"$searchQuery\"",
+                  style = MaterialTheme.typography.bodyLarge,
+                  color = MaterialTheme.colorScheme.outline,
+                )
+              }
+            }
+          }
+        } else {
+          LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 80.dp),
+          ) {
+            if (localResults.isNotEmpty()) {
+              item {
+                Text(
+                  text = "Local Media (${localResults.size})",
+                  style = MaterialTheme.typography.titleMedium,
+                  fontWeight = FontWeight.Bold,
+                  modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                )
+              }
+              items(localResults) { item ->
+                LocalItemRow(
+                  item = item,
+                  isSelected = isSelected(item),
+                  onClick = { onLocalClick(item) },
+                  onLongClick = { onLocalLongClick(item) },
+                )
+              }
+            }
+
+            if (federatedResults.isNotEmpty()) {
+              item {
+                Text(
+                  text = "Online Provider Streams (${federatedResults.size})",
+                  style = MaterialTheme.typography.titleMedium,
+                  fontWeight = FontWeight.Bold,
+                  modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+                )
+              }
+              items(federatedResults) { searchResp ->
+                FederatedItemCard(
+                  searchResponse = searchResp,
+                  onClick = { onFederatedClick(searchResp) },
+                )
+              }
+            }
+          }
+        }
+      }
+      1 -> {
+        UnifiedExplorerContent(
+          items = localResults,
+          isLoading = isLocalLoading,
+          uiSettings = uiSettings,
+          isSelected = isSelected,
+          onClick = onLocalClick,
+          onLongClick = onLocalLongClick,
+          onToggleSelection = onToggleSelection,
+          emptyTitle = "No local media found",
+          emptyMessage = "Try searching with a different keyword or check online providers",
+          emptyIcon = Icons.Filled.Search,
+          isInSelectionMode = isInSelectionMode,
+          recentlyPlayedFilePath = recentlyPlayedFilePath,
+          recentlyPlayedFilePaths = recentlyPlayedFilePaths,
+          recentlyPlayedPaths = recentlyPlayedPaths,
+          videoPlaybackProgress = videoFilesWithPlayback,
+          newVideoIds = newVideoIds,
+          watchedVideoIds = watchedVideoIds,
+        )
+      }
+      2 -> {
+        if (federatedResults.isEmpty()) {
+          if (!isFederatedLoading) {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+              contentAlignment = Alignment.Center,
+            ) {
+              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                  imageVector = Icons.Filled.Extension,
+                  contentDescription = null,
+                  modifier = Modifier.size(48.dp),
+                  tint = MaterialTheme.colorScheme.outline,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                  text = if (searchQuery.isBlank()) "Search online extensions" else "No extension results found for \"$searchQuery\"",
+                  style = MaterialTheme.typography.bodyLarge,
+                  color = MaterialTheme.colorScheme.outline,
+                )
+              }
+            }
+          }
+        } else {
+          LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            items(federatedResults) { searchResp ->
+              FederatedItemCard(
+                searchResponse = searchResp,
+                onClick = { onFederatedClick(searchResp) },
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun FederatedItemCard(
+  searchResponse: SearchResponse,
+  onClick: () -> Unit,
+) {
+  Card(
+    shape = RoundedCornerShape(14.dp),
+    colors = CardDefaults.cardColors(
+      containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+    ),
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(horizontal = 16.dp, vertical = 4.dp)
+      .clickable(onClick = onClick),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      if (!searchResponse.posterUrl.isNullOrBlank()) {
+        AsyncImage(
+          model = searchResponse.posterUrl,
+          contentDescription = searchResponse.name,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier
+            .size(width = 60.dp, height = 80.dp)
+            .clip(RoundedCornerShape(8.dp)),
+        )
+      } else {
+        Box(
+          modifier = Modifier
+            .size(width = 60.dp, height = 80.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+          contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+            imageVector = if (searchResponse.type == com.lagradost.cloudstream3.TvType.TvSeries) Icons.Outlined.Tv else Icons.Outlined.Movie,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.width(12.dp))
+
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = searchResponse.name,
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.Bold,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+          ) {
+            Text(
+              text = searchResponse.apiName,
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onPrimaryContainer,
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+          }
+
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+          ) {
+            Text(
+              text = searchResponse.type?.name ?: "Stream",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSecondaryContainer,
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+          }
+        }
+      }
+
+      IconButton(onClick = onClick) {
+        Icon(
+          imageVector = Icons.Default.PlayArrow,
+          contentDescription = "View Details",
+          tint = MaterialTheme.colorScheme.primary,
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun LocalItemRow(
+  item: FileSystemItem,
+  isSelected: Boolean,
+  onClick: () -> Unit,
+  onLongClick: () -> Unit,
+) {
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable(onClick = onClick)
+      .padding(horizontal = 16.dp, vertical = 8.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Icon(
+      imageVector = if (item is FileSystemItem.Folder) Icons.Filled.Folder else Icons.Outlined.Movie,
+      contentDescription = null,
+      tint = if (item is FileSystemItem.Folder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+      modifier = Modifier.size(36.dp),
+    )
+    Spacer(modifier = Modifier.width(12.dp))
+    Column(modifier = Modifier.weight(1f)) {
+      Text(
+        text = item.name,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.Medium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      Text(
+        text = item.path,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
       )
     }
   }

@@ -106,11 +106,11 @@ object CloudstreamHeadlessRunner {
     /**
      * 5. The Handoff: REX-Player Intent Launcher
      */
-    fun launchRexPlayer(
+    fun buildRexPlayerIntent(
         context: Context,
         link: ExtractorLink,
         title: String? = null
-    ) {
+    ): Intent {
         val intent = Intent(context, PlayerActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             this.data = Uri.parse(link.url)
@@ -144,6 +144,15 @@ object CloudstreamHeadlessRunner {
             intent.putExtra("title", title)
         }
 
+        return intent
+    }
+
+    fun launchRexPlayer(
+        context: Context,
+        link: ExtractorLink,
+        title: String? = null
+    ) {
+        val intent = buildRexPlayerIntent(context, link, title)
         context.startActivity(intent)
     }
 

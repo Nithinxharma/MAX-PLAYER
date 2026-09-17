@@ -66,11 +66,11 @@ class ExtensionManager(
         if (!file.exists()) return classNames
         runCatching {
             ZipFile(file).use { zip ->
-                val entry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json")
+                val entry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json") ?: zip.getEntry("plugin.json")
                 if (entry != null) {
                     val text = zip.getInputStream(entry).bufferedReader().readText()
                     val json = JSONObject(text)
-                    val mainClass = json.optString("pluginClassName", "")
+                    val mainClass = json.optString("pluginClassName", json.optString("mainClass", json.optString("class", "")))
                     if (mainClass.isNotBlank()) {
                         classNames.add(mainClass)
                     }
@@ -83,6 +83,14 @@ class ExtensionManager(
                             }
                         }
                     }
+                }
+                if (classNames.isEmpty()) {
+                    zip.entries().asSequence()
+                        .filter { !it.isDirectory && it.name.endsWith(".class") && !it.name.contains("$") }
+                        .forEach { classEntry ->
+                            val cName = classEntry.name.removeSuffix(".class").replace('/', '.')
+                            if (!classNames.contains(cName)) classNames.add(cName)
+                        }
                 }
             }
         }.onFailure {
@@ -107,7 +115,7 @@ class ExtensionManager(
 
             val classNames = mutableListOf<String>()
 
-            // 1. Inspect manifest.json / make.json directly from the zip archive
+            // 1. Inspect manifest.json / make.json / plugin.json directly from the zip archive
             classNames.addAll(extractClassNamesFromZip(file))
 
             // 2. Also check classesFile recorded during install, filtering out any author names or non-class entries
@@ -124,21 +132,54 @@ class ExtensionManager(
                 }
             }
 
+            val beforeApis = com.lagradost.cloudstream3.APIHolder.apis.toSet()
+
             for (className in classNames) {
                 try {
                     val clazz = classLoader.loadClass(className)
                     val instance = clazz.getDeclaredConstructor().newInstance()
-                    if (instance is CineHubProvider) {
-                        registry.register(instance, isEnabledByDefault = ext.isEnabled)
-                    } else if (instance is com.lagradost.cloudstream3.MainAPI) {
-                        com.lagradost.cloudstream3.APIHolder.addPlugin(instance)
-                        registry.register(CloudstreamMainApiAdapter(instance), isEnabledByDefault = ext.isEnabled)
-                    } else if (instance is MainAPI) {
-                        registry.register(MainApiProviderAdapter(instance), isEnabledByDefault = ext.isEnabled)
+                    when (instance) {
+                        is com.lagradost.cloudstream3.plugins.BasePlugin -> {
+                            instance.filename = file.absolutePath
+                            if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
+                                runCatching {
+                                    val assets = android.content.res.AssetManager::class.java.getDeclaredConstructor().newInstance()
+                                    val addAssetPath = android.content.res.AssetManager::class.java.getMethod("addAssetPath", String::class.java)
+                                    addAssetPath.invoke(assets, file.absolutePath)
+                                    instance.resources = android.content.res.Resources(
+                                        assets,
+                                        context.resources.displayMetrics,
+                                        context.resources.configuration
+                                    )
+                                }
+                                instance.load(context)
+                            } else {
+                                instance.load()
+                            }
+                        }
+                        is CineHubProvider -> {
+                            registry.register(instance, isEnabledByDefault = ext.isEnabled)
+                        }
+                        is com.lagradost.cloudstream3.MainAPI -> {
+                            instance.sourcePlugin = file.absolutePath
+                            com.lagradost.cloudstream3.APIHolder.addPlugin(instance)
+                        }
+                        is MainAPI -> {
+                            registry.register(MainApiProviderAdapter(instance), isEnabledByDefault = ext.isEnabled)
+                        }
                     }
                 } catch (e: Throwable) {
                     Log.w("ExtensionManager", "Failed to load class $className for extension ${ext.pkgName}: ${e.message}")
                 }
+            }
+
+            // Synchronize newly added CloudStream APIs from this extension into ProviderRegistry
+            val newlyAddedApis = com.lagradost.cloudstream3.APIHolder.apis.filter {
+                it.sourcePlugin == file.absolutePath || !beforeApis.contains(it)
+            }
+            for (api in newlyAddedApis) {
+                api.sourcePlugin = file.absolutePath
+                registry.register(CloudstreamMainApiAdapter(api), isEnabledByDefault = ext.isEnabled)
             }
         } catch (e: Throwable) {
             Log.e("ExtensionManager", "Failed to load extension ${ext.pkgName} from $localPath", e)
@@ -197,8 +238,11 @@ class ExtensionManager(
                 versionCode = 0
             )
             db.extensionDao().deleteExtension(ext)
-            registry.unregister(pkgName)
             val file = File(extensionDir, "$pkgName.cs3")
+            com.lagradost.cloudstream3.APIHolder.removePluginsBySource(file.absolutePath)
+            com.lagradost.cloudstream3.APIHolder.removePluginsBySource(file.name)
+            registry.unregister(pkgName)
+            registry.unregister("cs3_${pkgName.lowercase()}")
             if (file.exists()) file.delete()
         } catch (e: Exception) {
             e.printStackTrace()

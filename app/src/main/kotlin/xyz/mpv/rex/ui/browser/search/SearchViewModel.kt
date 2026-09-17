@@ -20,10 +20,14 @@ import xyz.mpv.rex.utils.history.RecentlyPlayedOps
 import xyz.mpv.rex.utils.media.MediaLibraryEvents
 import xyz.mpv.rex.utils.media.MetadataRetrieval
 import xyz.mpv.rex.utils.permission.PermissionUtils.StorageOps
+import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.SearchResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -64,12 +68,19 @@ class SearchViewModel(
 
   val searchQuery = MutableStateFlow("")
   val searchScope = MutableStateFlow(if (initialPath != null) SearchScope.CURRENT_FOLDER else SearchScope.ALL_STORAGE)
+  val isFederatedSearchEnabled = MutableStateFlow(false)
 
   private val _searchResults = MutableStateFlow<List<FileSystemItem>>(emptyList())
   val searchResults: StateFlow<List<FileSystemItem>> = _searchResults.asStateFlow()
 
   private val _isSearchLoading = MutableStateFlow(false)
   val isSearchLoading: StateFlow<Boolean> = _isSearchLoading.asStateFlow()
+
+  private val _federatedResults = MutableStateFlow<List<SearchResponse>>(emptyList())
+  val federatedResults: StateFlow<List<SearchResponse>> = _federatedResults.asStateFlow()
+
+  private val _isFederatedLoading = MutableStateFlow(false)
+  val isFederatedLoading: StateFlow<Boolean> = _isFederatedLoading.asStateFlow()
 
   private val _videoFilesWithPlayback = MutableStateFlow<Map<Long, Float>>(emptyMap())
   val videoFilesWithPlayback: StateFlow<Map<Long, Float>> = _videoFilesWithPlayback.asStateFlow()
@@ -93,6 +104,7 @@ class SearchViewModel(
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
   private var searchJob: Job? = null
+  private var federatedJob: Job? = null
 
   init {
     viewModelScope.launch {
@@ -100,6 +112,9 @@ class SearchViewModel(
         .debounce(150L)
         .collectLatest { query ->
           executeSearch(query, searchScope.value)
+          if (isFederatedSearchEnabled.value) {
+            executeFederatedSearch(query)
+          }
         }
     }
 
@@ -107,6 +122,18 @@ class SearchViewModel(
       searchScope.collectLatest { scope ->
         if (searchQuery.value.isNotBlank()) {
           executeSearch(searchQuery.value, scope)
+        }
+      }
+    }
+
+    viewModelScope.launch {
+      isFederatedSearchEnabled.collectLatest { enabled ->
+        if (enabled && searchQuery.value.isNotBlank()) {
+          executeFederatedSearch(searchQuery.value)
+        } else if (!enabled) {
+          federatedJob?.cancel()
+          _federatedResults.value = emptyList()
+          _isFederatedLoading.value = false
         }
       }
     }
@@ -120,11 +147,62 @@ class SearchViewModel(
     searchScope.value = scope
   }
 
+  fun setFederatedSearchEnabled(enabled: Boolean) {
+    isFederatedSearchEnabled.value = enabled
+  }
+
+  fun toggleFederatedSearch() {
+    isFederatedSearchEnabled.value = !isFederatedSearchEnabled.value
+  }
+
+  private fun executeFederatedSearch(query: String) {
+    federatedJob?.cancel()
+    val trimmed = query.trim()
+    if (trimmed.isBlank() || !isFederatedSearchEnabled.value) {
+      _federatedResults.value = emptyList()
+      _isFederatedLoading.value = false
+      return
+    }
+
+    federatedJob = viewModelScope.launch(Dispatchers.IO) {
+      _isFederatedLoading.value = true
+      try {
+        val apis = APIHolder.apis.toList()
+        if (apis.isEmpty()) {
+          _federatedResults.value = emptyList()
+          _isFederatedLoading.value = false
+          return@launch
+        }
+
+        val deferredList = apis.map { provider ->
+          async {
+            try {
+              provider.search(trimmed)
+            } catch (t: Throwable) {
+              Log.w(TAG, "Search error in provider '${provider.name}': ${t.message}")
+              emptyList<SearchResponse>()
+            }
+          }
+        }
+        val aggregated = deferredList.awaitAll().flatten()
+        _federatedResults.value = aggregated
+      } catch (t: Throwable) {
+        Log.e(TAG, "Federated search failed: ${t.message}", t)
+        _federatedResults.value = emptyList()
+      } finally {
+        _isFederatedLoading.value = false
+      }
+    }
+  }
+
   private fun executeSearch(query: String, scope: SearchScope) {
     searchJob?.cancel()
     if (query.isBlank()) {
       _searchResults.value = emptyList()
       _isSearchLoading.value = false
+      federatedJob?.cancel()
+      _federatedResults.value = emptyList()
+      _isFederatedLoading.value = false
       return
     }
 

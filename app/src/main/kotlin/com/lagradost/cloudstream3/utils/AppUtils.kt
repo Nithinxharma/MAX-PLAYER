@@ -32,3 +32,17 @@ object AppUtils {
         }
     }
 }
+
+fun Any.toJson(): String {
+    return mapper.writeValueAsString(this)
+}
+
+inline fun <reified T> tryParseJson(value: String?): T? {
+    if (value.isNullOrBlank()) return null
+    return try {
+        mapper.readValue(value)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
