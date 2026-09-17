@@ -95,7 +95,9 @@ class MainActivity : ComponentActivity() {
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    installSplashScreen()
+    android.util.Log.d("APP_STARTUP", "APP_STAGE_1_MAIN_ACTIVITY_CREATED")
+    try {
+      installSplashScreen()
     super.onCreate(savedInstanceState)
     
     PermissionUtils.setMediaAccessLauncher(mediaAccessLauncher)
@@ -104,6 +106,7 @@ class MainActivity : ComponentActivity() {
     lifecycle.addObserver(xyz.mpv.rex.ui.browser.networkstreaming.proxy.ProxyLifecycleObserver())
 
     setContent {
+      android.util.Log.d("APP_STARTUP", "APP_STAGE_2_SETCONTENT")
       // Set up theme and edge-to-edge display
       val dark by appearancePreferences.darkMode.collectAsState()
       val isSystemInDarkTheme = isSystemInDarkTheme()
@@ -125,6 +128,10 @@ class MainActivity : ComponentActivity() {
           Navigator()
         }
       }
+    }
+    } catch (e: Throwable) {
+      android.util.Log.e("APP_STARTUP", "Crash in MainActivity.onCreate", e)
+      throw e
     }
   }
 
@@ -176,6 +183,7 @@ class MainActivity : ComponentActivity() {
    */
   @Composable
   fun Navigator() {
+    android.util.Log.d("APP_STARTUP", "APP_STAGE_3_NAVHOST_CREATED")
     val context = LocalContext.current
     val initialScreen = remember { SplashScreen }
     val backstack = rememberNavBackStack(initialScreen)
