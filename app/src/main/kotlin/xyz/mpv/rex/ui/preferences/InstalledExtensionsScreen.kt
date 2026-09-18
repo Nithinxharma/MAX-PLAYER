@@ -47,7 +47,24 @@ fun InstalledExtensionsScreen(
     var isRefreshingCatalog by remember { mutableStateOf(false) }
     var pluginToUninstall by remember { mutableStateOf<InstalledExtension?>(null) }
 
-    // Load available plugins from repositories cache
+    // Load available plugins from repositories cache on launch or tab change
+    LaunchedEffect(Unit) {
+        val cached = repositoryManager.getCachedPlugins()
+        if (cached.isEmpty()) {
+            isRefreshingCatalog = true
+            scope.launch(Dispatchers.IO) {
+                repositoryManager.syncAllRepositories()
+                val fresh = repositoryManager.getCachedPlugins()
+                withContext(Dispatchers.Main) {
+                    availablePlugins = fresh
+                    isRefreshingCatalog = false
+                }
+            }
+        } else {
+            availablePlugins = cached
+        }
+    }
+
     LaunchedEffect(selectedTab) {
         if (selectedTab == 1) {
             val cached = repositoryManager.getCachedPlugins()
@@ -66,6 +83,8 @@ fun InstalledExtensionsScreen(
             }
         }
     }
+
+    var installingPlugins by remember { mutableStateOf(setOf<String>()) }
 
     Scaffold(
         topBar = {
@@ -167,10 +186,17 @@ fun InstalledExtensionsScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Button(onClick = { selectedTab = 1 }) {
-                                Icon(Icons.Outlined.Explore, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Discover Extensions")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { selectedTab = 1 }) {
+                                    Icon(Icons.Outlined.Explore, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Discover Extensions")
+                                }
+                                OutlinedButton(onClick = onNavigateToRepositories) {
+                                    Icon(Icons.Outlined.CloudQueue, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Repositories")
+                                }
                             }
                         }
                     }
@@ -251,13 +277,17 @@ fun InstalledExtensionsScreen(
                     ) {
                         items(filteredPlugins, key = { "${it.repositoryUrl}_${it.internalName}" }) { plugin ->
                             val isInstalled = installedList.any { it.pkgName == plugin.internalName }
+                            val isInstalling = installingPlugins.contains(plugin.internalName)
                             DiscoverPluginCard(
                                 plugin = plugin,
                                 isInstalled = isInstalled,
+                                isInstalling = isInstalling,
                                 onInstall = {
+                                    installingPlugins = installingPlugins + plugin.internalName
                                     scope.launch(Dispatchers.IO) {
                                         val success = extensionManager.installExtension(plugin)
                                         withContext(Dispatchers.Main) {
+                                            installingPlugins = installingPlugins - plugin.internalName
                                             if (success) {
                                                 Toast.makeText(context, "Installed ${plugin.name}", Toast.LENGTH_SHORT).show()
                                             } else {
@@ -389,6 +419,7 @@ private fun InstalledExtensionCard(
 private fun DiscoverPluginCard(
     plugin: AvailablePlugin,
     isInstalled: Boolean,
+    isInstalling: Boolean = false,
     onInstall: () -> Unit
 ) {
     OutlinedCard(
@@ -446,6 +477,19 @@ private fun DiscoverPluginCard(
                         label = { Text("Installed") },
                         leadingIcon = { Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                     )
+                } else if (isInstalling) {
+                    FilledTonalButton(
+                        onClick = {},
+                        enabled = false,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Installing...")
+                    }
                 } else {
                     Button(
                         onClick = onInstall,

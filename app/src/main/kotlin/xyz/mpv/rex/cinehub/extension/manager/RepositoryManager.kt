@@ -26,19 +26,19 @@ class RepositoryManager(
     companion object {
         val POPULAR_PRESETS = listOf(
             ExtensionRepo(
-                url = "https://raw.githubusercontent.com/recloudstream/extensions/builds/repo.json",
-                name = "CloudStream English Repository",
-                description = "Official community repository with popular english provider extensions."
+                url = "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+                name = "CloudStream English & Anime Repository",
+                description = "Official community repository with popular english movie, tv series, and anime providers."
             ),
             ExtensionRepo(
-                url = "https://raw.githubusercontent.com/recloudstream/multilingual-providers/builds/repo.json",
+                url = "https://raw.githubusercontent.com/HatsuneMikuUwU/cloudstream-extensions-uwu/master/repo.json",
+                name = "HatsuneMiku Community Providers",
+                description = "Extended multimedia streaming sources and extractors."
+            ),
+            ExtensionRepo(
+                url = "https://raw.githubusercontent.com/CakesTwix/cloudstream-extensions-uk/master/repo.json",
                 name = "CloudStream Multilingual Repository",
                 description = "Multilingual provider plugins covering global regions and languages."
-            ),
-            ExtensionRepo(
-                url = "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json",
-                name = "Hexated Community Providers",
-                description = "High quality multimedia sources and extractors."
             )
         )
     }
@@ -69,53 +69,72 @@ class RepositoryManager(
     }
 
     suspend fun syncAllRepositories(): List<RepositorySyncResult> = withContext(Dispatchers.IO) {
-        val repos = mutableListOf<ExtensionRepo>()
-        val resultList = mutableListOf<RepositorySyncResult>()
-        // Collect current list
-        val currentRepos = db.extensionDao().getAllRepositories()
-        // Synchronous snapshot
-        val enabledExts = db.extensionDao().getEnabledExtensionsSync()
-        // Iterate through DB repositories
-        val allRepos = db.openHelper.readableDatabase.query("SELECT url, name, description, lastSync FROM extension_repositories")
-        try {
-            while (allRepos.moveToNext()) {
-                val url = allRepos.getString(0)
-                val name = allRepos.getString(1)
-                val desc = allRepos.getString(2)
-                val sync = allRepos.getLong(3)
-                repos.add(ExtensionRepo(url, name, desc, sync))
-            }
-        } finally {
-            allRepos.close()
+        val repos = db.extensionDao().getAllRepositoriesSync().toMutableList()
+        if (repos.isEmpty()) {
+            val defaultPreset = POPULAR_PRESETS.first()
+            db.extensionDao().insertRepository(defaultPreset)
+            repos.add(defaultPreset)
         }
-
+        val resultList = mutableListOf<RepositorySyncResult>()
         for (repo in repos) {
             resultList.add(syncRepository(repo.url))
         }
         resultList
     }
 
+    private fun fetchUrlWithFallback(targetUrl: String): Pair<String, String> {
+        val candidates = mutableListOf(targetUrl)
+        if (targetUrl.contains("/builds/")) {
+            candidates.add(targetUrl.replace("/builds/", "/master/"))
+            candidates.add(targetUrl.replace("/builds/", "/main/"))
+        } else if (targetUrl.contains("/master/")) {
+            candidates.add(targetUrl.replace("/master/", "/builds/"))
+            candidates.add(targetUrl.replace("/master/", "/main/"))
+        } else if (targetUrl.contains("/main/")) {
+            candidates.add(targetUrl.replace("/main/", "/master/"))
+            candidates.add(targetUrl.replace("/main/", "/builds/"))
+        }
+
+        var lastEx: Exception? = null
+        for (url in candidates.distinct()) {
+            try {
+                val req = Request.Builder()
+                    .url(url)
+                    .addHeader("User-Agent", "Mozilla/5.0 (CineHub-Extension-Engine/1.0)")
+                    .build()
+                val response = client.newCall(req).execute()
+                if (response.isSuccessful && response.body != null) {
+                    val body = response.body!!.string()
+                    if (body.isNotBlank() && !body.contains("404: Not Found")) {
+                        return Pair(url, body)
+                    }
+                }
+            } catch (e: Exception) {
+                lastEx = e
+            }
+        }
+        throw lastEx ?: Exception("Failed to fetch repository from $targetUrl")
+    }
+
     suspend fun syncRepository(repoUrl: String): RepositorySyncResult = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url(repoUrl)
-                .addHeader("User-Agent", "Mozilla/5.0 (CineHub-Extension-Engine/1.0)")
-                .build()
-
-            val body = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("HTTP ${response.code}: ${response.message}")
-                response.body?.string() ?: throw Exception("Empty repository response")
-            }
+            val (effectiveUrl, body) = fetchUrlWithFallback(repoUrl)
 
             val parsedPlugins = mutableListOf<AvailablePlugin>()
             var repoTitle = "Repository"
             var repoDesc: String? = null
 
+            val existing = db.extensionDao().getRepositoryByUrl(repoUrl)
+            if (existing != null && existing.name.isNotBlank()) {
+                repoTitle = existing.name
+                repoDesc = existing.description
+            }
+
             val trimmed = body.trim()
             if (trimmed.startsWith("{")) {
                 val json = JSONObject(trimmed)
                 repoTitle = json.optString("name", repoTitle)
-                repoDesc = json.optString("description", null)
+                repoDesc = json.optString("description", repoDesc)
 
                 if (json.has("pluginLists")) {
                     // CloudStream repo.json format
@@ -124,7 +143,7 @@ class RepositoryManager(
                         for (i in 0 until lists.length()) {
                             val listUrl = lists.getString(i)
                             try {
-                                val plugins = fetchPluginsList(listUrl, repoUrl)
+                                val plugins = fetchPluginsList(listUrl, effectiveUrl)
                                 parsedPlugins.addAll(plugins)
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -137,7 +156,7 @@ class RepositoryManager(
                     if (providers != null) {
                         for (i in 0 until providers.length()) {
                             val p = providers.getJSONObject(i)
-                            parsedPlugins.add(parsePluginJson(p, repoUrl))
+                            parsedPlugins.add(parsePluginJson(p, effectiveUrl))
                         }
                     }
                 }
@@ -146,7 +165,7 @@ class RepositoryManager(
                 val array = JSONArray(trimmed)
                 for (i in 0 until array.length()) {
                     val p = array.getJSONObject(i)
-                    parsedPlugins.add(parsePluginJson(p, repoUrl))
+                    parsedPlugins.add(parsePluginJson(p, effectiveUrl))
                 }
             }
 
@@ -169,13 +188,7 @@ class RepositoryManager(
     }
 
     private fun fetchPluginsList(listUrl: String, repoUrl: String): List<AvailablePlugin> {
-        val req = Request.Builder()
-            .url(listUrl)
-            .addHeader("User-Agent", "Mozilla/5.0 (CineHub-Extension-Engine/1.0)")
-            .build()
-        val listBody = client.newCall(req).execute().use { it.body?.string() ?: "" }
-        if (listBody.isBlank()) return emptyList()
-
+        val (_, listBody) = fetchUrlWithFallback(listUrl)
         val results = mutableListOf<AvailablePlugin>()
         val array = JSONArray(listBody)
         for (i in 0 until array.length()) {
@@ -188,12 +201,18 @@ class RepositoryManager(
     private fun parsePluginJson(obj: JSONObject, repoUrl: String): AvailablePlugin {
         val name = obj.optString("name", "Unknown Plugin")
         val internalName = obj.optString("internalName", obj.optString("id", name.lowercase().replace(" ", "_")))
-        val version = obj.optString("version", "1.0.0")
-        val versionCode = obj.optInt("versionCode", 1)
-        val description = obj.optString("description", null)
-        val url = obj.optString("url", "")
-        val tvUrl = obj.optString("tvUrl", null)
-        val iconUrl = obj.optString("iconUrl", obj.optString("icon", null))
+        val versionRaw = obj.opt("version")?.toString() ?: "1.0.0"
+        val versionCode = obj.optInt("versionCode", versionRaw.toIntOrNull() ?: 1)
+        val description = obj.optString("description", "").ifBlank { null }
+        
+        var url = obj.optString("url", obj.optString("jarUrl", obj.optString("file", "")))
+        if (url.isNotBlank() && !url.startsWith("http://") && !url.startsWith("https://")) {
+            val baseUrl = repoUrl.substringBeforeLast("/")
+            url = "$baseUrl/$url"
+        }
+
+        val tvUrl = obj.optString("tvUrl", "").ifBlank { null }
+        val iconUrl = obj.optString("iconUrl", obj.optString("icon", "")).ifBlank { null }
 
         val authors = mutableListOf<String>()
         val authorsArr = obj.optJSONArray("authors")
@@ -216,7 +235,7 @@ class RepositoryManager(
         return AvailablePlugin(
             name = name,
             internalName = internalName,
-            version = version,
+            version = versionRaw,
             versionCode = versionCode,
             description = description,
             url = url,
