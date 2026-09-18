@@ -293,6 +293,13 @@ object PreferencesScreen : Screen {
                   onClick = { backstack.add(AdvancedPreferencesScreen) },
                 )
                 PreferenceItem(
+                  position = GroupPosition.MIDDLE,
+                  title = "Developer Options",
+                  summary = "Developer diagnostics, CloudStream Test Center",
+                  icon = Icons.Outlined.BugReport,
+                  onClick = { backstack.add(xyz.mpv.rex.ui.preferences.DeveloperOptionsScreenRoute) },
+                )
+                PreferenceItem(
                   position = GroupPosition.LAST,
                   title = stringResource(id = R.string.pref_about_title),
                   summary = stringResource(id = R.string.pref_about_summary),

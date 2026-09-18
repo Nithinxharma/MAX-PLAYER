@@ -31,6 +31,7 @@ fun ExtensionPreferencesScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRepositories: () -> Unit,
     onNavigateToInstalled: () -> Unit,
+    onNavigateToTestCenter: () -> Unit = {},
     extensionManager: ExtensionManager = koinInject(),
     repositoryManager: RepositoryManager = koinInject(),
     registry: ProviderRegistry = koinInject()
@@ -185,6 +186,13 @@ fun ExtensionPreferencesScreen(
                     summary = { Text("View active runtime providers and framework status") },
                     icon = { Icon(Icons.Outlined.Assessment, contentDescription = null) },
                     onClick = { showDiagnostics = true }
+                )
+
+                Preference(
+                    title = { Text("CloudStream Test Center") },
+                    summary = { Text("Developer end-to-end diagnostic pipeline") },
+                    icon = { Icon(Icons.Outlined.BugReport, contentDescription = null) },
+                    onClick = onNavigateToTestCenter
                 )
             }
         }
