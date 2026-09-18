@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material3.AlertDialog
@@ -836,6 +837,39 @@ object AdvancedPreferencesScreen : Screen {
                       clipboard.setText(AnnotatedString(CrashActivity.concatLogs(deviceInfo, null, logcat)))
                       CrashActivity.shareLogs(deviceInfo, null, logcat, activity)
                     }
+                  },
+                )
+              }
+            }
+          }
+
+          // Developer Options Section
+          item {
+            PreferenceSectionHeader(title = stringResource(R.string.pref_developer_options_title))
+          }
+
+          item {
+            GroupedListColumn {
+              GroupedPreferenceCard(
+                position = GroupPosition.ONLY,
+              ) {
+                Preference(
+                  title = { Text(stringResource(R.string.pref_cloudstream_test_center_title)) },
+                  summary = {
+                    Text(
+                      stringResource(R.string.pref_cloudstream_test_center_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                  icon = {
+                    Icon(
+                      Icons.Filled.Build,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.primary,
+                    )
+                  },
+                  onClick = {
+                    backStack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen)
                   },
                 )
               }

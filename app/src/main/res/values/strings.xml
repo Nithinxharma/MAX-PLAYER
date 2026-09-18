@@ -1546,4 +1546,10 @@
   <string name="pref_cache_scanned_metadata_summary">Speed up startup without rescanning from scratch</string>
   <string name="pref_folder_path_hint">Folder path</string>
   <string name="pref_api_key_hint">API Key</string>
+
+  <!-- Developer Options & CloudStream Test Center -->
+  <string name="pref_developer_options_title">Developer Options</string>
+  <string name="pref_developer_options_summary">Diagnostic tools, debug console, and pipeline verification</string>
+  <string name="pref_cloudstream_test_center_title">CloudStream Test Center</string>
+  <string name="pref_cloudstream_test_center_summary">End-to-end integration diagnostics for repositories, extensions, search, metadata, links, and MPV playback</string>
 </resources>

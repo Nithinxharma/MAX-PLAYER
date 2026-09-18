@@ -11,12 +11,6 @@ interface ExtensionDao {
     @Query("SELECT * FROM extension_repositories")
     fun getAllRepositories(): Flow<List<ExtensionRepo>>
 
-    @Query("SELECT * FROM extension_repositories")
-    suspend fun getAllRepositoriesSync(): List<ExtensionRepo>
-
-    @Query("SELECT * FROM extension_repositories WHERE url = :url LIMIT 1")
-    suspend fun getRepositoryByUrl(url: String): ExtensionRepo?
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRepository(repo: ExtensionRepo)
 
@@ -25,9 +19,6 @@ interface ExtensionDao {
 
     @Query("SELECT * FROM installed_extensions")
     fun getAllInstalledExtensions(): Flow<List<InstalledExtension>>
-
-    @Query("SELECT * FROM installed_extensions")
-    suspend fun getAllInstalledExtensionsSync(): List<InstalledExtension>
 
     @Query("SELECT * FROM installed_extensions WHERE isEnabled = 1")
     suspend fun getEnabledExtensionsSync(): List<InstalledExtension>

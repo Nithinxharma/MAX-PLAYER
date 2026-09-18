@@ -29,58 +29,28 @@ class ProviderRegistry {
     }
 
     fun unregister(providerId: String) {
-        val targets = allProviders.keys.filter {
-            it.equals(providerId, ignoreCase = true) ||
-            it.equals("cs3_${providerId.lowercase()}", ignoreCase = true) ||
-            allProviders[it]?.name.equals(providerId, ignoreCase = true)
-        }
-        for (target in targets) {
-            allProviders.remove(target)
-            enabledProviderIds.remove(target)
-        }
         allProviders.remove(providerId)
         enabledProviderIds.remove(providerId)
         updateFlows()
     }
 
     fun setProviderEnabled(providerId: String, enabled: Boolean) {
-        val matchingKeys = allProviders.keys.filter {
-            it.equals(providerId, ignoreCase = true) ||
-            it.equals("cs3_${providerId.lowercase()}", ignoreCase = true) ||
-            allProviders[it]?.name.equals(providerId, ignoreCase = true)
-        }
-        if (matchingKeys.isNotEmpty()) {
-            for (key in matchingKeys) {
-                if (enabled) enabledProviderIds.add(key)
-                else enabledProviderIds.remove(key)
+        if (enabled) {
+            if (allProviders.containsKey(providerId)) {
+                enabledProviderIds.add(providerId)
             }
         } else {
-            if (enabled && allProviders.containsKey(providerId)) {
-                enabledProviderIds.add(providerId)
-            } else {
-                enabledProviderIds.remove(providerId)
-            }
+            enabledProviderIds.remove(providerId)
         }
         updateFlows()
     }
 
     fun isProviderEnabled(providerId: String): Boolean {
-        if (enabledProviderIds.contains(providerId)) return true
-        val matched = allProviders.entries.firstOrNull {
-            it.key.equals(providerId, ignoreCase = true) ||
-            it.key.equals("cs3_${providerId.lowercase()}", ignoreCase = true) ||
-            it.value.name.equals(providerId, ignoreCase = true)
-        }
-        return matched != null && enabledProviderIds.contains(matched.key)
+        return enabledProviderIds.contains(providerId)
     }
 
     fun getProvider(providerId: String): CineHubProvider? {
         return allProviders[providerId]
-            ?: allProviders.values.firstOrNull {
-                it.id.equals(providerId, ignoreCase = true) ||
-                it.id.equals("cs3_${providerId.lowercase()}", ignoreCase = true) ||
-                it.name.equals(providerId, ignoreCase = true)
-            }
     }
 
     fun getEnabledProviders(): List<CineHubProvider> {

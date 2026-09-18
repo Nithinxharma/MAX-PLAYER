@@ -182,17 +182,17 @@ fun ExtensionPreferencesScreen(
                 )
 
                 Preference(
+                    title = { Text("CloudStream Test Center") },
+                    summary = { Text("End-to-end integration and provider diagnostic suite") },
+                    icon = { Icon(Icons.Outlined.Build, contentDescription = null) },
+                    onClick = onNavigateToTestCenter
+                )
+
+                Preference(
                     title = { Text("Framework Diagnostics") },
                     summary = { Text("View active runtime providers and framework status") },
                     icon = { Icon(Icons.Outlined.Assessment, contentDescription = null) },
                     onClick = { showDiagnostics = true }
-                )
-
-                Preference(
-                    title = { Text("CloudStream Test Center") },
-                    summary = { Text("Developer end-to-end diagnostic pipeline") },
-                    icon = { Icon(Icons.Outlined.BugReport, contentDescription = null) },
-                    onClick = onNavigateToTestCenter
                 )
             }
         }

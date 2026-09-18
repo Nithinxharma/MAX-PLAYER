@@ -100,9 +100,9 @@ class ExtensionManager(
     }
 
     private fun loadExtensionFromDisk(ext: InstalledExtension) {
-        val file = ext.localFilePath?.let { File(it) }?.takeIf { it.exists() }
-            ?: File(extensionDir, "${ext.pkgName}.cs3").takeIf { it.exists() }
-            ?: return
+        val localPath = ext.localFilePath ?: return
+        val file = File(localPath)
+        if (!file.exists()) return
 
         try {
             val optDir = File(context.codeCacheDir, "opt_${ext.pkgName}").apply { mkdirs() }
@@ -127,12 +127,7 @@ class ExtensionManager(
             if (classNames.isNotEmpty() && ext.classesFile != classNames.joinToString(", ")) {
                 scope.launch(Dispatchers.IO) {
                     runCatching {
-                        db.extensionDao().insertExtension(
-                            ext.copy(
-                                localFilePath = file.absolutePath,
-                                classesFile = classNames.joinToString(", ")
-                            )
-                        )
+                        db.extensionDao().insertExtension(ext.copy(classesFile = classNames.joinToString(", ")))
                     }
                 }
             }
@@ -187,7 +182,7 @@ class ExtensionManager(
                 registry.register(CloudstreamMainApiAdapter(api), isEnabledByDefault = ext.isEnabled)
             }
         } catch (e: Throwable) {
-            Log.e("ExtensionManager", "Failed to load extension ${ext.pkgName} from ${file.absolutePath}", e)
+            Log.e("ExtensionManager", "Failed to load extension ${ext.pkgName} from $localPath", e)
         }
     }
 
@@ -261,7 +256,7 @@ class ExtensionManager(
 
     suspend fun checkForUpdates(): List<PluginUpdateInfo> = withContext(Dispatchers.IO) {
         val updates = mutableListOf<PluginUpdateInfo>()
-        val installedList = db.extensionDao().getAllInstalledExtensionsSync()
+        val installedList = db.extensionDao().getEnabledExtensionsSync()
         val cachedPlugins = repositoryManager.getCachedPlugins()
 
         for (inst in installedList) {
@@ -304,10 +299,8 @@ class ExtensionManager(
     fun clearCache() {
         repositoryManager.clearCache()
         try {
-            val codeCacheDir = context.codeCacheDir
-            codeCacheDir.listFiles()?.filter { it.name.startsWith("opt_") }?.forEach {
-                it.deleteRecursively()
-            }
+            extensionDir.deleteRecursively()
+            extensionDir.mkdirs()
         } catch (e: Exception) {
             e.printStackTrace()
         }
