@@ -150,11 +150,17 @@ room {
   schemaDirectory("$projectDir/schemas")
 }
 
+configurations.all {
+  exclude(group = "org.json", module = "json")
+}
+
 dependencies {
   // CloudStream SDK Compatibility
   implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
   implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
-  implementation("com.github.Blatzar:NiceHttp:0.4.18")
+  implementation("com.github.Blatzar:NiceHttp:0.4.18") {
+    exclude(group = "org.json", module = "json")
+  }
 
   implementation("io.coil-kt:coil-compose:2.6.0")
   implementation(libs.splashScreen)

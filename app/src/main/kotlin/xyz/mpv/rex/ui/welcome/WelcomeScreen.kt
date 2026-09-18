@@ -87,6 +87,7 @@ object WelcomeScreen : Screen {
 
   @Composable
   override fun Content() {
+    android.util.Log.d("TRANSITION_TRACE", "WelcomeScreen: first line of Content()")
     val context = LocalContext.current
     val backstack = LocalBackStack.current
     val appearancePreferences = koinInject<AppearancePreferences>()
@@ -99,6 +100,7 @@ object WelcomeScreen : Screen {
 
     val appIconBitmap = remember(context) {
       try {
+        android.util.Log.d("TRANSITION_TRACE", "WelcomeScreen: before packageManager.getApplicationIcon()")
         val drawable = context.packageManager.getApplicationIcon(context.packageName)
         val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 192
         val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 192
@@ -106,8 +108,10 @@ object WelcomeScreen : Screen {
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, canvas.width, canvas.height)
         drawable.draw(canvas)
+        android.util.Log.d("TRANSITION_TRACE", "WelcomeScreen: after bitmap creation")
         bitmap.asImageBitmap()
-      } catch (_: Exception) {
+      } catch (e: Exception) {
+        android.util.Log.e("TRANSITION_TRACE", "WelcomeScreen: error during icon bitmap creation", e)
         null
       }
     }

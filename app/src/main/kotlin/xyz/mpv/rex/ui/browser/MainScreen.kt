@@ -155,6 +155,7 @@ object MainScreen : Screen {
   @Composable
   @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
   override fun Content() {
+    android.util.Log.d("TRANSITION_TRACE", "MainScreen.Content() started")
     android.util.Log.d("APP_STARTUP", "APP_STAGE_4_START_DESTINATION")
     androidx.compose.runtime.LaunchedEffect(Unit) { android.util.Log.d("APP_STARTUP", "APP_STAGE_5_HOME_SCREEN_RENDERED") }
     var selectedTab by remember {
@@ -196,7 +197,11 @@ object MainScreen : Screen {
       buildList {
         add(
           VisibleTab("home", homeLabel, Icons.Filled.Home) {
+            android.util.Log.d("TRANSITION_TRACE", "Before FolderListScreen.Content()")
             FolderListScreen.Content()
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+              android.util.Log.d("TRANSITION_TRACE", "After FolderListScreen.Content() enters composition")
+            }
           }
         )
         if (isShortsEnabled) {

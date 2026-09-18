@@ -251,7 +251,6 @@ object JioTvRepo {
     }
 
     suspend fun fetchEpg(context: Context, channelId: String, offset: Int = 0): EpgProgram? = withContext(Dispatchers.IO) {
-        var resultProgram: EpgProgram? = null
         try {
             val url = "https://jiotv.data.cdn.jio.com/apis/v1.3/epg/get/channel/$channelId?offset=$offset&langId=6"
             val request = Request.Builder().url(url).get()
@@ -273,7 +272,7 @@ object JioTvRepo {
                             val startEpoch = node["startEpoch"]?.jsonPrimitive?.longOrNull ?: 0L
                             val endEpoch = node["endEpoch"]?.jsonPrimitive?.longOrNull ?: 0L
                             if (currentTime in startEpoch..endEpoch) {
-                                resultProgram = EpgProgram(
+                                return@withContext EpgProgram(
                                     srno = node["srno"]?.jsonPrimitive?.longOrNull ?: 0L,
                                     showId = node["showId"]?.jsonPrimitive?.content ?: "",
                                     showtime = node["showtime"]?.jsonPrimitive?.content ?: "",
@@ -287,16 +286,15 @@ object JioTvRepo {
                                     startEpoch = startEpoch,
                                     endEpoch = endEpoch
                                 )
-                                break
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("JioTvRepo", "fetchEpg failed for channel $channelId", e)
+            e.printStackTrace()
         }
-        resultProgram
+        return@withContext null
     }
 
     suspend fun getResolvedLiveUrl(context: Context, channelId: String, channelName: String = "Unknown"): ResolvedStream = withContext(Dispatchers.IO) {
@@ -312,9 +310,7 @@ object JioTvRepo {
                 try {
                     val jioUrl = resolveOriginalJioTvStream(context, channelId, channelName)
                     return@withContext ResolvedStream(jioUrl, PlaybackSource.JIO_TV, emptyMap(), "Jio Official")
-                } catch (e: Exception) {
-                    android.util.Log.w("JioTvRepo", "Failed to resolve verified JioTV stream: ${e.message}")
-                }
+                } catch (e: Exception) { }
             }
         }
 
@@ -331,9 +327,7 @@ object JioTvRepo {
             try {
                 val jioUrl = resolveOriginalJioTvStream(context, channelId, channelName)
                 return@withContext ResolvedStream(jioUrl, PlaybackSource.JIO_TV, emptyMap(), "Jio Official")
-            } catch (e: Exception) {
-                android.util.Log.w("JioTvRepo", "Failed to resolve preferred JioTV stream: ${e.message}")
-            }
+            } catch (e: Exception) { }
         }
 
         val matches = getAllM3uMatches(context, channelName, false)
@@ -346,7 +340,7 @@ object JioTvRepo {
         throw Exception("No working streams found|404")
     }
 
-    private fun resolveOriginalJioTvStream(context: Context, channelId: String, channelName: String): String {
+    private suspend fun resolveOriginalJioTvStream(context: Context, channelId: String, channelName: String): String {
         val prefs = context.getSharedPreferences("JioTvAuthPrefs", Context.MODE_PRIVATE)
         val authToken = prefs.getString("authToken", "") ?: ""
         val deviceId = prefs.getString("deviceId", "") ?: ""
@@ -364,9 +358,6 @@ object JioTvRepo {
             .addHeader("accesstoken", authToken).addHeader("subscriberid", crm).addHeader("uniqueId", uniqueId)
             .addHeader("usergroup", "tvYR7NSNn7rymo3F").addHeader("User-Agent", "okhttp/4.12.13").addHeader("versionCode", "452").build()
             
-        var resolvedUrl: String? = null
-        var errorMessage: String? = null
-
         client.newCall(request).execute().use { response ->
             val responseBody = response.body?.string() ?: ""
             val parsed = json.parseToJsonElement(responseBody).jsonObject
@@ -395,28 +386,17 @@ object JioTvRepo {
                             500 -> "Internal Server Error"
                             else -> "Manifest Request Failed"
                         }
-                        errorMessage = "$reason|$status"
-                    } else {
-                        resolvedUrl = finalUrl
+                        throw Exception("$reason|$status")
                     }
+                    return finalUrl
                 }
             } else {
                 val msg = parsed["message"]?.jsonPrimitive?.content ?: "API Error"
-                errorMessage = if (msg.contains("No eligible plans", ignoreCase = true) || code == 3012) {
-                    "No eligible plans found (3012)|3012"
-                } else if (msg.contains("Subscription Required", ignoreCase = true) || code == 403) {
-                    "Subscription Required (403)|403"
-                } else {
-                    "$msg|$code"
-                }
+                if (msg.contains("No eligible plans", ignoreCase = true) || code == 3012) throw Exception("No eligible plans found (3012)|3012")
+                if (msg.contains("Subscription Required", ignoreCase = true) || code == 403) throw Exception("Subscription Required (403)|403")
+                throw Exception("$msg|$code")
             }
         }
-
-        if (errorMessage != null) {
-            throw Exception(errorMessage)
-        }
-
-        return resolvedUrl ?: throw Exception("No stream URL resolved|500")
     }
 
     private fun restoreSessionFromAssets(context: Context): Boolean {
@@ -470,7 +450,6 @@ object JioTvRepo {
     fun isUserLoggedIn(): Boolean = cachedToken.isNotBlank()
 
     suspend fun requestOtp(mobileNumber: String): Boolean = withContext(Dispatchers.IO) {
-        var isSuccess = false
         try {
             val fullPhone = if (mobileNumber.startsWith("+91")) mobileNumber else "+91$mobileNumber"
             val encodedPhone = Base64.encodeToString(fullPhone.toByteArray(), Base64.NO_WRAP)
@@ -479,19 +458,11 @@ object JioTvRepo {
                 .post(jsonPayload.toRequestBody("application/json".toMediaType()))
                 .addHeader("appname", "RJIL_JioTV").addHeader("os", "android").addHeader("devicetype", "phone")
                 .addHeader("User-Agent", "okhttp/3.14.9").build()
-            client.newCall(request).execute().use { response ->
-                isSuccess = response.code == 204 || response.isSuccessful
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("JioTvRepo", "requestOtp failed", e)
-            isSuccess = false
-        }
-        isSuccess
+            client.newCall(request).execute().use { response -> return@withContext response.code == 204 || response.isSuccessful }
+        } catch (e: Exception) { return@withContext false }
     }
 
     suspend fun verifyOtp(context: Context, mobileNumber: String, otp: String): Boolean = withContext(Dispatchers.IO) {
-        var isVerified = false
-        var exceptionToThrow: Exception? = null
         try {
             val fullPhone = if (mobileNumber.startsWith("+91")) mobileNumber else "+91$mobileNumber"
             val encodedPhone = Base64.encodeToString(fullPhone.toByteArray(), Base64.NO_WRAP)
@@ -535,27 +506,14 @@ object JioTvRepo {
                             .putString("ssoToken", finalSsoToken).putString("authToken", finalAuthToken).putString("refreshToken", finalRefreshToken)
                             .putString("crmToken", finalCrm).putString("deviceId", targetDeviceId).putString("uniqueId", finalUniqueId).apply()
                             
-                        isVerified = true
+                        return@withContext true
                     }
                 }
-                if (!isVerified) {
-                    var errorMsg = "Unknown Error Occured : Code ${response.code}"
-                    if (parsed.containsKey("message") && parsed["message"]?.jsonPrimitive?.content?.isNotBlank() == true) {
-                        errorMsg = "Jio Error - " + parsed["message"]?.jsonPrimitive?.content
-                    }
-                    exceptionToThrow = Exception(errorMsg)
-                }
+                var errorMsg = "Unknown Error Occured : Code ${response.code}"
+                if (parsed.containsKey("message") && parsed["message"]?.jsonPrimitive?.content?.isNotBlank() == true) errorMsg = "Jio Error - " + parsed["message"]?.jsonPrimitive?.content
+                throw Exception(errorMsg)
             }
-        } catch (e: Exception) {
-            android.util.Log.e("JioTvRepo", "verifyOtp network error", e)
-            throw e
-        }
-
-        if (exceptionToThrow != null) {
-            throw exceptionToThrow!!
-        }
-
-        isVerified
+        } catch (e: Exception) { throw e }
     }
 
     suspend fun fetchLiveChannelsFromAssets(context: Context): List<LiveChannelItem> = withContext(Dispatchers.IO) {
@@ -661,14 +619,13 @@ object JioTvRepo {
     }
 
     suspend fun testStreamUrl(url: String, headers: Map<String, String>): String = withContext(Dispatchers.IO) {
-        var status = "Connection Error"
         try {
             val reqBuilder = Request.Builder().url(url).head()
             headers.forEach { (k, v) -> reqBuilder.header(k, v) }
             if (!headers.containsKey("User-Agent")) reqBuilder.header("User-Agent", JIO_USER_AGENT)
 
             quickClient.newCall(reqBuilder.build()).execute().use { res ->
-                status = when (res.code) {
+                return@withContext when (res.code) {
                     in 200..299 -> "Working"
                     403 -> "403 Forbidden"
                     404 -> "404 Not Found"
@@ -676,10 +633,9 @@ object JioTvRepo {
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.w("JioTvRepo", "testStreamUrl failed for $url", e)
-            if (e.message?.contains("timeout", true) == true) status = "Timeout"
+            if (e.message?.contains("timeout", true) == true) return@withContext "Timeout"
+            return@withContext "Connection Error"
         }
-        status
     }
 
     fun getPlaylistMeta(context: Context): PlaylistMeta {
@@ -692,12 +648,11 @@ object JioTvRepo {
     }
 
     suspend fun syncPlaylistFromUrl(context: Context, url: String): Boolean = withContext(Dispatchers.IO) {
-        var success = false
         try {
             val request = Request.Builder().url(url).build()
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
+                    val body = response.body?.string() ?: return@withContext false
                     if (body.contains("#EXTM3U")) {
                         saveM3uText(context, body)
                         val prefs = context.getSharedPreferences("JioTvSmartCache", Context.MODE_PRIVATE)
@@ -705,13 +660,11 @@ object JioTvRepo {
                             .putLong("playlistUpdated", System.currentTimeMillis())
                             .putInt("playlistCount", body.split("#EXTINF").size - 1)
                             .apply()
-                        success = true
+                        return@withContext true
                     }
                 }
             }
-        } catch (e: Exception) {
-            android.util.Log.e("JioTvRepo", "syncPlaylistFromUrl error", e)
-        }
-        success
+        } catch (e: Exception) {}
+        return@withContext false
     }
 }

@@ -93,6 +93,7 @@ class FolderListViewModel(
   }
 
   init {
+    Log.d("TRANSITION_TRACE", "FolderListViewModel: init start")
     // Load cached folders instantly for immediate display
     val hasCachedData = loadCachedFolders()
 
@@ -148,6 +149,7 @@ class FolderListViewModel(
   }
 
   private fun loadCachedFolders(): Boolean {
+    Log.d("TRANSITION_TRACE", "FolderListViewModel: loadCachedFolders start")
     var hasCachedData = false
     val prefs =
       getApplication<Application>().getSharedPreferences("folder_cache", android.content.Context.MODE_PRIVATE)
@@ -164,6 +166,7 @@ class FolderListViewModel(
         Log.e(TAG, "Error parsing cached folders", e)
       }
     }
+    Log.d("TRANSITION_TRACE", "FolderListViewModel: loadCachedFolders finish (hasCachedData=$hasCachedData)")
     return hasCachedData
   }
 
@@ -237,6 +240,7 @@ class FolderListViewModel(
   }
 
   override fun loadData() {
+    Log.d("TRANSITION_TRACE", "FolderListViewModel: loadData start")
     loadVideoFolders()
   }
 
@@ -254,6 +258,7 @@ class FolderListViewModel(
         
         val scanTime = System.currentTimeMillis() - startTime
         Log.d(TAG, "Media scan completed in ${scanTime}ms, found ${folders.size} folders")
+        Log.d("TRANSITION_TRACE", "FolderListViewModel: loadData finish (found ${folders.size} folders)")
 
         // Enrich with metadata only if needed
         if (MetadataRetrieval.isFolderMetadataNeeded(browserPreferences)) {

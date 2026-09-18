@@ -16,10 +16,9 @@ class GlobalExceptionHandler(
     t: Thread,
     e: Throwable,
   ) {
-    if (System.currentTimeMillis() - appLaunchTime < 3000) {
-      defaultHandler?.uncaughtException(t, e)
-      return
-    }
+    android.util.Log.e("CRASH_TRACE", "UNCAUGHT EXCEPTION INTERCEPTED AT T=" + (System.currentTimeMillis() - appLaunchTime) + "ms", e)
+    // Temporarily disabled 3-second bypass to capture real crash stacktrace
+    // if (System.currentTimeMillis() - appLaunchTime < 3000) { defaultHandler?.uncaughtException(t, e); return }
 
     val intent = Intent(context, activity)
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

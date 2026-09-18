@@ -159,11 +159,18 @@ object SplashScreen : Screen {
         animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
       )
 
+      android.util.Log.d("TRANSITION_TRACE", "SplashScreen: Checking appearancePreferences.onboardingCompleted.get()")
       val hasCompletedOnboarding = appearancePreferences.onboardingCompleted.get()
+      if (hasCompletedOnboarding) {
+        android.util.Log.d("TRANSITION_TRACE", "ABOUT TO NAVIGATE TO MAIN")
+      } else {
+        android.util.Log.d("TRANSITION_TRACE", "ABOUT TO NAVIGATE TO WELCOME")
+      }
       val targetScreen = if (hasCompletedOnboarding) MainScreen else WelcomeScreen
 
       backstack.clear()
       backstack.add(targetScreen)
+      android.util.Log.d("TRANSITION_TRACE", "SplashScreen: backstack updated to targetScreen: " + targetScreen::class.simpleName)
     }
 
     Box(
