@@ -17,6 +17,10 @@ fun logError(throwable: Throwable) {
     throwable.printStackTrace()
 }
 
+inline fun debugPrint(block: () -> String) {
+    // Debug print
+}
+
 fun <T> normalSafeApiCall(apiCall: () -> T): T? {
     return try {
         apiCall.invoke()

@@ -8,3 +8,5 @@ abstract class VideoClickAction {
 object VideoClickActionHolder {
     val allVideoClickActions = mutableListOf<VideoClickAction>()
 }
+
+inline fun <T, R> MutableList<T>.withLock(action: (MutableList<T>) -> R): R = synchronized(this) { action(this) }

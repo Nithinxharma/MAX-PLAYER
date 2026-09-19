@@ -23,7 +23,7 @@ abstract class Plugin : BasePlugin() {
      * @param element VideoClickAction you want to register
      */
     fun registerVideoClickAction(element: VideoClickAction) {
-        Log.i("Plugin", "Adding ${element.name} VideoClickAction")
+        Log.i(PLUGIN_TAG, "Adding ${element.name} VideoClickAction")
         element.sourcePlugin = this.filename
         VideoClickActionHolder.allVideoClickActions.add(element)
     }

@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.utils.ExtractorApi
 
+const val PLUGIN_TAG = "Plugin"
 
 abstract class BasePlugin {
     var filename: String? = null

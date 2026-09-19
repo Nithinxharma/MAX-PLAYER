@@ -3,6 +3,16 @@ package com.lagradost.cloudstream3.utils
 import kotlinx.coroutines.*
 
 object Coroutines {
+    fun main(work: suspend () -> Unit): Job {
+        return CoroutineScope(Dispatchers.Main).launch {
+            try {
+                work()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun <T> T.main(work: suspend ((T) -> Unit)): Job {
         val value = this
         return CoroutineScope(Dispatchers.Main).launch {

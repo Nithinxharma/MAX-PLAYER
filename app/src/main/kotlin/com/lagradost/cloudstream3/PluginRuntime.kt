@@ -83,6 +83,10 @@ object APIHolder {
         runCatching { onApiRemovedListener?.invoke(api) }
     }
 
+    fun removePluginMapping(api: MainAPI) {
+        removePlugin(api)
+    }
+
     fun getApi(name: String): MainAPI? = apiMap[name]
 
     fun removePluginsBySource(sourceFilename: String) {

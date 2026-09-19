@@ -1552,4 +1552,15 @@
   <string name="pref_developer_options_summary">Diagnostic tools, debug console, and pipeline verification</string>
   <string name="pref_cloudstream_test_center_title">CloudStream Test Center</string>
   <string name="pref_cloudstream_test_center_summary">End-to-end integration diagnostics for repositories, extensions, search, metadata, links, and MPV playback</string>
+
+  <!-- CloudStream Plugin System Strings -->
+  <string name="jsdelivr_proxy_key">jsdelivr_proxy</string>
+  <string name="plugins_updated">Updated %1$d extensions</string>
+  <string name="plugin_load_fail">Failed to load extension %1$s</string>
+  <string name="plugins_downloaded">Downloaded %1$d extensions</string>
+  <string name="starting_plugin_update_manually">Updating extensions…</string>
+  <string name="plugins_updated_manually">Updated %1$d extensions</string>
+  <string name="no_plugins_updated_manually">All extensions are up to date</string>
+  <string name="extension_install_first">Please install extension first</string>
+  <string name="already_voted">Already voted</string>
 </resources>
