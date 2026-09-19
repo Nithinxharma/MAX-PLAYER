@@ -411,7 +411,7 @@ class ExtensionManager(
         return null
     }
 
-    private fun loadExtensionFromDisk(ext: InstalledExtension) {
+    fun loadExtensionFromDisk(ext: InstalledExtension): Boolean {
         Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 1: Read extension database row: pkgName='${ext.pkgName}', name='${ext.name}', version=${ext.version}, isEnabled=${ext.isEnabled}, localFilePath='${ext.localFilePath}', classesFile='${ext.classesFile}'")
         var localPath = ext.localFilePath
         Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 2: localFilePath: '$localPath'")
@@ -447,7 +447,7 @@ class ExtensionManager(
             Log.e("ExtensionManager", "EXTENSION_AUDIT: Step 3: FAILED: File does not exist for package '${ext.pkgName}' at '$localPath'")
             Log.w("ExtensionManager", "EXTENSION_LOAD: Extension file not found on disk for ${ext.pkgName} (path=$localPath)")
             _failedPluginLoadsCount.value++
-            return
+            return false
         }
 
         val fileSize = file.length()
@@ -620,10 +620,287 @@ class ExtensionManager(
                 _failedPluginLoadsCount.value++
                 Log.w("ExtensionManager", "No providers or plugins could be registered from ${file.name}")
             }
+            return loadSuccess
         } catch (e: Throwable) {
             _failedPluginLoadsCount.value++
             Log.e("ExtensionManager", "Failed to load extension ${ext.pkgName} from $localPath", e)
+            return false
         }
+    }
+
+    fun getCandidatePluginFiles(): List<File> {
+        val searchDirs = listOfNotNull(
+            extensionDir,
+            File(context.filesDir, "cloudstream_plugins"),
+            File(context.filesDir, "Extensions"),
+            context.filesDir,
+            context.getExternalFilesDir(null)?.let { File(it, "plugins") },
+            File(android.os.Environment.getExternalStorageDirectory(), "Cloudstream3/plugins")
+        )
+        val files = mutableListOf<File>()
+        for (dir in searchDirs) {
+            if (dir.exists() && dir.isDirectory) {
+                dir.walkTopDown().maxDepth(2).forEach { f ->
+                    if (f.isFile && (f.extension.equals("cs3", ignoreCase = true) || f.extension.equals("zip", ignoreCase = true))) {
+                        files.add(f)
+                    }
+                }
+            }
+        }
+        return files.distinctBy { it.absolutePath }
+    }
+
+    fun inspectZipManifest(file: File): Pair<String?, List<String>> {
+        var manifestContent: String? = null
+        val classes = mutableListOf<String>()
+        if (!file.exists()) return Pair(null, emptyList())
+        runCatching {
+            ZipFile(file).use { zip ->
+                val entry = zip.entries().asSequence().firstOrNull {
+                    val name = it.name.substringAfterLast('/')
+                    name.equals("manifest.json", ignoreCase = true) ||
+                    name.equals("make.json", ignoreCase = true) ||
+                    name.equals("plugin.json", ignoreCase = true)
+                }
+                if (entry != null) {
+                    val text = zip.getInputStream(entry).bufferedReader().readText()
+                    manifestContent = text
+                    classes.addAll(extractClassNamesFromZip(file))
+                }
+            }
+        }
+        return Pair(manifestContent, classes)
+    }
+
+    suspend fun forceReloadExtension(pkgName: String): Boolean = withContext(Dispatchers.IO) {
+        val installed = db.extensionDao().getExtension(pkgName)
+        val file = findExtensionFile(pkgName, installed?.localFilePath)
+        if (file != null) {
+            com.lagradost.cloudstream3.APIHolder.removePluginsBySource(file.absolutePath)
+            com.lagradost.cloudstream3.APIHolder.removePluginsBySource(file.name)
+        }
+        registry.unregister(pkgName)
+        registry.unregister("cs3_${pkgName.lowercase()}")
+
+        val extToLoad = installed ?: file?.let {
+            InstalledExtension(
+                pkgName = pkgName,
+                name = pkgName,
+                version = "1.0.0",
+                versionCode = 1,
+                localFilePath = it.absolutePath,
+                isEnabled = true
+            )
+        } ?: return@withContext false
+
+        loadExtensionFromDisk(extToLoad)
+    }
+
+    fun findExtensionFile(pkgName: String, localPath: String?): File? {
+        if (localPath != null) {
+            val f = File(localPath)
+            if (f.exists() && f.isFile) return f
+        }
+        val candidates = listOfNotNull(
+            File(extensionDir, "$pkgName.cs3"),
+            File(extensionDir, pkgName),
+            File(context.filesDir, "cloudstream_plugins/$pkgName.cs3"),
+            File(context.filesDir, "cloudstream_plugins/$pkgName"),
+            extensionDir.listFiles()?.firstOrNull { it.name.contains(pkgName, ignoreCase = true) },
+            File(context.filesDir, "cloudstream_plugins").listFiles()?.firstOrNull { it.name.contains(pkgName, ignoreCase = true) }
+        )
+        return candidates.firstOrNull { it.exists() && it.isFile }
+    }
+
+    suspend fun forceDexAudit(file: File): xyz.mpv.rex.cinehub.extension.model.DexAuditReport = withContext(Dispatchers.IO) {
+        val startTime = System.currentTimeMillis()
+        val logs = mutableListOf<String>()
+        val classAudits = mutableListOf<xyz.mpv.rex.cinehub.extension.model.DexClassLoadAuditItem>()
+        var zipEntriesCount = 0
+        var hasManifest = false
+        var manifestContent: String? = null
+        var manifestPluginClass: String? = null
+        val classesFromManifest = mutableListOf<String>()
+        val classesFromDex = mutableListOf<String>()
+        var registeredProvidersCount = 0
+        var registeredExtractorsCount = 0
+        var isSuccess = false
+        var errorSummary: String? = null
+
+        logs.add("[Step 1] Verifying file: ${file.absolutePath} (size: ${if (file.exists()) file.length() else 0} bytes)")
+
+        if (!file.exists()) {
+            logs.add("[Step 1 ERROR] File does not exist at ${file.absolutePath}")
+            return@withContext xyz.mpv.rex.cinehub.extension.model.DexAuditReport(
+                fileName = file.name,
+                filePath = file.absolutePath,
+                fileSize = 0L,
+                fileExists = false,
+                zipEntriesCount = 0,
+                hasManifest = false,
+                manifestContent = null,
+                manifestPluginClass = null,
+                classesFromManifest = emptyList(),
+                classesFromDex = emptyList(),
+                classLoadAudits = emptyList(),
+                registeredProvidersCount = 0,
+                registeredExtractorsCount = 0,
+                totalDurationMs = System.currentTimeMillis() - startTime,
+                success = false,
+                errorSummary = "File not found",
+                logs = logs
+            )
+        }
+
+        runCatching {
+            ZipFile(file).use { zip ->
+                zipEntriesCount = zip.size()
+                logs.add("[Step 2] Opened ZIP archive. Total entries: $zipEntriesCount")
+                val manifestEntry = zip.entries().asSequence().firstOrNull {
+                    val n = it.name.substringAfterLast('/')
+                    n.equals("manifest.json", ignoreCase = true) ||
+                    n.equals("make.json", ignoreCase = true) ||
+                    n.equals("plugin.json", ignoreCase = true)
+                }
+                if (manifestEntry != null) {
+                    hasManifest = true
+                    val txt = zip.getInputStream(manifestEntry).bufferedReader().readText()
+                    manifestContent = txt
+                    logs.add("[Step 3] Manifest found: ${manifestEntry.name}")
+                    val json = JSONObject(txt)
+                    manifestPluginClass = json.optString("pluginClassName", json.optString("pluginClass", json.optString("mainClass", json.optString("class", ""))))
+                    if (!manifestPluginClass.isNullOrBlank()) {
+                        classesFromManifest.add(manifestPluginClass!!.trim())
+                    }
+                    val classesArr = json.optJSONArray("classes")
+                    if (classesArr != null) {
+                        for (i in 0 until classesArr.length()) {
+                            val cName = classesArr.optString(i).trim()
+                            if (cName.isNotBlank() && !classesFromManifest.contains(cName)) {
+                                classesFromManifest.add(cName)
+                            }
+                        }
+                    }
+                } else {
+                    logs.add("[Step 3 WARNING] No manifest.json found in archive")
+                }
+            }
+        }.onFailure {
+            logs.add("[Step 2/3 ERROR] Failed reading ZIP archive: ${it.message}")
+            errorSummary = it.message
+        }
+
+        // Dex scan
+        val optDir = File(context.codeCacheDir, "opt_audit_${file.nameWithoutExtension}").apply { mkdirs() }
+        val dexClasses = extractClassesFromDex(file, optDir)
+        classesFromDex.addAll(dexClasses)
+        logs.add("[Step 4] Extracted ${dexClasses.size} candidate classes from classes.dex")
+
+        val allCandidateClasses = (classesFromManifest + classesFromDex).distinct()
+        logs.add("[Step 5] Total unique candidate classes to inspect: ${allCandidateClasses.size}")
+
+        val classLoader: ClassLoader = try {
+            dalvik.system.PathClassLoader(file.absolutePath, context.classLoader)
+        } catch (e: Throwable) {
+            dalvik.system.DexClassLoader(file.absolutePath, optDir.absolutePath, null, context.classLoader)
+        }
+
+        val initialApis = com.lagradost.cloudstream3.APIHolder.allProviders.size
+        val initialExtractors = com.lagradost.cloudstream3.APIHolder.extractorApis.size
+
+        for (cName in allCandidateClasses) {
+            try {
+                val clazz = classLoader.loadClass(cName)
+                val isInstantiable = clazz.declaredConstructors.any { it.parameterTypes.isEmpty() || (it.parameterTypes.size == 1 && Context::class.java.isAssignableFrom(it.parameterTypes[0])) } ||
+                        runCatching { clazz.getField("INSTANCE") }.isSuccess || runCatching { clazz.getDeclaredField("INSTANCE") }.isSuccess
+                val resolvedType = when {
+                    com.lagradost.cloudstream3.plugins.BasePlugin::class.java.isAssignableFrom(clazz) -> "BasePlugin"
+                    com.lagradost.cloudstream3.MainAPI::class.java.isAssignableFrom(clazz) -> "MainAPI"
+                    com.lagradost.cloudstream3.utils.ExtractorApi::class.java.isAssignableFrom(clazz) -> "ExtractorApi"
+                    CineHubProvider::class.java.isAssignableFrom(clazz) -> "CineHubProvider"
+                    else -> clazz.superclass?.simpleName ?: "Object"
+                }
+                val hasLoad = clazz.methods.any { it.name == "load" }
+
+                classAudits.add(
+                    xyz.mpv.rex.cinehub.extension.model.DexClassLoadAuditItem(
+                        className = cName,
+                        isClassFound = true,
+                        isInstantiable = isInstantiable,
+                        resolvedType = resolvedType,
+                        hasLoadMethod = hasLoad,
+                        errorMessage = null
+                    )
+                )
+                logs.add("[Step 6 Class Audit] $cName -> Type: $resolvedType, Instantiable: $isInstantiable, hasLoad: $hasLoad")
+
+                val instance = instantiateClass(clazz, file.nameWithoutExtension)
+                if (instance != null) {
+                    if (instance is com.lagradost.cloudstream3.plugins.BasePlugin) {
+                        instance.filename = file.absolutePath
+                        if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
+                            runCatching {
+                                val assets = android.content.res.AssetManager::class.java.getDeclaredConstructor().newInstance()
+                                val addAssetPath = android.content.res.AssetManager::class.java.getMethod("addAssetPath", String::class.java)
+                                addAssetPath.invoke(assets, file.absolutePath)
+                                instance.resources = android.content.res.Resources(assets, context.resources.displayMetrics, context.resources.configuration)
+                            }
+                            instance.load(context)
+                        } else {
+                            instance.load()
+                        }
+                        logs.add("[Step 7 Execution] Invoked BasePlugin.load() for $cName successfully")
+                    } else if (instance is com.lagradost.cloudstream3.MainAPI) {
+                        instance.sourcePlugin = file.absolutePath
+                        com.lagradost.cloudstream3.APIHolder.addPlugin(instance)
+                        registry.register(CloudstreamMainApiAdapter(instance), isEnabledByDefault = true)
+                        logs.add("[Step 7 Execution] Registered MainAPI: ${instance.name}")
+                    } else if (instance is com.lagradost.cloudstream3.utils.ExtractorApi) {
+                        instance.sourcePlugin = file.absolutePath
+                        com.lagradost.cloudstream3.APIHolder.addExtractor(instance)
+                        logs.add("[Step 7 Execution] Registered Extractor: ${instance.name}")
+                    }
+                }
+            } catch (err: Throwable) {
+                classAudits.add(
+                    xyz.mpv.rex.cinehub.extension.model.DexClassLoadAuditItem(
+                        className = cName,
+                        isClassFound = false,
+                        isInstantiable = false,
+                        resolvedType = null,
+                        hasLoadMethod = false,
+                        errorMessage = err.message
+                    )
+                )
+                logs.add("[Step 6 Class Audit FAILED] $cName: ${err.message}")
+            }
+        }
+
+        registeredProvidersCount = (com.lagradost.cloudstream3.APIHolder.allProviders.size - initialApis).coerceAtLeast(0)
+        registeredExtractorsCount = (com.lagradost.cloudstream3.APIHolder.extractorApis.size - initialExtractors).coerceAtLeast(0)
+        isSuccess = classAudits.any { it.isClassFound }
+
+        logs.add("[Step 8 Summary] Audit completed in ${System.currentTimeMillis() - startTime}ms. Success: $isSuccess, Providers Registered: $registeredProvidersCount, Extractors: $registeredExtractorsCount")
+
+        xyz.mpv.rex.cinehub.extension.model.DexAuditReport(
+            fileName = file.name,
+            filePath = file.absolutePath,
+            fileSize = file.length(),
+            fileExists = true,
+            zipEntriesCount = zipEntriesCount,
+            hasManifest = hasManifest,
+            manifestContent = manifestContent,
+            manifestPluginClass = manifestPluginClass,
+            classesFromManifest = classesFromManifest,
+            classesFromDex = classesFromDex,
+            classLoadAudits = classAudits,
+            registeredProvidersCount = registeredProvidersCount,
+            registeredExtractorsCount = registeredExtractorsCount,
+            totalDurationMs = System.currentTimeMillis() - startTime,
+            success = isSuccess,
+            errorSummary = errorSummary,
+            logs = logs
+        )
     }
 
     suspend fun installExtension(plugin: AvailablePlugin): Boolean = withContext(Dispatchers.IO) {

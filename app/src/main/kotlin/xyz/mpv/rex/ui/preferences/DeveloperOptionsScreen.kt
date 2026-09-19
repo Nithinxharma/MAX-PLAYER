@@ -64,7 +64,28 @@ object DeveloperOptionsScreen : Screen {
                 ) {
                     PreferenceSectionHeader(title = "CloudStream Integration")
                     GroupedListColumn {
-                        GroupedPreferenceCard(position = GroupPosition.ONLY) {
+                        GroupedPreferenceCard(position = GroupPosition.FIRST) {
+                            Preference(
+                                title = { Text("Force Plugin Activation") },
+                                summary = {
+                                    Text(
+                                        "Directly load DEX files, activate plugins, reload and test providers",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.FlashOn,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(ForcePluginActivationScreenRoute)
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.LAST) {
                             Preference(
                                 title = { Text(stringResource(id = R.string.pref_cloudstream_test_center_title)) },
                                 summary = {

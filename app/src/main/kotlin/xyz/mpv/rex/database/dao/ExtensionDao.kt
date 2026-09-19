@@ -26,6 +26,9 @@ interface ExtensionDao {
     @Query("SELECT * FROM installed_extensions WHERE isEnabled = 1")
     suspend fun getEnabledExtensionsSync(): List<InstalledExtension>
 
+    @Query("SELECT * FROM installed_extensions WHERE pkgName = :pkgName LIMIT 1")
+    suspend fun getExtension(pkgName: String): InstalledExtension?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExtension(ext: InstalledExtension)
 

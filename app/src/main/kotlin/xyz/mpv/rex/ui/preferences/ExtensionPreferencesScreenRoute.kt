@@ -14,7 +14,8 @@ object ExtensionPreferencesScreenRoute : Screen {
             onNavigateBack = { backstack.removeLastOrNull() },
             onNavigateToRepositories = { backstack.add(ExtensionRepositoriesScreenRoute) },
             onNavigateToInstalled = { backstack.add(InstalledExtensionsScreenRoute) },
-            onNavigateToTestCenter = { backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen) }
+            onNavigateToTestCenter = { backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen) },
+            onNavigateToForceActivation = { backstack.add(ForcePluginActivationScreenRoute) }
         )
     }
 }

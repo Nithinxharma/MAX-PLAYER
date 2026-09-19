@@ -32,6 +32,7 @@ fun ExtensionPreferencesScreen(
     onNavigateToRepositories: () -> Unit,
     onNavigateToInstalled: () -> Unit,
     onNavigateToTestCenter: () -> Unit = {},
+    onNavigateToForceActivation: () -> Unit = {},
     extensionManager: ExtensionManager = koinInject(),
     repositoryManager: RepositoryManager = koinInject(),
     registry: ProviderRegistry = koinInject()
@@ -144,6 +145,13 @@ fun ExtensionPreferencesScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                Preference(
+                    title = { Text("Force Plugin Activation") },
+                    summary = { Text("Force load DEX binaries, activate plugins, reload & run tests") },
+                    icon = { Icon(Icons.Outlined.FlashOn, contentDescription = null) },
+                    onClick = onNavigateToForceActivation
                 )
 
                 Preference(
