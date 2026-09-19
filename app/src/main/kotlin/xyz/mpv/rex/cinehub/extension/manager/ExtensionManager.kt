@@ -436,13 +436,23 @@ class ExtensionManager(
 
         try {
             Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 5: Opening archive: ${file.absolutePath}")
-            val optDir = File(context.codeCacheDir, "opt_${ext.pkgName}").apply { mkdirs() }
-            val classLoader = dalvik.system.DexClassLoader(
-                file.absolutePath,
-                optDir.absolutePath,
-                null,
-                context.classLoader
-            )
+            val optDir = File(context.codeCacheDir, "cloudstream_dex_${ext.pkgName}").apply { mkdirs() }
+            
+            // Original CloudStream PluginManager uses PathClassLoader with context.classLoader as parent
+            val classLoader: ClassLoader = try {
+                dalvik.system.PathClassLoader(file.absolutePath, context.classLoader)
+            } catch (pclErr: Throwable) {
+                dalvik.system.DexClassLoader(
+                    file.absolutePath,
+                    optDir.absolutePath,
+                    null,
+                    context.classLoader
+                )
+            }
+
+            Log.i("ExtensionManager", "DEX_LOAD: Archive path: ${file.absolutePath}")
+            Log.i("ExtensionManager", "DEX_LOAD: Optimized directory: ${optDir.absolutePath}")
+            Log.i("ExtensionManager", "DEX_LOAD: Parent classloader: ${context.classLoader}")
 
             val classNames = mutableListOf<String>()
 
@@ -456,6 +466,7 @@ class ExtensionManager(
 
             // 3. Extract and print every class discovered in classes.dex (Step 8)
             val discoveredDexClasses = extractClassesFromDex(file, optDir)
+            Log.i("ExtensionManager", "DEX_LOAD: DexFile entries count: ${discoveredDexClasses.size}")
             Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 8: Discovered ${discoveredDexClasses.size} classes in classes.dex for ${ext.pkgName}: $discoveredDexClasses")
             for (dexC in discoveredDexClasses) {
                 if (!classNames.contains(dexC)) classNames.add(dexC)
@@ -481,8 +492,10 @@ class ExtensionManager(
 
             for (className in classNames) {
                 try {
+                    Log.i("ExtensionManager", "DEX_LOAD: Attempting class load: $className")
                     Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 9: Verifying plugin class can be loaded: $className")
                     val clazz = classLoader.loadClass(className)
+                    Log.i("ExtensionManager", "DEX_LOAD: Class loaded successfully: $className")
                     Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 9: Successfully loaded class $className for ${ext.pkgName}")
                     val instance = instantiateClass(clazz, ext.pkgName)
 
@@ -561,6 +574,9 @@ class ExtensionManager(
                         }
                     }
                 } catch (e: Throwable) {
+                    if (e is ClassNotFoundException || e.cause is ClassNotFoundException) {
+                        Log.e("ExtensionManager", "DEX_LOAD: ClassNotFoundException: Failed loading class $className from ${file.name}: ${e.message}")
+                    }
                     Log.e("ExtensionManager", "EXTENSION_AUDIT: Step 9/10/11: FAILED for class $className (package: ${ext.pkgName}): ${e.message}", e)
                     Log.w("ExtensionManager", "Failed to load class $className for extension ${ext.pkgName}: ${e.message}")
                 }
