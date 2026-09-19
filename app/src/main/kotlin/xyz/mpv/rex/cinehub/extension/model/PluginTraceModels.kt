@@ -32,7 +32,31 @@ data class PluginTraceSession(
     val steps: List<TraceStepItem> = emptyList(),
     var rawLogLines: List<String> = emptyList(),
     var dexExecutionCheck: DexExecutionCheckResult? = null,
+    var dependencyResolutionCheck: DependencyResolutionCheckResult? = null,
     var proofOfExecution: ProofOfExecutionResult? = null
+)
+
+data class ClassResolutionStatus(
+    val className: String,
+    val isPresent: Boolean,
+    val exceptionMessage: String? = null,
+    val superclassName: String? = null,
+    val interfaces: List<String> = emptyList(),
+    val constructors: List<String> = emptyList(),
+    val methods: List<String> = emptyList()
+)
+
+data class DependencyResolutionCheckResult(
+    val pluginClass: String,
+    val superclassChain: List<String>,
+    val interfaces: List<String>,
+    val referencedCloudstreamClasses: List<String>,
+    val coreClassesStatus: List<ClassResolutionStatus>,
+    val missingDependency: String?,
+    val classLoaderUsed: String,
+    val parentLoaderUsed: String,
+    val isSuccess: Boolean,
+    val diagnosticSummary: String
 )
 
 data class DexExecutionCheckResult(

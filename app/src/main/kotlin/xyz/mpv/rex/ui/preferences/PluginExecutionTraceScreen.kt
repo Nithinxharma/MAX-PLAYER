@@ -259,6 +259,12 @@ fun PluginExecutionTraceScreen(
                     }
                 }
 
+                session.dependencyResolutionCheck?.let { depCheck ->
+                    item {
+                        DependencyResolutionCheckCard(depCheck = depCheck)
+                    }
+                }
+
                 items(session.steps, key = { it.stepNumber }) { step ->
                     TraceTimelineStepCard(step = step)
                 }
@@ -772,6 +778,120 @@ fun DexExecutionCheckCard(dexCheck: xyz.mpv.rex.cinehub.extension.model.DexExecu
                     DexCheckAttributeRow("Android Version", "SDK ${dexCheck.androidSdkVersion} (${dexCheck.androidRelease})")
                     DexCheckAttributeRow("ART Exception", dexCheck.artException ?: "None (Clean Load)")
                     DexCheckAttributeRow("DEX Classes Count", dexCheck.dexVisibleClassesCount.toString())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DependencyResolutionCheckCard(depCheck: xyz.mpv.rex.cinehub.extension.model.DependencyResolutionCheckResult) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+        ),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Layers,
+                        contentDescription = null,
+                        tint = if (depCheck.isSuccess) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "DEPENDENCY RESOLUTION CHECK",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Badge(containerColor = if (depCheck.isSuccess) Color(0xFF1B5E20) else Color(0xFFB71C1C)) {
+                    Text(
+                        text = if (depCheck.isSuccess) "All Dependencies Resolved" else "Missing Class",
+                        color = Color.White,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Text(
+                text = "Plugin Class Superclass Chain & Core Runtime Resolution:",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    DexCheckAttributeRow("Plugin Class", depCheck.pluginClass)
+                    DexCheckAttributeRow("Superclass Chain", if (depCheck.superclassChain.isNotEmpty()) depCheck.superclassChain.joinToString(" -> ") else "None")
+                    DexCheckAttributeRow("Interfaces", if (depCheck.interfaces.isNotEmpty()) depCheck.interfaces.joinToString(", ") else "None")
+                    DexCheckAttributeRow("ClassLoader Used", depCheck.classLoaderUsed)
+                    DexCheckAttributeRow("Parent Loader Used", depCheck.parentLoaderUsed)
+                    DexCheckAttributeRow("Missing Dependency", depCheck.missingDependency ?: "None (All Resolved)")
+                    DexCheckAttributeRow("Diagnostic Summary", depCheck.diagnosticSummary)
+                }
+            }
+
+            Text(
+                text = "Core CloudStream Runtime Presence (${depCheck.coreClassesStatus.count { it.isPresent }}/${depCheck.coreClassesStatus.size} Present):",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                depCheck.coreClassesStatus.forEach { cs ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = cs.className.removePrefix("com.lagradost.cloudstream3."),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = if (cs.isPresent) "PRESENT" else "MISSING",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (cs.isPresent) Color(0xFF2E7D32) else Color(0xFFD32F2F),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
         }
