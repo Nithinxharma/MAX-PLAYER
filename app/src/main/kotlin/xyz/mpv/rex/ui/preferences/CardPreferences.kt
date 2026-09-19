@@ -1,6 +1,7 @@
 package xyz.mpv.rex.ui.preferences
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,8 @@ import xyz.mpv.rex.presentation.components.GroupPosition
 import xyz.mpv.rex.presentation.components.GroupedListColumn
 import xyz.mpv.rex.presentation.components.GroupedListItem
 import xyz.mpv.rex.presentation.components.groupedItemShape
+import xyz.mpv.rex.ui.theme.liquidglass.isLiquidGlassActive
+import xyz.mpv.rex.ui.theme.liquidglass.liquidGlassSurface
 
 /**
  * Material 3 Expressive card container for grouping related preferences.
@@ -36,22 +39,47 @@ fun PreferenceCard(
   content: @Composable ColumnScope.() -> Unit,
 ) {
   val shape = groupedItemShape(position)
-  Surface(
-    modifier = modifier
-      .fillMaxWidth()
-      .padding(horizontal = 16.dp)
-      .clip(shape),
-    shape = shape,
-    color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-    contentColor = MaterialTheme.colorScheme.onSurface,
-    tonalElevation = tonalElevation,
-    shadowElevation = 0.dp,
-  ) {
-    Column(
-      modifier = Modifier.padding(vertical = 4.dp),
-      verticalArrangement = Arrangement.spacedBy(0.dp),
+  val isGlass = isLiquidGlassActive()
+
+  if (isGlass) {
+    Box(
+      modifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 2.dp)
+        .liquidGlassSurface(
+          shape = shape,
+          tintColor = color,
+          alpha = 0.76f,
+          elevation = 8.dp,
+          borderWidth = 1.dp
+        )
+        .padding(vertical = 4.dp),
     ) {
-      content()
+      Column(
+        modifier = Modifier.padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+      ) {
+        content()
+      }
+    }
+  } else {
+    Surface(
+      modifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp)
+        .clip(shape),
+      shape = shape,
+      color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+      contentColor = MaterialTheme.colorScheme.onSurface,
+      tonalElevation = tonalElevation,
+      shadowElevation = 0.dp,
+    ) {
+      Column(
+        modifier = Modifier.padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+      ) {
+        content()
+      }
     }
   }
 }
@@ -74,19 +102,39 @@ fun GroupedPreferenceCard(
   } else {
     Modifier
   }
-  Surface(
-    modifier = modifier
-      .fillMaxWidth()
-      .padding(horizontal = 16.dp)
-      .then(highlightModifier)
-      .clip(shape),
-    shape = shape,
-    color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-    contentColor = MaterialTheme.colorScheme.onSurface,
-    tonalElevation = tonalElevation,
-    shadowElevation = 0.dp,
-  ) {
-    content()
+  val isGlass = isLiquidGlassActive()
+
+  if (isGlass) {
+    Box(
+      modifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 2.dp)
+        .then(highlightModifier)
+        .liquidGlassSurface(
+          shape = shape,
+          tintColor = color,
+          alpha = 0.76f,
+          elevation = 8.dp,
+          borderWidth = 1.dp
+        ),
+    ) {
+      content()
+    }
+  } else {
+    Surface(
+      modifier = modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp)
+        .then(highlightModifier)
+        .clip(shape),
+      shape = shape,
+      color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+      contentColor = MaterialTheme.colorScheme.onSurface,
+      tonalElevation = tonalElevation,
+      shadowElevation = 0.dp,
+    ) {
+      content()
+    }
   }
 }
 

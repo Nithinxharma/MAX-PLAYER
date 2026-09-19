@@ -58,6 +58,9 @@ import xyz.mpv.rex.ui.browser.cinehub.CineHubScreen
 import xyz.mpv.rex.ui.browser.folderlist.FolderListScreen
 import xyz.mpv.rex.ui.browser.networkstreaming.NetworkStreamingScreen
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
+import xyz.mpv.rex.ui.theme.liquidglass.LiquidGlassNavigationBar
+import xyz.mpv.rex.ui.theme.liquidglass.LiquidGlassNavigationBarItem
+import xyz.mpv.rex.ui.theme.liquidglass.isLiquidGlassActive
 import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
 import xyz.mpv.rex.ui.browser.shorts.ShortsScreen
 import xyz.mpv.rex.ui.browser.selection.SelectionManager
@@ -362,6 +365,8 @@ object MainScreen : Screen {
         val shortsIdx = visibleTabs.indexOfFirst { it.id == "shorts" }
         val isShortsTabActive = isShortsEnabled && shortsIdx != -1 && selectedTab == shortsIdx
         
+        val isLiquidGlass = isLiquidGlassActive()
+
         AnimatedVisibility(
             visible = !hideNavigationBar && !isShortsTabActive && visibleTabs.size > 1,
             enter = slideInVertically(
@@ -373,43 +378,63 @@ object MainScreen : Screen {
               targetOffsetY = { fullHeight -> fullHeight }
             )
           ) {
-            NavigationBar(
-              containerColor = if (isShortsTabActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
-              contentColor = if (isShortsTabActive) Color.White else MaterialTheme.colorScheme.onSurface,
-            ) {
-              val itemColors = if (isShortsTabActive) {
-                NavigationBarItemDefaults.colors(
-                  selectedIconColor = Color.White,
-                  selectedTextColor = Color.White,
-                  unselectedIconColor = Color.White.copy(alpha = 0.7f),
-                  unselectedTextColor = Color.White.copy(alpha = 0.7f),
-                  indicatorColor = Color.White.copy(alpha = 0.2f),
-                )
-              } else {
-                NavigationBarItemDefaults.colors(
-                  selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                  selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                  indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                  unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                  unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            if (isLiquidGlass && !isShortsTabActive) {
+              LiquidGlassNavigationBar {
+                visibleTabs.forEachIndexed { index, tab ->
+                  LiquidGlassNavigationBarItem(
+                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    label = { Text(tab.label) },
+                    selected = selectedTab == index,
+                    onClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                      if (selectedTab == index) {
+                        _scrollToTopRequest.tryEmit(tab.id)
+                      } else {
+                        selectedTab = index
+                      }
+                    },
+                  )
+                }
               }
+            } else {
+              NavigationBar(
+                containerColor = if (isShortsTabActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = if (isShortsTabActive) Color.White else MaterialTheme.colorScheme.onSurface,
+              ) {
+                val itemColors = if (isShortsTabActive) {
+                  NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color.White,
+                    selectedTextColor = Color.White,
+                    unselectedIconColor = Color.White.copy(alpha = 0.7f),
+                    unselectedTextColor = Color.White.copy(alpha = 0.7f),
+                    indicatorColor = Color.White.copy(alpha = 0.2f),
+                  )
+                } else {
+                  NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
 
-              visibleTabs.forEachIndexed { index, tab ->
-                NavigationBarItem(
-                  icon = { Icon(tab.icon, contentDescription = tab.label) },
-                  label = { Text(tab.label) },
-                  selected = selectedTab == index,
-                  onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (selectedTab == index) {
-                      _scrollToTopRequest.tryEmit(tab.id)
-                    } else {
-                      selectedTab = index
-                    }
-                  },
-                  colors = itemColors,
-                )
+                visibleTabs.forEachIndexed { index, tab ->
+                  NavigationBarItem(
+                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    label = { Text(tab.label) },
+                    selected = selectedTab == index,
+                    onClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                      if (selectedTab == index) {
+                        _scrollToTopRequest.tryEmit(tab.id)
+                      } else {
+                        selectedTab = index
+                      }
+                    },
+                    colors = itemColors,
+                  )
+                }
               }
             }
           }

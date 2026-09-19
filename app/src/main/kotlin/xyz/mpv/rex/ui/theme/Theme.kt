@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
@@ -51,7 +52,13 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.drawToBitmap
 import xyz.mpv.rex.R
 import xyz.mpv.rex.preferences.AppearancePreferences
+import xyz.mpv.rex.preferences.UiStyleOption
 import xyz.mpv.rex.preferences.preference.collectAsState
+import xyz.mpv.rex.ui.theme.liquidglass.LocalLiquidGlassColors
+import xyz.mpv.rex.ui.theme.liquidglass.LocalUiStyle
+import xyz.mpv.rex.ui.theme.liquidglass.LiquidGlassColors
+import xyz.mpv.rex.ui.theme.liquidglass.UiStyle
+import xyz.mpv.rex.ui.theme.liquidglass.toLiquidGlassColorScheme
 import org.koin.compose.koinInject
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import kotlin.math.hypot
@@ -402,8 +409,12 @@ fun MpvexTheme(content: @Composable () -> Unit) {
   val amoledMode by preferences.amoledMode.collectAsState()
   val appTheme by preferences.appTheme.collectAsState()
   val useSystemFont by preferences.useSystemFont.collectAsState()
+  val uiStyle by preferences.uiStyle.collectAsState()
+  val enableLiquidGlassUi by preferences.enableLiquidGlassUi.collectAsState()
   val darkTheme = isSystemInDarkTheme()
   val context = LocalContext.current
+
+  val isLiquidGlass = enableLiquidGlassUi || uiStyle == UiStyleOption.LiquidGlass
 
     val useDarkTheme = when (darkMode) {
         DarkMode.Dark -> true
@@ -413,7 +424,7 @@ fun MpvexTheme(content: @Composable () -> Unit) {
 
     val isAmoled = useDarkTheme && amoledMode
 
-    val colorScheme = when {
+    val baseColorScheme = when {
         appTheme.isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             when {
                 isAmoled -> {
@@ -438,10 +449,28 @@ fun MpvexTheme(content: @Composable () -> Unit) {
         else -> appTheme.getLightColorScheme()
     }
 
+    val colorScheme = if (isLiquidGlass) {
+        baseColorScheme.toLiquidGlassColorScheme(useDarkTheme)
+    } else {
+        baseColorScheme
+    }
+
+    val liquidGlassColors = LiquidGlassColors(
+        cardBackgroundAlpha = if (useDarkTheme) 0.74f else 0.80f,
+        barBackgroundAlpha = if (useDarkTheme) 0.78f else 0.84f,
+        dialogBackgroundAlpha = if (useDarkTheme) 0.85f else 0.90f,
+        cardElevation = 16.dp,
+        cardCornerRadius = 28.dp,
+        specularAlpha = if (useDarkTheme) 0.38f else 0.55f,
+        glassBorderWidth = 1.dp
+    )
+
     // Provide theme transition state first, OUTSIDE MaterialTheme
     CompositionLocalProvider(
         LocalSpacing provides Spacing(),
         LocalThemeTransitionState provides rememberThemeTransitionState(),
+        LocalUiStyle provides UiStyle(liquidGlassEnabled = isLiquidGlass),
+        LocalLiquidGlassColors provides liquidGlassColors,
     ) {
         ThemeTransitionContent {
             MaterialTheme(
@@ -468,10 +497,14 @@ fun MpvexPlayerTheme(content: @Composable () -> Unit) {
     val amoledMode by preferences.amoledMode.collectAsState()
     val appTheme by preferences.appTheme.collectAsState()
     val useSystemFont by preferences.useSystemFont.collectAsState()
+    val uiStyle by preferences.uiStyle.collectAsState()
+    val enableLiquidGlassUi by preferences.enableLiquidGlassUi.collectAsState()
     val darkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
 
-    val isPlayerAlwaysDark = playerAlwaysDarkMode || enableGlassPlayerControls
+    val isLiquidGlass = enableLiquidGlassUi || uiStyle == UiStyleOption.LiquidGlass
+
+    val isPlayerAlwaysDark = playerAlwaysDarkMode || enableGlassPlayerControls || isLiquidGlass
     val useDarkTheme = if (isPlayerAlwaysDark) {
         true
     } else {
@@ -482,7 +515,7 @@ fun MpvexPlayerTheme(content: @Composable () -> Unit) {
         }
     }
 
-    val colorScheme = when {
+    val baseColorScheme = when {
         appTheme.isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             when {
                 useDarkTheme && amoledMode -> {
@@ -507,10 +540,28 @@ fun MpvexPlayerTheme(content: @Composable () -> Unit) {
         else -> appTheme.getLightColorScheme()
     }
 
+    val colorScheme = if (isLiquidGlass) {
+        baseColorScheme.toLiquidGlassColorScheme(useDarkTheme)
+    } else {
+        baseColorScheme
+    }
+
+    val liquidGlassColors = LiquidGlassColors(
+        cardBackgroundAlpha = if (useDarkTheme) 0.74f else 0.80f,
+        barBackgroundAlpha = if (useDarkTheme) 0.78f else 0.84f,
+        dialogBackgroundAlpha = if (useDarkTheme) 0.85f else 0.90f,
+        cardElevation = 16.dp,
+        cardCornerRadius = 28.dp,
+        specularAlpha = if (useDarkTheme) 0.38f else 0.55f,
+        glassBorderWidth = 1.dp
+    )
+
     // Provide theme transition state first, OUTSIDE MaterialTheme
     CompositionLocalProvider(
         LocalSpacing provides Spacing(),
         LocalThemeTransitionState provides rememberThemeTransitionState(),
+        LocalUiStyle provides UiStyle(liquidGlassEnabled = isLiquidGlass),
+        LocalLiquidGlassColors provides liquidGlassColors,
     ) {
         ThemeTransitionContent {
             MaterialTheme(

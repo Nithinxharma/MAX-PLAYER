@@ -58,6 +58,8 @@ import xyz.mpv.rex.cinehub.data.KodiMediaScraper
 import xyz.mpv.rex.cinehub.data.NfoScanner
 import xyz.mpv.rex.cinehub.model.EpisodeItem
 import xyz.mpv.rex.cinehub.model.MovieItem
+import xyz.mpv.rex.ui.theme.liquidglass.isLiquidGlassActive
+import xyz.mpv.rex.ui.theme.liquidglass.liquidGlassSurface
 import xyz.mpv.rex.cinehub.model.TvShowItem
 import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
@@ -1403,14 +1405,31 @@ private fun FeaturedHeroCard(
   onPlayClick: () -> Unit,
   onDetailClick: () -> Unit,
 ) {
+  val isGlass = isLiquidGlassActive()
   Card(
     modifier = Modifier
       .fillMaxWidth()
       .height(240.dp)
       .padding(horizontal = 16.dp, vertical = 8.dp)
-      .clip(RoundedCornerShape(20.dp))
+      .then(
+        if (isGlass) {
+          Modifier.liquidGlassSurface(
+            shape = RoundedCornerShape(24.dp),
+            alpha = 0.85f,
+            elevation = 16.dp,
+            borderWidth = 1.2.dp
+          )
+        } else {
+          Modifier
+        }
+      )
+      .clip(RoundedCornerShape(if (isGlass) 24.dp else 20.dp))
       .clickable { onDetailClick() },
-    shape = RoundedCornerShape(20.dp),
+    shape = RoundedCornerShape(if (isGlass) 24.dp else 20.dp),
+    colors = CardDefaults.cardColors(
+      containerColor = if (isGlass) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
+    ),
+    elevation = CardDefaults.cardElevation(defaultElevation = if (isGlass) 0.dp else 2.dp)
   ) {
     Box(modifier = Modifier.fillMaxSize()) {
       AsyncImage(
@@ -1529,6 +1548,7 @@ private fun MediaPosterCard(
   year: String,
   onClick: () -> Unit,
 ) {
+  val isGlass = isLiquidGlassActive()
   Column(
     modifier = Modifier
       .width(140.dp)
@@ -1538,7 +1558,23 @@ private fun MediaPosterCard(
       shape = RoundedCornerShape(16.dp),
       modifier = Modifier
         .width(140.dp)
-        .height(205.dp),
+        .height(205.dp)
+        .then(
+          if (isGlass) {
+            Modifier.liquidGlassSurface(
+              shape = RoundedCornerShape(16.dp),
+              alpha = 0.78f,
+              elevation = 10.dp,
+              borderWidth = 1.dp
+            )
+          } else {
+            Modifier
+          }
+        ),
+      colors = CardDefaults.cardColors(
+        containerColor = if (isGlass) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant
+      ),
+      elevation = CardDefaults.cardElevation(defaultElevation = if (isGlass) 0.dp else 2.dp)
     ) {
       Box(modifier = Modifier.fillMaxSize()) {
         if (!posterUrl.isNullOrBlank()) {

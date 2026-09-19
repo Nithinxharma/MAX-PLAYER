@@ -191,6 +191,61 @@ object AppearancePreferencesScreen : Screen {
                     }
 
                     item {
+                        PreferenceSectionHeader(title = stringResource(id = R.string.pref_appearance_ui_style_title))
+                    }
+
+                    item {
+                        val uiStyle by preferences.uiStyle.collectAsState()
+                        val enableLiquidGlassUi by preferences.enableLiquidGlassUi.collectAsState()
+
+                        GroupedListColumn {
+                            GroupedPreferenceCard(
+                                position = GroupPosition.FIRST,
+                                highlightKey = listOf(
+                                    R.string.pref_appearance_ui_style_title,
+                                    R.string.pref_appearance_ui_style_material3,
+                                    R.string.pref_appearance_ui_style_liquid_glass,
+                                ),
+                            ) {
+                                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                    MultiChoiceSegmentedButton(
+                                        choices = persistentListOf(
+                                            stringResource(R.string.pref_appearance_ui_style_material3),
+                                            stringResource(R.string.pref_appearance_ui_style_liquid_glass),
+                                        ),
+                                        selectedIndices = persistentListOf(if (uiStyle == xyz.mpv.rex.preferences.UiStyleOption.LiquidGlass || enableLiquidGlassUi) 1 else 0),
+                                        onClick = { index ->
+                                            val isLiquid = index == 1
+                                            preferences.uiStyle.set(if (isLiquid) xyz.mpv.rex.preferences.UiStyleOption.LiquidGlass else xyz.mpv.rex.preferences.UiStyleOption.Material3)
+                                            preferences.enableLiquidGlassUi.set(isLiquid)
+                                        },
+                                    )
+                                }
+                            }
+
+                            GroupedPreferenceCard(
+                                position = GroupPosition.LAST,
+                                highlightKey = R.string.pref_appearance_enable_liquid_glass_title,
+                            ) {
+                                SwitchPreference(
+                                    value = enableLiquidGlassUi || uiStyle == xyz.mpv.rex.preferences.UiStyleOption.LiquidGlass,
+                                    onValueChange = { enabled ->
+                                        preferences.enableLiquidGlassUi.set(enabled)
+                                        preferences.uiStyle.set(if (enabled) xyz.mpv.rex.preferences.UiStyleOption.LiquidGlass else xyz.mpv.rex.preferences.UiStyleOption.Material3)
+                                    },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_enable_liquid_glass_title)) },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_liquid_glass_summary),
+                                            color = MaterialTheme.colorScheme.outline,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    item {
                         PreferenceSectionHeader(title = stringResource(id = R.string.pref_appearance_category_theme))
                     }
 
