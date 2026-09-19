@@ -220,7 +220,8 @@ class CloudStreamDiagnosticViewModel(
     val registeredProviders: StateFlow<List<CineHubProvider>> = registry.registeredProviders
 
     init {
-        DiagnosticLogger.info(TAG_AUTO, "CloudStream Test Center Diagnostic Engine initialized.")
+        DiagnosticLogger.info(TAG_AUTO, "CloudStream Test Center Diagnostic Engine initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, ExtensionManager.identityHashCode=${System.identityHashCode(extensionManager)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
+        android.util.Log.i("DiagnosticViewModel", "INSTANCE_IDENTITY: CloudStreamDiagnosticViewModel initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, ExtensionManager.identityHashCode=${System.identityHashCode(extensionManager)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         refreshEnvironmentStatus()
         loadRepositoryAndExtensionData()
     }
@@ -231,7 +232,8 @@ class CloudStreamDiagnosticViewModel(
 
     fun refreshEnvironmentStatus() {
         viewModelScope.launch(Dispatchers.IO) {
-            DiagnosticLogger.info("EnvironmentStatus", "Refreshing environment and runtime health status...")
+            DiagnosticLogger.info("EnvironmentStatus", "Refreshing environment and runtime health status... ViewModel@${System.identityHashCode(this@CloudStreamDiagnosticViewModel)}, Registry@${System.identityHashCode(registry)}, ExtensionManager@${System.identityHashCode(extensionManager)}, APIHolder@${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
+            android.util.Log.i("DiagnosticViewModel", "INSTANCE_IDENTITY: refreshEnvironmentStatus running on ViewModel@${System.identityHashCode(this@CloudStreamDiagnosticViewModel)}, Registry@${System.identityHashCode(registry)}, ExtensionManager@${System.identityHashCode(extensionManager)}, APIHolder@${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
 
             val appVer = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
             val sdkVer = "CloudStream Core API v3 (Headless Runner)"

@@ -79,6 +79,10 @@ object CloudStreamTestCenterScreen : Screen {
             )
         }
 
+        LaunchedEffect(Unit) {
+            android.util.Log.i("TestCenterScreen", "INSTANCE_IDENTITY: CloudStreamTestCenterScreen composed. identityHashCode=${System.identityHashCode(this)}, ViewModel.identityHashCode=${System.identityHashCode(viewModel)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, ExtensionManager.identityHashCode=${System.identityHashCode(extensionManager)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
+        }
+
         var selectedTab by remember { mutableIntStateOf(0) }
         val tabs = listOf(
             "Overview & Auto",

@@ -1,6 +1,7 @@
 package xyz.mpv.rex.ui.browser.cinehub
 
 import android.os.Environment
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -285,6 +286,10 @@ object CineHubScreen : Screen {
     val registeredProvidersList by providerRegistry.registeredProviders.collectAsState()
     val installedExtensionsList by extensionManager.getAllInstalledExtensions().collectAsState(initial = emptyList())
     var showDiagnostics by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+      Log.i("CineHubScreen", "INSTANCE_IDENTITY: CineHubScreen composed. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(providerRegistry)}, ExtensionManager.identityHashCode=${System.identityHashCode(extensionManager)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
+    }
 
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
     val enableLocalTvShows by browserPreferences.enableLocalTvShows.collectAsState()
@@ -628,7 +633,10 @@ object CineHubScreen : Screen {
                     Button(
                       onClick = {
                         scope.launch(Dispatchers.IO) {
+                          Log.i("CineHubScreen", "RELOAD_ACTION: Reload Providers clicked in UI. ExtensionManager@${System.identityHashCode(extensionManager)}, ProviderRegistry@${System.identityHashCode(providerRegistry)}, APIHolder@${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
+                          Log.i("CineHubScreen", "RELOAD_ACTION: Before load: APIHolder.allProviders.size=${com.lagradost.cloudstream3.APIHolder.allProviders.size}, ProviderRegistry.registeredProviders.size=${providerRegistry.registeredProviders.value.size}, ProviderRegistry.activeProviders.size=${providerRegistry.activeProviders.value.size}")
                           extensionManager.loadInstalledExtensions()
+                          Log.i("CineHubScreen", "RELOAD_ACTION: After load: APIHolder.allProviders.size=${com.lagradost.cloudstream3.APIHolder.allProviders.size}, ProviderRegistry.registeredProviders.size=${providerRegistry.registeredProviders.value.size}, ProviderRegistry.activeProviders.size=${providerRegistry.activeProviders.value.size}")
                           withContext(Dispatchers.Main) {
                             loadMedia()
                           }

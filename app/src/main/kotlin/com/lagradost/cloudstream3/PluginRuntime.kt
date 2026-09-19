@@ -27,6 +27,9 @@ object AcraApplication {
 }
 
 object APIHolder {
+    init {
+        Log.i("APIHolder", "INSTANCE_IDENTITY: APIHolder initialized. identityHashCode=${System.identityHashCode(this)}")
+    }
     val unixTimeMS: Long get() = System.currentTimeMillis()
     val unixTime: Long get() = unixTimeMS / 1000L
 
@@ -42,6 +45,7 @@ object APIHolder {
 
     fun addPlugin(api: MainAPI) {
         _registerMainApiCallsCount.incrementAndGet()
+        Log.i("ExtensionManager", "INSTANCE_IDENTITY: APIHolder.addPlugin called on APIHolder@${System.identityHashCode(this)} for API ${api.name} (${api.mainUrl})")
         Log.i("ExtensionManager", "EXTENSION_LOAD: registerMainAPI called: ${api.name} (${api.mainUrl})")
         // Replace existing entry with same name if already present, or add new
         val existing = allProviders.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }

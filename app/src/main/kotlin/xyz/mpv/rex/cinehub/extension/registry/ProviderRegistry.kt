@@ -22,7 +22,12 @@ class ProviderRegistry {
     private val _registeredProviders = MutableStateFlow<List<CineHubProvider>>(emptyList())
     val registeredProviders: StateFlow<List<CineHubProvider>> = _registeredProviders.asStateFlow()
 
+    init {
+        Log.i(TAG, "INSTANCE_IDENTITY: ProviderRegistry initialized. identityHashCode=${System.identityHashCode(this)}")
+    }
+
     fun register(provider: CineHubProvider, isEnabledByDefault: Boolean = true) {
+        Log.i(TAG, "INSTANCE_IDENTITY: ProviderRegistry.register called on ProviderRegistry@${System.identityHashCode(this)} for provider ${provider.name} (id=${provider.id})")
         allProviders[provider.id] = provider
         if (isEnabledByDefault) {
             enabledProviderIds.add(provider.id)

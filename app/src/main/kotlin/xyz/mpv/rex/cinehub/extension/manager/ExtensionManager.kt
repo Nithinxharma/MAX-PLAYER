@@ -60,6 +60,7 @@ class ExtensionManager(
     val loadedPluginCount: Int get() = loadedPluginInstances.size
 
     init {
+        Log.i("ExtensionManager", "INSTANCE_IDENTITY: ExtensionManager initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         if (!extensionDir.exists()) extensionDir.mkdirs()
 
         // Immediate reactive bridge: when any plugin registers MainAPI, instantly register in ProviderRegistry
@@ -83,6 +84,7 @@ class ExtensionManager(
     }
 
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
+        Log.i("ExtensionManager", "INSTANCE_IDENTITY: loadInstalledExtensions called on ExtensionManager@${System.identityHashCode(this)} with ProviderRegistry@${System.identityHashCode(registry)} and APIHolder@${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         val installedExts = db.extensionDao().getAllInstalledExtensionsSync()
         _installedExtensionsCount.value = installedExts.size
         _pluginFilesFoundCount.value = 0
@@ -156,6 +158,7 @@ class ExtensionManager(
                 "${com.lagradost.cloudstream3.APIHolder.allProviders.size} APIs in APIHolder, " +
                 "${registry.getAllProviders().size} registered providers, " +
                 "${registry.getEnabledProviders().size} enabled providers.")
+        Log.i("ExtensionManager", "INSTANCE_IDENTITY: ExtensionManager@${System.identityHashCode(this)} dump: APIHolder@${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}.providers.size=${com.lagradost.cloudstream3.APIHolder.allProviders.size}, ProviderRegistry@${System.identityHashCode(registry)}.registeredProviders.size=${registry.registeredProviders.value.size}, ProviderRegistry.activeProviders.size=${registry.activeProviders.value.size}")
     }
 
     private fun extractClassNamesFromZip(file: File): List<String> {
