@@ -1,5 +1,6 @@
 package xyz.mpv.rex.cinehub.extension.registry
 
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
  * active states, and lifecycle.
  */
 class ProviderRegistry {
+    private val TAG = "ProviderRegistry"
     private val allProviders = ConcurrentHashMap<String, CineHubProvider>()
     private val enabledProviderIds = ConcurrentHashMap.newKeySet<String>()
 
@@ -25,32 +27,58 @@ class ProviderRegistry {
         if (isEnabledByDefault) {
             enabledProviderIds.add(provider.id)
         }
+        Log.i(TAG, "Registered provider: ${provider.name} (id=${provider.id}), isEnabledByDefault=$isEnabledByDefault [Total: ${allProviders.size}, Enabled: ${enabledProviderIds.size}]")
         updateFlows()
     }
 
-    fun unregister(providerId: String) {
-        allProviders.remove(providerId)
-        enabledProviderIds.remove(providerId)
+    fun unregister(identifier: String) {
+        val matchingIds = findMatchingProviderIds(identifier)
+        for (id in matchingIds) {
+            allProviders.remove(id)
+            enabledProviderIds.remove(id)
+        }
+        allProviders.remove(identifier)
+        enabledProviderIds.remove(identifier)
+        Log.i(TAG, "Unregistered provider identifier: $identifier [Removed: ${matchingIds.size}]")
         updateFlows()
     }
 
-    fun setProviderEnabled(providerId: String, enabled: Boolean) {
-        if (enabled) {
-            if (allProviders.containsKey(providerId)) {
-                enabledProviderIds.add(providerId)
+    fun setProviderEnabled(identifier: String, enabled: Boolean) {
+        val matchingIds = findMatchingProviderIds(identifier)
+        if (matchingIds.isNotEmpty()) {
+            for (id in matchingIds) {
+                if (enabled) {
+                    enabledProviderIds.add(id)
+                } else {
+                    enabledProviderIds.remove(id)
+                }
             }
+            Log.i(TAG, "setProviderEnabled($identifier, $enabled) matched IDs: $matchingIds")
         } else {
-            enabledProviderIds.remove(providerId)
+            // Direct key fallback if registered under direct ID
+            if (enabled) {
+                if (allProviders.containsKey(identifier)) {
+                    enabledProviderIds.add(identifier)
+                }
+            } else {
+                enabledProviderIds.remove(identifier)
+            }
+            Log.w(TAG, "setProviderEnabled($identifier, $enabled) fallback executed. Matching ID count: 0")
         }
         updateFlows()
     }
 
-    fun isProviderEnabled(providerId: String): Boolean {
-        return enabledProviderIds.contains(providerId)
+    fun isProviderEnabled(identifier: String): Boolean {
+        if (enabledProviderIds.contains(identifier)) return true
+        val matchingIds = findMatchingProviderIds(identifier)
+        return matchingIds.any { enabledProviderIds.contains(it) }
     }
 
-    fun getProvider(providerId: String): CineHubProvider? {
-        return allProviders[providerId]
+    fun getProvider(identifier: String): CineHubProvider? {
+        return allProviders[identifier] ?: run {
+            val matchingIds = findMatchingProviderIds(identifier)
+            matchingIds.firstNotNullOfOrNull { allProviders[it] }
+        }
     }
 
     fun getEnabledProviders(): List<CineHubProvider> {
@@ -59,6 +87,22 @@ class ProviderRegistry {
 
     fun getAllProviders(): List<CineHubProvider> {
         return allProviders.values.toList()
+    }
+
+    private fun findMatchingProviderIds(identifier: String): Set<String> {
+        val clean = identifier.trim()
+        val normalized = clean.lowercase().replace("\\s+".toRegex(), "_")
+        return allProviders.values.filter { provider ->
+            val pId = provider.id.lowercase()
+            val pName = provider.name.lowercase()
+            pId == clean.lowercase() ||
+            pName == clean.lowercase() ||
+            pId == "cs3_$normalized" ||
+            pId == "cs3_${clean.lowercase()}" ||
+            pName.replace("\\s+".toRegex(), "_") == normalized ||
+            pName.contains(clean.removePrefix("cs3_").removeSuffix("Provider"), ignoreCase = true) ||
+            clean.contains(provider.name, ignoreCase = true)
+        }.map { it.id }.toSet()
     }
 
     private fun updateFlows() {

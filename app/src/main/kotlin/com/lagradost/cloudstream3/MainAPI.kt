@@ -5,6 +5,15 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import kotlinx.serialization.json.Json
+
+val json: Json = Json {
+    isLenient = true
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+    explicitNulls = false
+    encodeDefaults = true
+}
 
 val mapper: JsonMapper = JsonMapper.builder()
     .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -20,6 +29,21 @@ inline fun <reified T> tryParseJson(value: String?): T? {
         null
     }
 }
+
+suspend fun newSubtitleFile(
+    lang: String,
+    url: String,
+    initializer: suspend SubtitleFile.() -> Unit = {}
+): SubtitleFile {
+    val sub = SubtitleFile(lang, url)
+    sub.initializer()
+    return sub
+}
+
+fun newSubtitleFile(
+    lang: String,
+    url: String
+): SubtitleFile = SubtitleFile(lang, url)
 
 enum class TvType {
     Movie, TvSeries, Anime, AnimeMovie, OVA, Cartoon, Documentary, AsianDrama, Live, NSFW, Others

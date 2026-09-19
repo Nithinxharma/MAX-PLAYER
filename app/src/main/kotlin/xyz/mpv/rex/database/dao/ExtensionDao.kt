@@ -20,6 +20,9 @@ interface ExtensionDao {
     @Query("SELECT * FROM installed_extensions")
     fun getAllInstalledExtensions(): Flow<List<InstalledExtension>>
 
+    @Query("SELECT * FROM installed_extensions")
+    suspend fun getAllInstalledExtensionsSync(): List<InstalledExtension>
+
     @Query("SELECT * FROM installed_extensions WHERE isEnabled = 1")
     suspend fun getEnabledExtensionsSync(): List<InstalledExtension>
 

@@ -279,6 +279,12 @@ object CineHubScreen : Screen {
     val libraryDao = database.cineLibraryDao()
     val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
     val providerRegistry = koinInject<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>()
+    val extensionManager = koinInject<xyz.mpv.rex.cinehub.extension.manager.ExtensionManager>()
+
+    val activeProvidersList by providerRegistry.activeProviders.collectAsState()
+    val registeredProvidersList by providerRegistry.registeredProviders.collectAsState()
+    val installedExtensionsList by extensionManager.getAllInstalledExtensions().collectAsState(initial = emptyList())
+    var showDiagnostics by remember { mutableStateOf(false) }
 
     val enableLocalMovies by browserPreferences.enableLocalMovies.collectAsState()
     val enableLocalTvShows by browserPreferences.enableLocalTvShows.collectAsState()
@@ -358,7 +364,7 @@ object CineHubScreen : Screen {
       }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(activeProvidersList) {
       loadMedia()
     }
 
@@ -491,9 +497,15 @@ object CineHubScreen : Screen {
                     isSearchingOnline = true
                     scope.launch(Dispatchers.IO) {
                       val activeProviders = providerRegistry.getEnabledProviders()
+                      android.util.Log.i("CineHubSearch", "Searching across ${activeProviders.size} enabled providers for: $query")
                       val extDeferreds = activeProviders.map { provider ->
                         async {
-                          runCatching { provider.search(query) }.getOrDefault(emptyList())
+                          try {
+                            provider.search(query)
+                          } catch (t: Throwable) {
+                            android.util.Log.e("CineHubSearch", "Error in provider ${provider.name} search: ${t.message}", t)
+                            emptyList()
+                          }
                         }
                       }
                       val extRes = extDeferreds.awaitAll().flatten()
@@ -529,6 +541,106 @@ object CineHubScreen : Screen {
                   .padding(horizontal = 16.dp, vertical = 8.dp)
                   .testTag("cinehub_search_input"),
               )
+            }
+
+            // Diagnostic Panel
+            item {
+              Card(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 16.dp, vertical = 4.dp)
+                  .testTag("cinehub_provider_diagnostic_panel"),
+                colors = CardDefaults.cardColors(
+                  containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+              ) {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+                ) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Text(
+                      text = "CloudStream Provider Diagnostics",
+                      style = MaterialTheme.typography.labelLarge,
+                      fontWeight = FontWeight.Bold,
+                      color = MaterialTheme.colorScheme.primary
+                    )
+                    TextButton(
+                      onClick = { showDiagnostics = !showDiagnostics }
+                    ) {
+                      Text(if (showDiagnostics) "Hide" else "Show Details")
+                    }
+                  }
+
+                  val installedCount = installedExtensionsList.size
+                  val enabledCount = installedExtensionsList.count { it.isEnabled }
+                  val loadedPluginsCount = extensionManager.loadedPluginCount
+                  val apiHolderCount = com.lagradost.cloudstream3.APIHolder.allProviders.size
+                  val registeredCount = registeredProvidersList.size
+                  val activeCount = activeProvidersList.size
+                  val enabledCountRegistry = providerRegistry.getEnabledProviders().size
+
+                  Text(
+                    text = "Installed: $installedCount | Enabled: $enabledCount | Active: $activeCount | Loaded: $loadedPluginsCount",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+
+                  if (showDiagnostics) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                      text = "Installed Extensions ($installedCount): ${installedExtensionsList.map { it.name.ifBlank { it.pkgName } }.joinToString().ifEmpty { "None" }}",
+                      style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                      text = "Enabled Extensions ($enabledCount): ${installedExtensionsList.filter { it.isEnabled }.map { it.name.ifBlank { it.pkgName } }.joinToString().ifEmpty { "None" }}",
+                      style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                      text = "Loaded Plugins ($loadedPluginsCount)",
+                      style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                      text = "APIHolder Count ($apiHolderCount): ${com.lagradost.cloudstream3.APIHolder.allProviders.map { it.name }.joinToString().ifEmpty { "None" }}",
+                      style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                      text = "Registered Providers ($registeredCount): ${registeredProvidersList.map { it.name }.joinToString().ifEmpty { "None" }}",
+                      style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                      text = "Active Providers ($activeCount): ${activeProvidersList.map { it.name }.joinToString().ifEmpty { "None" }}",
+                      style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                      text = "Enabled Providers ($enabledCountRegistry): ${providerRegistry.getEnabledProviders().map { it.name }.joinToString().ifEmpty { "None" }}",
+                      style = MaterialTheme.typography.bodySmall
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                      onClick = {
+                        scope.launch(Dispatchers.IO) {
+                          extensionManager.loadInstalledExtensions()
+                          withContext(Dispatchers.Main) {
+                            loadMedia()
+                          }
+                        }
+                      },
+                      modifier = Modifier.align(Alignment.End)
+                    ) {
+                      Text("Reload Providers")
+                    }
+                  }
+                }
+              }
             }
 
             // If Search is Active, display Search Results

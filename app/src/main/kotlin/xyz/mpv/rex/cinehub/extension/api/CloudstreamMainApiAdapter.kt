@@ -135,6 +135,19 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
         return links
     }
 
+    override suspend fun loadSubtitles(data: String): List<CineHubSubtitleTrack> {
+        val subs = mutableListOf<CineHubSubtitleTrack>()
+        api.loadLinks(data, false, subtitleCallback = { sub ->
+            subs.add(
+                CineHubSubtitleTrack(
+                    language = sub.lang,
+                    url = sub.url
+                )
+            )
+        }) { _ -> }
+        return subs
+    }
+
     private fun CsTvType.toRexType(): TvType = when (this) {
         CsTvType.Movie -> TvType.Movie
         CsTvType.TvSeries -> TvType.TvSeries

@@ -191,9 +191,21 @@ class RepositoryManager(
         val version = obj.optString("version", "1.0.0")
         val versionCode = obj.optInt("versionCode", 1)
         val description = obj.optString("description", null)
-        val url = obj.optString("url", "")
-        val tvUrl = obj.optString("tvUrl", null)
-        val iconUrl = obj.optString("iconUrl", obj.optString("icon", null))
+        var url = obj.optString("url", "")
+        var tvUrl = obj.optString("tvUrl", null)
+        var iconUrl = obj.optString("iconUrl", obj.optString("icon", null))
+
+        // Resolve relative URLs if needed
+        val baseUrl = repoUrl.substringBeforeLast("/") + "/"
+        if (url.isNotBlank() && !url.startsWith("http://") && !url.startsWith("https://")) {
+            url = baseUrl + url.removePrefix("./").removePrefix("/")
+        }
+        if (tvUrl != null && tvUrl.isNotBlank() && !tvUrl.startsWith("http://") && !tvUrl.startsWith("https://")) {
+            tvUrl = baseUrl + tvUrl.removePrefix("./").removePrefix("/")
+        }
+        if (iconUrl != null && iconUrl.isNotBlank() && !iconUrl.startsWith("http://") && !iconUrl.startsWith("https://")) {
+            iconUrl = baseUrl + iconUrl.removePrefix("./").removePrefix("/")
+        }
 
         val authors = mutableListOf<String>()
         val authorsArr = obj.optJSONArray("authors")

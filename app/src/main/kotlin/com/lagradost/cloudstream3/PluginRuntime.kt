@@ -37,6 +37,9 @@ object APIHolder {
     private val _registerMainApiCallsCount = java.util.concurrent.atomic.AtomicInteger(0)
     val registerMainApiCallsCount: Int get() = _registerMainApiCallsCount.get()
 
+    var onApiAddedListener: ((MainAPI) -> Unit)? = null
+    var onApiRemovedListener: ((MainAPI) -> Unit)? = null
+
     fun addPlugin(api: MainAPI) {
         _registerMainApiCallsCount.incrementAndGet()
         // Replace existing entry with same name if already present, or add new
@@ -49,6 +52,7 @@ object APIHolder {
         apis.add(api)
         apiMap[api.name] = api
         Log.i("APIHolder", "Registered Cloudstream API: ${api.name} (${api.mainUrl}) [Total active: ${allProviders.size}]")
+        runCatching { onApiAddedListener?.invoke(api) }
     }
 
     fun addExtractor(api: ExtractorApi) {
@@ -64,6 +68,7 @@ object APIHolder {
         allProviders.remove(api)
         apis.remove(api)
         apiMap.remove(api.name)
+        runCatching { onApiRemovedListener?.invoke(api) }
     }
 
     fun getApi(name: String): MainAPI? = apiMap[name]

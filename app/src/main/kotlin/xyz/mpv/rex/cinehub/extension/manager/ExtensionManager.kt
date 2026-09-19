@@ -57,9 +57,22 @@ class ExtensionManager(
     val failedPluginLoadsCount = _failedPluginLoadsCount.asStateFlow()
 
     private val loadedPluginInstances = mutableListOf<com.lagradost.cloudstream3.plugins.BasePlugin>()
+    val loadedPluginCount: Int get() = loadedPluginInstances.size
 
     init {
         if (!extensionDir.exists()) extensionDir.mkdirs()
+
+        // Immediate reactive bridge: when any plugin registers MainAPI, instantly register in ProviderRegistry
+        com.lagradost.cloudstream3.APIHolder.onApiAddedListener = { api ->
+            val adapter = CloudstreamMainApiAdapter(api)
+            registry.register(adapter, isEnabledByDefault = true)
+            Log.i("ExtensionManager", "Reactively registered provider to ProviderRegistry: ${api.name}")
+        }
+        com.lagradost.cloudstream3.APIHolder.onApiRemovedListener = { api ->
+            registry.unregister(api.name)
+            Log.i("ExtensionManager", "Reactively unregistered provider from ProviderRegistry: ${api.name}")
+        }
+
         scope.launch {
             loadInstalledExtensions()
         }
@@ -70,16 +83,16 @@ class ExtensionManager(
     }
 
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
-        val enabledExts = db.extensionDao().getEnabledExtensionsSync()
-        _installedExtensionsCount.value = enabledExts.size
+        val installedExts = db.extensionDao().getAllInstalledExtensionsSync()
+        _installedExtensionsCount.value = installedExts.size
         _pluginFilesFoundCount.value = 0
         _successfullyLoadedPluginsCount.value = 0
         _failedPluginLoadsCount.value = 0
         loadedPluginInstances.clear()
 
-        Log.i("ExtensionManager", "Beginning load of ${enabledExts.size} installed extensions...")
+        Log.i("ExtensionManager", "Beginning load of ${installedExts.size} installed extensions from database...")
 
-        for (ext in enabledExts) {
+        for (ext in installedExts) {
             loadExtensionFromDisk(ext)
         }
 
@@ -92,18 +105,21 @@ class ExtensionManager(
             }
         }
 
-        // Ensure all APIHolder providers are synchronized into ProviderRegistry
+        // Ensure all APIHolder providers are synchronized into ProviderRegistry matching db enabled status
         val allApis = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
         for (api in allApis) {
+            val matchingExt = installedExts.firstOrNull { it.pkgName.contains(api.name, ignoreCase = true) || api.name.contains(it.pkgName, ignoreCase = true) }
+            val isEnabled = matchingExt?.isEnabled ?: true
             val adapter = CloudstreamMainApiAdapter(api)
-            registry.register(adapter, isEnabledByDefault = true)
+            registry.register(adapter, isEnabledByDefault = isEnabled)
         }
 
         Log.i("ExtensionManager", "Extension loading complete: " +
                 "${_pluginFilesFoundCount.value} files found, " +
                 "${_successfullyLoadedPluginsCount.value} plugins loaded, " +
                 "${com.lagradost.cloudstream3.APIHolder.allProviders.size} APIs in APIHolder, " +
-                "${registry.getAllProviders().size} providers in ProviderRegistry.")
+                "${registry.getAllProviders().size} registered providers, " +
+                "${registry.getEnabledProviders().size} enabled providers.")
     }
 
     private fun extractClassNamesFromZip(file: File): List<String> {
