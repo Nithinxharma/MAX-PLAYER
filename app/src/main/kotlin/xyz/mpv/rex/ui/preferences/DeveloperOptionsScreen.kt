@@ -66,6 +66,27 @@ object DeveloperOptionsScreen : Screen {
                     GroupedListColumn {
                         GroupedPreferenceCard(position = GroupPosition.FIRST) {
                             Preference(
+                                title = { Text("Plugin Execution Trace") },
+                                summary = {
+                                    Text(
+                                        "16-step execution lifecycle trace & failure point pinpointing",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Troubleshoot,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(PluginExecutionTraceScreenRoute)
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
                                 title = { Text("Force Plugin Activation") },
                                 summary = {
                                     Text(

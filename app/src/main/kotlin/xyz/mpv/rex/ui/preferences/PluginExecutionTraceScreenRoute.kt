@@ -6,13 +6,12 @@ import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.utils.LocalBackStack
 
 @Serializable
-object ForcePluginActivationScreenRoute : Screen {
+object PluginExecutionTraceScreenRoute : Screen {
     @Composable
     override fun Content() {
         val backstack = LocalBackStack.current
-        ForcePluginActivationScreen(
-            onNavigateBack = { backstack.removeLastOrNull() },
-            onNavigateToTrace = { backstack.add(PluginExecutionTraceScreenRoute) }
+        PluginExecutionTraceScreen(
+            onNavigateBack = { backstack.removeLastOrNull() }
         )
     }
 }

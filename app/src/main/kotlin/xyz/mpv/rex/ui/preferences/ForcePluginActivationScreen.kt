@@ -47,6 +47,7 @@ import xyz.mpv.rex.cinehub.extension.model.RegisteredProviderSummary
 @Composable
 fun ForcePluginActivationScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToTrace: () -> Unit = {},
     viewModel: ForcePluginActivationViewModel = koinInject()
 ) {
     val context = LocalContext.current
@@ -129,6 +130,14 @@ fun ForcePluginActivationScreen(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("🔬 Plugin Execution Trace") },
+                            leadingIcon = { Icon(Icons.Outlined.Troubleshoot, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToTrace()
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("⚡ Force Activate All") },
                             leadingIcon = { Icon(Icons.Default.FlashOn, contentDescription = null) },

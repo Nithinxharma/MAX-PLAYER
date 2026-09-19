@@ -33,6 +33,7 @@ fun ExtensionPreferencesScreen(
     onNavigateToInstalled: () -> Unit,
     onNavigateToTestCenter: () -> Unit = {},
     onNavigateToForceActivation: () -> Unit = {},
+    onNavigateToExecutionTrace: () -> Unit = {},
     extensionManager: ExtensionManager = koinInject(),
     repositoryManager: RepositoryManager = koinInject(),
     registry: ProviderRegistry = koinInject()
@@ -145,6 +146,13 @@ fun ExtensionPreferencesScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                Preference(
+                    title = { Text("Plugin Execution Trace") },
+                    summary = { Text("Step-by-step 16-stage live lifecycle trace and failure point detector") },
+                    icon = { Icon(Icons.Outlined.Troubleshoot, contentDescription = null) },
+                    onClick = onNavigateToExecutionTrace
                 )
 
                 Preference(
