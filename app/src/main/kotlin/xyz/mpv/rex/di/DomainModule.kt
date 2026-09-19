@@ -34,6 +34,7 @@ val domainModule = module {
     single { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get(), get()) }
     single { xyz.mpv.rex.ui.preferences.ForcePluginActivationViewModel(androidContext(), get(), get(), get(), get()) }
     single { xyz.mpv.rex.ui.preferences.PluginExecutionTraceViewModel(androidContext(), get(), get(), get()) }
+    single { xyz.mpv.rex.ui.preferences.RepositoryPresetsViewModel(androidContext(), get()) }
 }
 
 

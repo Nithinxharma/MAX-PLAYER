@@ -106,6 +106,27 @@ object DeveloperOptionsScreen : Screen {
                                 }
                             )
                         }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
+                                title = { Text("Repository Presets & MegaRepo") },
+                                summary = {
+                                    Text(
+                                        "MegaRepo one-tap install and 9 verified CloudStream community feeds",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.AllInclusive,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(RepositoryPresetsScreenRoute)
+                                }
+                            )
+                        }
                         GroupedPreferenceCard(position = GroupPosition.LAST) {
                             Preference(
                                 title = { Text(stringResource(id = R.string.pref_cloudstream_test_center_title)) },

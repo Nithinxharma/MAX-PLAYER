@@ -9,6 +9,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.ExtensionRepo
+import xyz.mpv.rex.cinehub.extension.model.MegaRepoInstallResult
+import xyz.mpv.rex.cinehub.extension.model.RepoPresetItem
+import xyz.mpv.rex.cinehub.extension.model.RepoVerificationResult
 import xyz.mpv.rex.cinehub.extension.model.RepositorySyncResult
 import xyz.mpv.rex.database.MpvExDatabase
 import java.util.concurrent.ConcurrentHashMap
@@ -24,23 +27,66 @@ class RepositoryManager(
     private val pluginCache = ConcurrentHashMap<String, List<AvailablePlugin>>()
 
     companion object {
-        val POPULAR_PRESETS = listOf(
-            ExtensionRepo(
-                url = "https://raw.githubusercontent.com/recloudstream/extensions/builds/repo.json",
-                name = "CloudStream English Repository",
-                description = "Official community repository with popular english provider extensions."
+        val BUILT_IN_PRESETS = listOf(
+            RepoPresetItem(
+                name = "CloudStream Providers Repo",
+                url = "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+                description = "Official core CloudStream providers extension repository.",
+                author = "CloudStream Team"
             ),
-            ExtensionRepo(
-                url = "https://raw.githubusercontent.com/recloudstream/multilingual-providers/builds/repo.json",
-                name = "CloudStream Multilingual Repository",
-                description = "Multilingual provider plugins covering global regions and languages."
+            RepoPresetItem(
+                name = "MegaRepo",
+                url = "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json",
+                description = "Master multi-repository index aggregating all top community extension sources.",
+                author = "Self-Similarity"
             ),
-            ExtensionRepo(
-                url = "https://raw.githubusercontent.com/hexated/cloudstream-extensions-hexated/builds/repo.json",
-                name = "Hexated Community Providers",
-                description = "High quality multimedia sources and extractors."
+            RepoPresetItem(
+                name = "Phisher Repo",
+                url = "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json",
+                description = "High-speed scrapers, Hindi, English, and multi-source streaming providers.",
+                author = "Phisher98"
+            ),
+            RepoPresetItem(
+                name = "doGior's Had Enough",
+                url = "https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json",
+                description = "Curated collection of resilient streaming providers and extractors.",
+                author = "doGior"
+            ),
+            RepoPresetItem(
+                name = "CakesTwix Provider",
+                url = "https://raw.githubusercontent.com/CakesTwix/cloudstream-extensions-uk/master/repo.json",
+                description = "UK & International premium movie, series, and live streaming providers.",
+                author = "CakesTwix"
+            ),
+            RepoPresetItem(
+                name = "Saimuel Repo",
+                url = "https://raw.githubusercontent.com/saimuelbr/saimuelrepo/refs/heads/main/builds/repo.json",
+                description = "South American, Portuguese, and international provider sources.",
+                author = "Saimuel"
+            ),
+            RepoPresetItem(
+                name = "CNCVerse Repository",
+                url = "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
+                description = "CNC community multimedia sources, movies, and TV shows.",
+                author = "NivinCNC"
+            ),
+            RepoPresetItem(
+                name = "Megix Repo (CSX)",
+                url = "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json",
+                description = "CSX high-performance media extractors and direct streaming providers.",
+                author = "Saurabh Kaperwan"
+            ),
+            RepoPresetItem(
+                name = "King IPTV",
+                url = "https://pastebin.com/raw/Cd2g2tfz",
+                description = "Live IPTV channels, m3u streams, and global broadcast feeds.",
+                author = "King IPTV"
             )
         )
+
+        val POPULAR_PRESETS = BUILT_IN_PRESETS.map {
+            ExtensionRepo(url = it.url, name = it.name, description = it.description)
+        }
     }
 
     fun getAllRepositories(): Flow<List<ExtensionRepo>> {
@@ -63,19 +109,183 @@ class RepositoryManager(
         true
     }
 
+    suspend fun addAllPresets(): Int = withContext(Dispatchers.IO) {
+        var added = 0
+        for (preset in BUILT_IN_PRESETS) {
+            val exists = db.extensionDao().getRepository(preset.url) != null
+            if (!exists) {
+                addRepository(preset.url, preset.name, preset.description)
+                added++
+            }
+        }
+        added
+    }
+
     suspend fun removeRepository(repo: ExtensionRepo) = withContext(Dispatchers.IO) {
         db.extensionDao().deleteRepository(repo)
         pluginCache.remove(repo.url)
     }
 
+    suspend fun verifyRepository(url: String): RepoVerificationResult = withContext(Dispatchers.IO) {
+        val cleanUrl = url.trim()
+        val start = System.currentTimeMillis()
+        try {
+            val request = Request.Builder()
+                .url(cleanUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (CineHub-Extension-Engine/1.0)")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val latency = System.currentTimeMillis() - start
+                val code = response.code
+                if (!response.isSuccessful) {
+                    return@withContext RepoVerificationResult(
+                        url = cleanUrl,
+                        name = "Repository",
+                        isOnline = false,
+                        httpCode = code,
+                        latencyMs = latency,
+                        error = "HTTP $code: ${response.message}"
+                    )
+                }
+
+                val body = response.body?.string() ?: ""
+                var name = "Repository"
+                var count = 0
+                val trimmed = body.trim()
+
+                if (trimmed.startsWith("{")) {
+                    val json = JSONObject(trimmed)
+                    name = json.optString("name", "Repository")
+                    if (json.has("pluginLists")) {
+                        val lists = json.optJSONArray("pluginLists")
+                        count = lists?.length() ?: 0
+                    } else if (json.has("providers")) {
+                        count = json.optJSONArray("providers")?.length() ?: 0
+                    }
+                } else if (trimmed.startsWith("[")) {
+                    val arr = JSONArray(trimmed)
+                    count = arr.length()
+                }
+
+                RepoVerificationResult(
+                    url = cleanUrl,
+                    name = name,
+                    isOnline = true,
+                    httpCode = code,
+                    pluginCount = count,
+                    latencyMs = latency
+                )
+            }
+        } catch (e: Exception) {
+            RepoVerificationResult(
+                url = cleanUrl,
+                name = "Repository",
+                isOnline = false,
+                latencyMs = System.currentTimeMillis() - start,
+                error = e.localizedMessage ?: "Connection error"
+            )
+        }
+    }
+
+    suspend fun installMegaRepo(): MegaRepoInstallResult = withContext(Dispatchers.IO) {
+        val megaRepoUrl = "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json"
+        try {
+            // 1. Add MegaRepo itself
+            addRepository(megaRepoUrl, "MegaRepo", "Master multi-repository index aggregating all top community extension sources.")
+            
+            // 2. Add all known repositories through MegaRepo
+            var installedCount = 1
+            for (preset in BUILT_IN_PRESETS) {
+                if (preset.url != megaRepoUrl) {
+                    val added = addRepository(preset.url, preset.name, preset.description)
+                    if (added) installedCount++
+                }
+            }
+
+            MegaRepoInstallResult(
+                isSuccess = true,
+                megaRepoUrl = megaRepoUrl,
+                discoveredReposCount = BUILT_IN_PRESETS.size,
+                installedReposCount = installedCount,
+                message = "MegaRepo installed successfully with $installedCount community extension feeds."
+            )
+        } catch (e: Exception) {
+            MegaRepoInstallResult(
+                isSuccess = false,
+                megaRepoUrl = megaRepoUrl,
+                discoveredReposCount = 0,
+                installedReposCount = 0,
+                message = "Failed to install MegaRepo: ${e.message}"
+            )
+        }
+    }
+
+    suspend fun exportRepositoriesJson(): String = withContext(Dispatchers.IO) {
+        val repos = mutableListOf<ExtensionRepo>()
+        val allRepos = db.openHelper.readableDatabase.query("SELECT url, name, description, lastSync FROM extension_repositories")
+        try {
+            while (allRepos.moveToNext()) {
+                repos.add(
+                    ExtensionRepo(
+                        url = allRepos.getString(0),
+                        name = allRepos.getString(1),
+                        description = allRepos.getString(2),
+                        lastSync = allRepos.getLong(3)
+                    )
+                )
+            }
+        } finally {
+            allRepos.close()
+        }
+
+        val jsonArray = JSONArray()
+        for (r in repos) {
+            val obj = JSONObject()
+            obj.put("name", r.name)
+            obj.put("url", r.url)
+            obj.put("description", r.description ?: "")
+            obj.put("lastSync", r.lastSync)
+            jsonArray.put(obj)
+        }
+        jsonArray.toString(2)
+    }
+
+    suspend fun importRepositoriesJson(jsonString: String): Int = withContext(Dispatchers.IO) {
+        var count = 0
+        try {
+            val trimmed = jsonString.trim()
+            if (trimmed.startsWith("[")) {
+                val array = JSONArray(trimmed)
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    val url = obj.optString("url")
+                    val name = obj.optString("name")
+                    val desc = obj.optString("description")
+                    if (url.isNotBlank()) {
+                        addRepository(url, name, desc)
+                        count++
+                    }
+                }
+            } else if (trimmed.startsWith("{")) {
+                val obj = JSONObject(trimmed)
+                val url = obj.optString("url")
+                val name = obj.optString("name")
+                val desc = obj.optString("description")
+                if (url.isNotBlank()) {
+                    addRepository(url, name, desc)
+                    count++
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        count
+    }
+
     suspend fun syncAllRepositories(): List<RepositorySyncResult> = withContext(Dispatchers.IO) {
         val repos = mutableListOf<ExtensionRepo>()
         val resultList = mutableListOf<RepositorySyncResult>()
-        // Collect current list
-        val currentRepos = db.extensionDao().getAllRepositories()
-        // Synchronous snapshot
-        val enabledExts = db.extensionDao().getEnabledExtensionsSync()
-        // Iterate through DB repositories
         val allRepos = db.openHelper.readableDatabase.query("SELECT url, name, description, lastSync FROM extension_repositories")
         try {
             while (allRepos.moveToNext()) {

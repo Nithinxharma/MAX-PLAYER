@@ -31,6 +31,7 @@ fun ExtensionPreferencesScreen(
     onNavigateBack: () -> Unit,
     onNavigateToRepositories: () -> Unit,
     onNavigateToInstalled: () -> Unit,
+    onNavigateToPresets: () -> Unit = {},
     onNavigateToTestCenter: () -> Unit = {},
     onNavigateToForceActivation: () -> Unit = {},
     onNavigateToExecutionTrace: () -> Unit = {},
@@ -123,6 +124,13 @@ fun ExtensionPreferencesScreen(
                     },
                     icon = { Icon(Icons.Outlined.Extension, contentDescription = null) },
                     onClick = onNavigateToInstalled
+                )
+
+                Preference(
+                    title = { Text("Repository Presets & MegaRepo") },
+                    summary = { Text("One-tap setup for MegaRepo and 9 curated CloudStream repository sources") },
+                    icon = { Icon(Icons.Outlined.AllInclusive, contentDescription = null) },
+                    onClick = onNavigateToPresets
                 )
 
                 Preference(

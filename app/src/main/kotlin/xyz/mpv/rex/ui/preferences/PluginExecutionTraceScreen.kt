@@ -53,6 +53,8 @@ fun PluginExecutionTraceScreen(
     val traceSession by viewModel.traceSession.collectAsState()
     val isTracing by viewModel.isTracing.collectAsState()
     val savedFilePath by viewModel.savedFilePath.collectAsState()
+    val proofResult by viewModel.proofOfExecutionResult.collectAsState()
+    val isRunningProofTest by viewModel.isRunningProofTest.collectAsState()
 
     var showLogsDialog by remember { mutableStateOf(false) }
 
@@ -236,10 +238,25 @@ fun PluginExecutionTraceScreen(
                 )
             }
 
+            // Proof of Execution Section
+            item {
+                ProofOfExecutionCard(
+                    isRunning = isRunningProofTest,
+                    result = proofResult,
+                    onRunProofTest = { viewModel.runProofOfExecutionTest() }
+                )
+            }
+
             // Summary Status Banner
             traceSession?.let { session ->
                 item {
                     TraceSessionHeaderCard(session = session)
+                }
+
+                session.dexExecutionCheck?.let { dexCheck ->
+                    item {
+                        DexExecutionCheckCard(dexCheck = dexCheck)
+                    }
                 }
 
                 items(session.steps, key = { it.stepNumber }) { step ->
@@ -674,6 +691,233 @@ fun EmptyTraceStateBanner(selectedName: String, onRunTrace: () -> Unit) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Run 16-Step Trace Now")
+            }
+        }
+    }
+}
+
+@Composable
+fun DexExecutionCheckCard(dexCheck: xyz.mpv.rex.cinehub.extension.model.DexExecutionCheckResult) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        ),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Security,
+                        contentDescription = null,
+                        tint = if (dexCheck.isReadOnlyEnforced) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "DEX EXECUTION CHECK",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Badge(containerColor = if (dexCheck.isReadOnlyEnforced) Color(0xFF1B5E20) else Color(0xFFE65100)) {
+                    Text(
+                        text = if (dexCheck.isReadOnlyEnforced) "Android 14+ Compliant" else "Standard Mode",
+                        color = Color.White,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Text(
+                text = "Android ART Security Status & ClassLoader Attributes:",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    DexCheckAttributeRow("Plugin Path", dexCheck.pluginPath)
+                    DexCheckAttributeRow("Physical Exists", dexCheck.exists.toString())
+                    DexCheckAttributeRow("Readable / Writable", "${dexCheck.isReadable} / ${dexCheck.isWritable}")
+                    DexCheckAttributeRow("Read-Only Enforced", dexCheck.isReadOnlyEnforced.toString())
+                    DexCheckAttributeRow("Executable File", dexCheck.executablePath)
+                    DexCheckAttributeRow("Parent ClassLoader", dexCheck.parentClassLoader)
+                    DexCheckAttributeRow("Loader Type", dexCheck.loaderType)
+                    DexCheckAttributeRow("Android Version", "SDK ${dexCheck.androidSdkVersion} (${dexCheck.androidRelease})")
+                    DexCheckAttributeRow("ART Exception", dexCheck.artException ?: "None (Clean Load)")
+                    DexCheckAttributeRow("DEX Classes Count", dexCheck.dexVisibleClassesCount.toString())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DexCheckAttributeRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = "$label:",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            modifier = Modifier.width(130.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun ProofOfExecutionCard(
+    isRunning: Boolean,
+    result: xyz.mpv.rex.cinehub.extension.model.ProofOfExecutionResult?,
+    onRunProofTest: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+        ),
+        border = CardDefaults.outlinedCardBorder()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Science,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "PROOF OF EXECUTION",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Button(
+                    onClick = onRunProofTest,
+                    enabled = !isRunning,
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                ) {
+                    if (isRunning) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Testing...", fontSize = 11.sp)
+                    } else {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Run Proof Test", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Text(
+                text = "Validate complete dynamic execution: ClassLoader creation -> loadClass() -> Plugin.load(context) -> registerMainAPI() -> APIHolder verification.",
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+
+            if (result != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Proof Result:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Badge(containerColor = if (result.isSuccess) Color(0xFF1B5E20) else MaterialTheme.colorScheme.error) {
+                                Text(
+                                    text = if (result.isSuccess) "PASSED (${result.totalDurationMs}ms)" else "FAILED",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        DexCheckAttributeRow("1. ClassLoader Created", result.isClassLoaderCreated.toString())
+                        DexCheckAttributeRow("2. Class Loaded", result.isClassLoaded.toString())
+                        DexCheckAttributeRow("3. Instance Created", result.isInstanceCreated.toString())
+                        DexCheckAttributeRow("4. Method Invoked", result.isMethodInvoked.toString())
+                        DexCheckAttributeRow("5. plugin.load(ctx) Executed", result.isBasePluginLifecycleReached.toString())
+                        DexCheckAttributeRow("6. registerMainAPI() Verified", result.isRegisterMainAPICalled.toString())
+                        DexCheckAttributeRow("Registered Providers", result.registeredProviders.joinToString().ifBlank { "None" })
+
+                        if (result.error != null) {
+                            Text(
+                                text = "Error: ${result.error}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
             }
         }
     }

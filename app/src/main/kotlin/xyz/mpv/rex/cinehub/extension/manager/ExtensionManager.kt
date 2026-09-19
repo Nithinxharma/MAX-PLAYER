@@ -252,13 +252,40 @@ class ExtensionManager(
         return classNames
     }
 
+    fun prepareExecutablePluginFile(sourceFile: File, pkgName: String): File {
+        // Android 14+ ART Security Enforcement: Writable DEX/JAR/ZIP files passed to ClassLoader are prohibited.
+        runCatching { sourceFile.setReadOnly() }
+
+        return try {
+            val execDir = File(context.codeCacheDir, "plugin_exec").apply { mkdirs() }
+            val execFile = File(execDir, "${sourceFile.nameWithoutExtension}_exec.cs3")
+            if (execFile.exists()) {
+                execFile.setWritable(true)
+                execFile.delete()
+            }
+            sourceFile.inputStream().use { input ->
+                execFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            execFile.setReadOnly() // Strictly read-only for Android ART ClassLoaders
+            execFile
+        } catch (e: Throwable) {
+            Log.w("ExtensionManager", "Could not create execution copy in codeCacheDir: ${e.message}")
+            runCatching { sourceFile.setReadOnly() }
+            sourceFile
+        }
+    }
+
     private fun extractClassesFromDex(file: File, optDir: File): List<String> {
         val dexClasses = mutableListOf<String>()
+        val execFile = prepareExecutablePluginFile(file, file.nameWithoutExtension)
         runCatching {
-            // First attempt using dalvik.system.DexFile
-            val dexOptPath = File(optDir, "${file.nameWithoutExtension}.dex.opt").absolutePath
+            // First attempt using dalvik.system.DexFile on read-only executable file
+            val dexOptPath = File(optDir, "${execFile.nameWithoutExtension}.dex.opt").absolutePath
+            @Suppress("DEPRECATION")
             val dexFile = dalvik.system.DexFile.loadDex(
-                file.absolutePath,
+                execFile.absolutePath,
                 dexOptPath,
                 0
             )
@@ -275,6 +302,7 @@ class ExtensionManager(
                     dexClasses.add(cName)
                 }
             }
+            dexFile.close()
         }.onFailure { dexErr ->
             // Fallback: parse classes.dex directly from zip archive if DexFile.loadDex is unsupported (e.g. Android 14+ or Robolectric)
             runCatching {
@@ -459,13 +487,14 @@ class ExtensionManager(
         try {
             Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 5: Opening archive: ${file.absolutePath}")
             val optDir = File(context.codeCacheDir, "cloudstream_dex_${ext.pkgName}").apply { mkdirs() }
+            val execFile = prepareExecutablePluginFile(file, ext.pkgName)
             
-            // Original CloudStream PluginManager uses PathClassLoader with context.classLoader as parent
+            // CloudStream PluginManager uses PathClassLoader on read-only executable file with context.classLoader as parent
             val classLoader: ClassLoader = try {
-                dalvik.system.PathClassLoader(file.absolutePath, context.classLoader)
+                dalvik.system.PathClassLoader(execFile.absolutePath, context.classLoader)
             } catch (pclErr: Throwable) {
                 dalvik.system.DexClassLoader(
-                    file.absolutePath,
+                    execFile.absolutePath,
                     optDir.absolutePath,
                     null,
                     context.classLoader
@@ -799,10 +828,11 @@ class ExtensionManager(
         val allCandidateClasses = (classesFromManifest + classesFromDex).distinct()
         logs.add("[Step 5] Total unique candidate classes to inspect: ${allCandidateClasses.size}")
 
+        val execFile = prepareExecutablePluginFile(file, file.nameWithoutExtension)
         val classLoader: ClassLoader = try {
-            dalvik.system.PathClassLoader(file.absolutePath, context.classLoader)
+            dalvik.system.PathClassLoader(execFile.absolutePath, context.classLoader)
         } catch (e: Throwable) {
-            dalvik.system.DexClassLoader(file.absolutePath, optDir.absolutePath, null, context.classLoader)
+            dalvik.system.DexClassLoader(execFile.absolutePath, optDir.absolutePath, null, context.classLoader)
         }
 
         val initialApis = com.lagradost.cloudstream3.APIHolder.allProviders.size
@@ -909,6 +939,9 @@ class ExtensionManager(
             var discoveredClasses: List<String> = emptyList()
             if (plugin.url.isNotBlank()) {
                 val targetFile = File(extensionDir, "${plugin.internalName}.cs3")
+                if (targetFile.exists()) {
+                    runCatching { targetFile.setWritable(true) }
+                }
                 val request = Request.Builder().url(plugin.url).build()
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful && response.body != null) {
@@ -964,7 +997,10 @@ class ExtensionManager(
             com.lagradost.cloudstream3.APIHolder.removePluginsBySource(file.name)
             registry.unregister(pkgName)
             registry.unregister("cs3_${pkgName.lowercase()}")
-            if (file.exists()) file.delete()
+            if (file.exists()) {
+                runCatching { file.setWritable(true) }
+                file.delete()
+            }
         } catch (e: Exception) {
             Log.e("ExtensionManager", "Failed uninstalling extension $pkgName", e)
         }
