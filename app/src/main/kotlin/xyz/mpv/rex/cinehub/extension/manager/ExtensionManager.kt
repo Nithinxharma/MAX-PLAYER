@@ -176,6 +176,7 @@ class ExtensionManager(
 
                 if (entry != null) {
                     val text = zip.getInputStream(entry).bufferedReader().readText()
+                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 6: manifest.json content for ${file.name}:\n$text")
                     val json = JSONObject(text)
                     
                     val mainClass = json.optString("pluginClassName", 
@@ -184,6 +185,7 @@ class ExtensionManager(
                                 json.optString("class", 
                                     json.optString("plugin", 
                                         json.optString("entrypoint", ""))))))
+                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 7: pluginClassName from manifest for ${file.name}: '$mainClass'")
                     if (mainClass.isNotBlank()) {
                         classNames.add(mainClass.trim())
                     }
@@ -217,10 +219,13 @@ class ExtensionManager(
                             }
                         }
                     }
+                } else {
+                    Log.w("ExtensionManager", "EXTENSION_AUDIT: Step 6: No manifest.json/make.json/plugin.json found in archive ${file.name}")
+                    Log.w("ExtensionManager", "EXTENSION_AUDIT: Step 7: pluginClassName: None (no manifest)")
                 }
             }
         }.onFailure {
-            Log.w("ExtensionManager", "Failed to parse manifest from zip ${file.name}: ${it.message}")
+            Log.w("ExtensionManager", "EXTENSION_AUDIT: Step 5/6: Failed to open archive or parse manifest from ${file.name}: ${it.message}")
         }
         return classNames
     }
@@ -228,9 +233,11 @@ class ExtensionManager(
     private fun extractClassesFromDex(file: File, optDir: File): List<String> {
         val dexClasses = mutableListOf<String>()
         runCatching {
+            // First attempt using dalvik.system.DexFile
+            val dexOptPath = File(optDir, "${file.nameWithoutExtension}.dex.opt").absolutePath
             val dexFile = dalvik.system.DexFile.loadDex(
                 file.absolutePath,
-                File(optDir, "${file.nameWithoutExtension}.dex.opt").absolutePath,
+                dexOptPath,
                 0
             )
             val entries = dexFile.entries()
@@ -246,31 +253,119 @@ class ExtensionManager(
                     dexClasses.add(cName)
                 }
             }
-        }.onFailure {
-            Log.d("ExtensionManager", "DexFile scan fallback for ${file.name}: ${it.message}")
+        }.onFailure { dexErr ->
+            // Fallback: parse classes.dex directly from zip archive if DexFile.loadDex is unsupported (e.g. Android 14+ or Robolectric)
+            runCatching {
+                ZipFile(file).use { zip ->
+                    val dexEntry = zip.getEntry("classes.dex")
+                    if (dexEntry != null) {
+                        val bytes = zip.getInputStream(dexEntry).readBytes()
+                        dexClasses.addAll(extractClassNamesFromDexBytes(bytes))
+                    }
+                }
+            }.onFailure {
+                Log.d("ExtensionManager", "DexFile scan fallback for ${file.name}: ${dexErr.message}")
+            }
         }
         return dexClasses
     }
 
-    private fun instantiateClass(clazz: Class<*>): Any? {
+    private fun extractClassNamesFromDexBytes(dexBytes: ByteArray): List<String> {
+        val classNames = mutableListOf<String>()
+        try {
+            if (dexBytes.size < 0x70) return classNames
+            val magic = String(dexBytes, 0, 8)
+            if (!magic.startsWith("dex\n")) return classNames
+
+            fun readInt(offset: Int): Int {
+                return (dexBytes[offset].toInt() and 0xFF) or
+                        ((dexBytes[offset + 1].toInt() and 0xFF) shl 8) or
+                        ((dexBytes[offset + 2].toInt() and 0xFF) shl 16) or
+                        ((dexBytes[offset + 3].toInt() and 0xFF) shl 24)
+            }
+
+            val stringIdsSize = readInt(0x38)
+            val stringIdsOff = readInt(0x3C)
+            val typeIdsSize = readInt(0x40)
+            val typeIdsOff = readInt(0x44)
+            val classDefsSize = readInt(0x60)
+            val classDefsOff = readInt(0x64)
+
+            fun getString(stringIdx: Int): String {
+                if (stringIdx < 0 || stringIdx >= stringIdsSize) return ""
+                val strOff = readInt(stringIdsOff + stringIdx * 4)
+                var pos = strOff
+                // ULEB128 utf16_size
+                var b: Int
+                do {
+                    b = dexBytes[pos++].toInt() and 0xFF
+                } while ((b and 0x80) != 0)
+                // Read null-terminated modified UTF-8
+                val start = pos
+                while (pos < dexBytes.size && dexBytes[pos] != 0.toByte()) {
+                    pos++
+                }
+                return String(dexBytes, start, pos - start, Charsets.UTF_8)
+            }
+
+            fun getTypeName(typeIdx: Int): String {
+                if (typeIdx < 0 || typeIdx >= typeIdsSize) return ""
+                val descriptorIdx = readInt(typeIdsOff + typeIdx * 4)
+                return getString(descriptorIdx)
+            }
+
+            for (i in 0 until classDefsSize) {
+                val offset = classDefsOff + i * 32
+                val classIdx = readInt(offset)
+                val descriptor = getTypeName(classIdx)
+                if (descriptor.startsWith("L") && descriptor.endsWith(";")) {
+                    val className = descriptor.substring(1, descriptor.length - 1).replace('/', '.')
+                    if (!className.contains("$") &&
+                        !className.startsWith("kotlin.") &&
+                        !className.startsWith("kotlinx.") &&
+                        !className.startsWith("java.") &&
+                        !className.startsWith("android.") &&
+                        !className.startsWith("androidx.")
+                    ) {
+                        classNames.add(className)
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+        return classNames
+    }
+
+    private fun instantiateClass(clazz: Class<*>, pkgName: String): Any? {
         // 1. Try public/declared 0-arg constructor
         try {
             val constructor: Constructor<*> = clazz.getDeclaredConstructor()
             constructor.isAccessible = true
-            return constructor.newInstance()
-        } catch (_: Throwable) {}
+            val obj = constructor.newInstance()
+            Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via 0-arg constructor")
+            return obj
+        } catch (e: Throwable) {
+            Log.d("ExtensionManager", "0-arg constructor failed for ${clazz.name}: ${e.message}")
+        }
 
         // 2. Try Kotlin object singleton INSTANCE field
         try {
             val field = clazz.getField("INSTANCE")
             field.isAccessible = true
-            return field.get(null)
+            val obj = field.get(null)
+            if (obj != null) {
+                Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via INSTANCE field")
+                return obj
+            }
         } catch (_: Throwable) {}
 
         try {
             val field = clazz.getDeclaredField("INSTANCE")
             field.isAccessible = true
-            return field.get(null)
+            val obj = field.get(null)
+            if (obj != null) {
+                Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via declared INSTANCE field")
+                return obj
+            }
         } catch (_: Throwable) {}
 
         // 3. Try constructor taking Context
@@ -278,18 +373,30 @@ class ExtensionManager(
             try {
                 constructor.isAccessible = true
                 if (constructor.parameterTypes.isEmpty()) {
-                    return constructor.newInstance()
+                    val obj = constructor.newInstance()
+                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via declared constructor")
+                    return obj
                 } else if (constructor.parameterTypes.size == 1 && Context::class.java.isAssignableFrom(constructor.parameterTypes[0])) {
-                    return constructor.newInstance(context)
+                    val obj = constructor.newInstance(context)
+                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via Context constructor")
+                    return obj
                 }
-            } catch (_: Throwable) {}
+            } catch (e: Throwable) {
+                Log.d("ExtensionManager", "Constructor invocation failed for ${clazz.name}: ${e.message}")
+            }
         }
+        Log.e("ExtensionManager", "EXTENSION_AUDIT: Step 10: FAILED: Could not create plugin instance for ${clazz.name} (package: $pkgName)")
         return null
     }
 
     private fun loadExtensionFromDisk(ext: InstalledExtension) {
+        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 1: Read extension database row: pkgName='${ext.pkgName}', name='${ext.name}', version=${ext.version}, isEnabled=${ext.isEnabled}, localFilePath='${ext.localFilePath}', classesFile='${ext.classesFile}'")
         var localPath = ext.localFilePath
+        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 2: localFilePath: '$localPath'")
         var file = localPath?.let { File(it) }
+
+        val initialFileExists = file?.exists() == true
+        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 3: Verify file exists: $initialFileExists (path='$localPath')")
 
         if (file == null || !file.exists()) {
             val candidateFiles = listOfNotNull(
@@ -310,20 +417,25 @@ class ExtensionManager(
             if (found != null) {
                 file = found
                 localPath = found.absolutePath
+                Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 3: Resolved candidate file exists: true (path='$localPath')")
             }
         }
 
         if (file == null || !file.exists()) {
+            Log.e("ExtensionManager", "EXTENSION_AUDIT: Step 3: FAILED: File does not exist for package '${ext.pkgName}' at '$localPath'")
             Log.w("ExtensionManager", "EXTENSION_LOAD: Extension file not found on disk for ${ext.pkgName} (path=$localPath)")
             _failedPluginLoadsCount.value++
             return
         }
 
-        Log.i("ExtensionManager", "EXTENSION_LOAD: Found extension file: ${file.absolutePath} (size: ${file.length()} bytes)")
+        val fileSize = file.length()
+        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 4: File size: $fileSize bytes (${file.name})")
+        Log.i("ExtensionManager", "EXTENSION_LOAD: Found extension file: ${file.absolutePath} (size: $fileSize bytes)")
         _pluginFilesFoundCount.value++
         var loadSuccess = false
 
         try {
+            Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 5: Opening archive: ${file.absolutePath}")
             val optDir = File(context.codeCacheDir, "opt_${ext.pkgName}").apply { mkdirs() }
             val classLoader = dalvik.system.DexClassLoader(
                 file.absolutePath,
@@ -334,7 +446,7 @@ class ExtensionManager(
 
             val classNames = mutableListOf<String>()
 
-            // 1. Inspect manifest.json / make.json / plugin.json from zip archive
+            // 1. Inspect manifest.json / make.json / plugin.json from zip archive (Steps 6 & 7 executed inside)
             classNames.addAll(extractClassNamesFromZip(file))
 
             // 2. Also check classesFile recorded during install
@@ -342,9 +454,11 @@ class ExtensionManager(
                 if (!classNames.contains(it)) classNames.add(it)
             }
 
-            // 3. If class names list is still empty, scan DEX file directly
-            if (classNames.isEmpty()) {
-                classNames.addAll(extractClassesFromDex(file, optDir))
+            // 3. Extract and print every class discovered in classes.dex (Step 8)
+            val discoveredDexClasses = extractClassesFromDex(file, optDir)
+            Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 8: Discovered ${discoveredDexClasses.size} classes in classes.dex for ${ext.pkgName}: $discoveredDexClasses")
+            for (dexC in discoveredDexClasses) {
+                if (!classNames.contains(dexC)) classNames.add(dexC)
             }
 
             Log.i("ExtensionManager", "EXTENSION_LOAD: Candidate classes to load for ${ext.pkgName}: $classNames")
@@ -367,9 +481,10 @@ class ExtensionManager(
 
             for (className in classNames) {
                 try {
-                    Log.i("ExtensionManager", "EXTENSION_LOAD: Loading plugin class: $className")
+                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 9: Verifying plugin class can be loaded: $className")
                     val clazz = classLoader.loadClass(className)
-                    val instance = instantiateClass(clazz)
+                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 9: Successfully loaded class $className for ${ext.pkgName}")
+                    val instance = instantiateClass(clazz, ext.pkgName)
 
                     if (instance != null) {
                         when (instance) {
@@ -387,11 +502,13 @@ class ExtensionManager(
                                             context.resources.configuration
                                         )
                                     }
+                                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoking plugin.load(context) for $className (package: ${ext.pkgName})")
                                     instance.load(context)
-                                    Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load(context) executed for $className")
+                                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoked plugin.load(context) successfully for $className")
                                 } else {
+                                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoking plugin.load() for $className (package: ${ext.pkgName})")
                                     instance.load()
-                                    Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load() executed for $className")
+                                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoked plugin.load() successfully for $className")
                                 }
                                 loadSuccess = true
                                 Log.i("ExtensionManager", "Successfully executed BasePlugin: $className from ${file.name}")
@@ -425,21 +542,26 @@ class ExtensionManager(
                                     val loadMethodWithContext = clazz.methods.firstOrNull { it.name == "load" && it.parameterTypes.size == 1 && Context::class.java.isAssignableFrom(it.parameterTypes[0]) }
                                     val loadMethodNoArgs = clazz.methods.firstOrNull { it.name == "load" && it.parameterTypes.isEmpty() }
                                     if (loadMethodWithContext != null) {
+                                        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoking plugin.load(context) (reflection) for $className")
                                         loadMethodWithContext.invoke(instance, context)
-                                        Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load(context) executed (reflection) for $className")
+                                        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoked plugin.load(context) successfully (reflection) for $className")
                                         loadedPluginInstances.add(instance)
                                         loadSuccess = true
                                     } else if (loadMethodNoArgs != null) {
+                                        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoking plugin.load() (reflection) for $className")
                                         loadMethodNoArgs.invoke(instance)
-                                        Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load() executed (reflection) for $className")
+                                        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoked plugin.load() successfully (reflection) for $className")
                                         loadedPluginInstances.add(instance)
                                         loadSuccess = true
                                     }
-                                } catch (_: Throwable) {}
+                                } catch (loadErr: Throwable) {
+                                    Log.e("ExtensionManager", "EXTENSION_AUDIT: Step 11: FAILED: plugin.load invocation failed for $className (package: ${ext.pkgName})", loadErr)
+                                }
                             }
                         }
                     }
                 } catch (e: Throwable) {
+                    Log.e("ExtensionManager", "EXTENSION_AUDIT: Step 9/10/11: FAILED for class $className (package: ${ext.pkgName}): ${e.message}", e)
                     Log.w("ExtensionManager", "Failed to load class $className for extension ${ext.pkgName}: ${e.message}")
                 }
             }

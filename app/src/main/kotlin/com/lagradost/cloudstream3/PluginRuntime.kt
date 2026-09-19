@@ -57,6 +57,7 @@ object APIHolder {
         apis.add(api)
         apiMap[api.name] = api
         Log.i("APIHolder", "Registered Cloudstream API: ${api.name} (${api.mainUrl}) [Total active: ${allProviders.size}]")
+        Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 13: Provider name after registration: '${api.name}' [mainUrl='${api.mainUrl}', totalRegistered=${allProviders.size}]")
         Log.i("ExtensionManager", "EXTENSION_LOAD: Provider registered: ${api.name}")
         runCatching { onApiAddedListener?.invoke(api) }
     }

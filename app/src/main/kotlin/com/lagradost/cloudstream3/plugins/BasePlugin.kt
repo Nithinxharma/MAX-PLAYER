@@ -22,11 +22,13 @@ abstract class BasePlugin {
     open fun afterPluginsLoaded() {}
 
     fun registerMainAPI(element: MainAPI) {
+        android.util.Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 12: Hooked registerMainAPI() invocation for provider '${element.name}' (mainUrl='${element.mainUrl}') from sourcePlugin='$filename'")
         element.sourcePlugin = this.filename
         APIHolder.addPlugin(element)
     }
 
     fun registerExtractorAPI(element: ExtractorApi) {
+        android.util.Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 12: Hooked registerExtractorAPI() invocation for extractor '${element.name}' (mainUrl='${element.mainUrl}') from sourcePlugin='$filename'")
         element.sourcePlugin = this.filename
         APIHolder.addExtractor(element)
     }
