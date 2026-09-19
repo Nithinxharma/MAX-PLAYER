@@ -57,6 +57,9 @@ data class EnvironmentStatusState(
     val registerMainApiCallsCount: Int = 0,
     val apiHolderProviderCount: Int = 0,
     val providerRegistryCount: Int = 0,
+    val providersRegisteredCount: Int = 0,
+    val providersEnabledCount: Int = 0,
+    val activeProviderCount: Int = 0,
     val loadedProviderNames: List<String> = emptyList(),
     val repositoriesCount: Int = 0,
     val networkStatus: String = "Unknown",
@@ -218,12 +221,39 @@ class CloudStreamDiagnosticViewModel(
     val automatedReport: StateFlow<AutomatedTestReport?> = _automatedReport.asStateFlow()
 
     val registeredProviders: StateFlow<List<CineHubProvider>> = registry.registeredProviders
+    val activeProviders: StateFlow<List<CineHubProvider>> = registry.activeProviders
 
     init {
         DiagnosticLogger.info(TAG_AUTO, "CloudStream Test Center Diagnostic Engine initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, ExtensionManager.identityHashCode=${System.identityHashCode(extensionManager)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         android.util.Log.i("DiagnosticViewModel", "INSTANCE_IDENTITY: CloudStreamDiagnosticViewModel initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, ExtensionManager.identityHashCode=${System.identityHashCode(extensionManager)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         refreshEnvironmentStatus()
         loadRepositoryAndExtensionData()
+
+        viewModelScope.launch {
+            registry.registeredProviders.collect {
+                refreshEnvironmentStatus()
+            }
+        }
+        viewModelScope.launch {
+            registry.activeProviders.collect {
+                refreshEnvironmentStatus()
+            }
+        }
+        viewModelScope.launch {
+            extensionManager.successfullyLoadedPluginsCount.collect {
+                refreshEnvironmentStatus()
+            }
+        }
+        viewModelScope.launch {
+            extensionManager.pluginFilesFoundCount.collect {
+                refreshEnvironmentStatus()
+            }
+        }
+        viewModelScope.launch {
+            extensionManager.failedPluginLoadsCount.collect {
+                refreshEnvironmentStatus()
+            }
+        }
     }
 
     // ==========================================
@@ -239,7 +269,12 @@ class CloudStreamDiagnosticViewModel(
             val sdkVer = "CloudStream Core API v3 (Headless Runner)"
 
             // Check Providers
-            val loadedProviders = registry.getAllProviders().size
+            val allRegistered = registry.getAllProviders()
+            val enabledList = registry.getEnabledProviders()
+            val providersRegisteredCount = allRegistered.size
+            val providersEnabledCount = enabledList.size
+            val activeProviderCount = providersEnabledCount
+            val loadedProviders = activeProviderCount
 
             // Check Installed Extensions
             val installedCount = try {
@@ -254,7 +289,7 @@ class CloudStreamDiagnosticViewModel(
             val failedPlugins = extensionManager.failedPluginLoadsCount.value
             val registerCalls = com.lagradost.cloudstream3.APIHolder.registerMainApiCallsCount
             val apiHolderCount = com.lagradost.cloudstream3.APIHolder.allProviders.size
-            val providerNames = registry.getAllProviders().map { it.name }
+            val providerNames = allRegistered.map { it.name }
 
             // Check DB Repositories
             var repoCount = 0
@@ -311,7 +346,10 @@ class CloudStreamDiagnosticViewModel(
                 failedPluginLoadsCount = failedPlugins,
                 registerMainApiCallsCount = registerCalls,
                 apiHolderProviderCount = apiHolderCount,
-                providerRegistryCount = loadedProviders,
+                providerRegistryCount = providersRegisteredCount,
+                providersRegisteredCount = providersRegisteredCount,
+                providersEnabledCount = providersEnabledCount,
+                activeProviderCount = activeProviderCount,
                 loadedProviderNames = providerNames,
                 repositoriesCount = repoCount,
                 networkStatus = netStatus,

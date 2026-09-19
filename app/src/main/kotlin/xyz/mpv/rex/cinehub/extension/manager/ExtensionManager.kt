@@ -62,6 +62,7 @@ class ExtensionManager(
     init {
         Log.i("ExtensionManager", "INSTANCE_IDENTITY: ExtensionManager initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         if (!extensionDir.exists()) extensionDir.mkdirs()
+        com.lagradost.cloudstream3.AcraApplication.init(context)
 
         // Immediate reactive bridge: when any plugin registers MainAPI, instantly register in ProviderRegistry
         com.lagradost.cloudstream3.APIHolder.onApiAddedListener = { api ->

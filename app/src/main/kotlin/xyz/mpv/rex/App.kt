@@ -37,6 +37,7 @@ class App : Application() {
   private val metadataCache: VideoMetadataCacheRepository by inject()
   private val hybridMediaIndex: HybridMediaIndexRepository by inject()
   private val advancedPreferences: xyz.mpv.rex.preferences.AdvancedPreferences by inject()
+  private val extensionManager: xyz.mpv.rex.cinehub.extension.manager.ExtensionManager by inject()
   private val mediaStoreInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val rootInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 

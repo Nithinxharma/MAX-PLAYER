@@ -62,6 +62,10 @@ object APIHolder {
         runCatching { onApiAddedListener?.invoke(api) }
     }
 
+    fun addPluginMapping(api: MainAPI) {
+        addPlugin(api)
+    }
+
     fun addExtractor(api: ExtractorApi) {
         Log.i("ExtensionManager", "EXTENSION_LOAD: registerExtractorAPI called: ${api.name} (${api.mainUrl})")
         val existing = extractorApis.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }
