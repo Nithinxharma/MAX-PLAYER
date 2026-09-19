@@ -100,31 +100,52 @@ class ExtensionManager(
         }
 
         // Also enumerate any .cs3 files on disk that might not be recorded in database or were placed manually
-        val diskDirs = listOf(extensionDir, File(context.filesDir, "cloudstream_plugins"))
+        val searchDirs = listOfNotNull(
+            extensionDir,
+            File(context.filesDir, "cloudstream_plugins"),
+            File(context.filesDir, "Extensions"),
+            context.filesDir,
+            context.getExternalFilesDir(null)?.let { File(it, "plugins") },
+            File(android.os.Environment.getExternalStorageDirectory(), "Cloudstream3/plugins")
+        )
         val loadedFilePaths = loadedPluginInstances.mapNotNull { 
             if (it is com.lagradost.cloudstream3.plugins.BasePlugin) it.filename 
             else runCatching { it.javaClass.getMethod("getFilename").invoke(it) as? String }.getOrNull() 
         }.toSet()
-        for (dir in diskDirs) {
-            if (dir.exists() && dir.isDirectory) {
-                val files = dir.listFiles { f -> f.extension.equals("cs3", ignoreCase = true) || f.extension.equals("zip", ignoreCase = true) } ?: emptyArray()
-                for (file in files) {
-                    if (!loadedFilePaths.contains(file.absolutePath)) {
-                        val basePkg = file.nameWithoutExtension
-                        val existing = installedExts.firstOrNull { it.pkgName.equals(basePkg, ignoreCase = true) || it.localFilePath == file.absolutePath }
-                        if (existing == null) {
-                            Log.i("ExtensionManager", "EXTENSION_LOAD: Found unindexed .cs3 file on disk: ${file.name}, loading it...")
-                            val ext = InstalledExtension(
-                                pkgName = basePkg,
-                                name = basePkg,
-                                version = "1.0.0",
-                                versionCode = 1,
-                                localFilePath = file.absolutePath,
-                                isEnabled = true
-                            )
-                            loadExtensionFromDisk(ext)
-                        }
+        
+        fun collectPluginFiles(dir: File, dest: MutableList<File>) {
+            if (!dir.exists()) return
+            if (dir.isDirectory) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isDirectory) {
+                        collectPluginFiles(file, dest)
+                    } else if (file.extension.equals("cs3", ignoreCase = true) || file.extension.equals("zip", ignoreCase = true)) {
+                        dest.add(file)
                     }
+                }
+            }
+        }
+
+        val discoveredFiles = mutableListOf<File>()
+        for (dir in searchDirs) {
+            collectPluginFiles(dir, discoveredFiles)
+        }
+
+        for (file in discoveredFiles.distinctBy { it.absolutePath }) {
+            if (!loadedFilePaths.contains(file.absolutePath)) {
+                val basePkg = file.nameWithoutExtension
+                val existing = installedExts.firstOrNull { it.pkgName.equals(basePkg, ignoreCase = true) || it.localFilePath == file.absolutePath }
+                if (existing == null) {
+                    Log.i("ExtensionManager", "EXTENSION_LOAD: Found unindexed .cs3 file on disk: ${file.name}, loading it...")
+                    val ext = InstalledExtension(
+                        pkgName = basePkg,
+                        name = basePkg,
+                        version = "1.0.0",
+                        versionCode = 1,
+                        localFilePath = file.absolutePath,
+                        isEnabled = true
+                    )
+                    loadExtensionFromDisk(ext)
                 }
             }
         }

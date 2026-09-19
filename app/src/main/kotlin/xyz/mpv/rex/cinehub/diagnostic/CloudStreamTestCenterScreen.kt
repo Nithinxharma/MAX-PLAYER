@@ -263,31 +263,112 @@ fun OverviewAndAutoTestSection(
                         fontWeight = FontWeight.Bold
                     )
                     automatedSteps.forEach { step ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = when (step.status) {
+                                StatusIndicator.FAILED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                                StatusIndicator.WARNING -> Color(0xFFFFF3E0)
+                                StatusIndicator.SUCCESS -> Color(0xFFE8F5E9)
+                                else -> MaterialTheme.colorScheme.surface
+                            },
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
                                 when (step.status) {
-                                    StatusIndicator.SUCCESS -> Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
-                                    StatusIndicator.FAILED -> Icon(Icons.Default.Cancel, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                    StatusIndicator.RUNNING -> CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                    else -> Icon(Icons.Default.Schedule, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                    StatusIndicator.FAILED -> MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                                    StatusIndicator.WARNING -> Color(0xFFFFB74D)
+                                    StatusIndicator.SUCCESS -> Color(0xFFA5D6A7)
+                                    else -> Color.Transparent
                                 }
-                                Column {
-                                    Text(text = step.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                                    if (step.details.isNotBlank()) {
-                                        Text(text = step.details, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        when (step.status) {
+                                            StatusIndicator.SUCCESS -> Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                                            StatusIndicator.FAILED -> Icon(Icons.Default.Cancel, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                            StatusIndicator.WARNING -> Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFF57C00), modifier = Modifier.size(18.dp))
+                                            StatusIndicator.RUNNING -> CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                            else -> Icon(Icons.Default.Schedule, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                                        }
+                                        Text(text = step.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    }
+                                    if (step.durationMs > 0) {
+                                        Text(text = "${step.durationMs}ms", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                                     }
                                 }
-                            }
-                            if (step.durationMs > 0) {
-                                Text(text = "${step.durationMs}ms", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+
+                                if (step.details.isNotBlank()) {
+                                    Text(text = step.details, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+
+                                if (!step.failureReason.isNullOrBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                text = "Reason: ${step.failureReason}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            if (!step.troubleshootingTip.isNullOrBlank()) {
+                                                Text(
+                                                    text = "💡 Tip: ${step.troubleshootingTip}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (!step.failureStackTrace.isNullOrBlank()) {
+                                    var showStack by remember { mutableStateOf(false) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        TextButton(onClick = { showStack = !showStack }, contentPadding = PaddingValues(0.dp)) {
+                                            Text(if (showStack) "Hide Stacktrace" else "Show Full Stacktrace", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                clipboardManager.setText(AnnotatedString(step.failureStackTrace))
+                                                Toast.makeText(context, "Stacktrace copied", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy Stacktrace", modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                    if (showStack) {
+                                        SelectionContainer {
+                                            Text(
+                                                text = step.failureStackTrace,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier
+                                                    .background(Color(0xFF1E1E1E), RoundedCornerShape(4.dp))
+                                                    .padding(6.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

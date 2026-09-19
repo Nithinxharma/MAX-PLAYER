@@ -119,7 +119,10 @@ data class AutomatedTestStepState(
     val name: String,
     val status: StatusIndicator = StatusIndicator.IDLE,
     val details: String = "",
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
+    val failureReason: String? = null,
+    val failureStackTrace: String? = null,
+    val troubleshootingTip: String? = null
 )
 
 data class AutomatedTestReport(
@@ -1029,17 +1032,41 @@ class CloudStreamDiagnosticViewModel(
 
                 val syncs = repositoryManager.syncAllRepositories()
                 val successCount = syncs.count { it.error == null }
+                val failedRepos = syncs.filter { it.error != null }
                 val duration1 = System.currentTimeMillis() - start1
                 repoPass = successCount > 0
+                
+                val failureReason = if (!repoPass) {
+                    if (failedRepos.isNotEmpty()) "Failed syncing all ${syncs.size} repos. Reasons: ${failedRepos.joinToString("; ") { "${it.repoName}: ${it.error}" }}"
+                    else "No repositories responded or no plugins found in remote catalog."
+                } else if (failedRepos.isNotEmpty()) {
+                    "Some repos failed: ${failedRepos.joinToString("; ") { "${it.repoName}: ${it.error}" }}"
+                } else null
+
+                val tip = if (!repoPass) "Check internet connection, verify repository JSON URLs in Settings/Repositories, or verify DNS/SSL settings." else null
+
                 steps[0] = AutomatedTestStepState(
                     "1. Sync Repositories",
                     if (repoPass) StatusIndicator.SUCCESS else StatusIndicator.FAILED,
                     "Synced $successCount/${syncs.size} repositories successfully (${repositoryManager.getCachedPlugins().size} plugins in catalog)",
-                    duration1
+                    duration1,
+                    failureReason = failureReason,
+                    troubleshootingTip = tip
                 )
                 reportSb.appendLine("Repositories: ${if (repoPass) "PASS" else "FAIL"} ($successCount/${syncs.size} synced in ${duration1}ms)")
+                if (failureReason != null) reportSb.appendLine("  -> Reason: $failureReason")
             } catch (t: Throwable) {
-                steps[0] = AutomatedTestStepState("1. Sync Repositories", StatusIndicator.FAILED, "Error: ${t.message}", System.currentTimeMillis() - start1)
+                val duration1 = System.currentTimeMillis() - start1
+                val trace = getStackTraceString(t)
+                steps[0] = AutomatedTestStepState(
+                    "1. Sync Repositories",
+                    StatusIndicator.FAILED,
+                    "Error: ${t.message}",
+                    duration1,
+                    failureReason = "${t.javaClass.simpleName}: ${t.message ?: "Repository sync crashed"}",
+                    failureStackTrace = trace,
+                    troubleshootingTip = "Verify database integrity and network permissions in AndroidManifest."
+                )
                 reportSb.appendLine("Repositories: FAIL (${t.message})")
             }
             _automatedSteps.value = steps.toList()
@@ -1050,26 +1077,48 @@ class CloudStreamDiagnosticViewModel(
             _automatedSteps.value = steps.toList()
             try {
                 var installedList = db.extensionDao().getEnabledExtensionsSync()
+                var installError: String? = null
                 if (installedList.isEmpty()) {
                     val available = repositoryManager.getCachedPlugins()
                     val targetPlugin = available.firstOrNull { it.url.isNotBlank() }
                     if (targetPlugin != null) {
                         DiagnosticLogger.info(TAG_AUTO, "Auto-installing target test extension: ${targetPlugin.name}")
-                        extensionManager.installExtension(targetPlugin)
+                        val installed = extensionManager.installExtension(targetPlugin)
+                        if (!installed) {
+                            installError = "Failed downloading or parsing .cs3 zip package for ${targetPlugin.name} from ${targetPlugin.url}"
+                        }
                         installedList = db.extensionDao().getEnabledExtensionsSync()
+                    } else {
+                        installError = "No available extensions found in cached repository manifests to install."
                     }
                 }
                 val duration2 = System.currentTimeMillis() - start2
                 extPass = installedList.isNotEmpty()
+                val failReason = if (!extPass) (installError ?: "No installed extensions found in database.") else null
+                val tip = if (!extPass) "Sync repositories in Section 2, then click 'Install Extension' on an available plugin in Section 3." else null
+
                 steps[1] = AutomatedTestStepState(
                     "2. Extensions Verification / Install",
                     if (extPass) StatusIndicator.SUCCESS else StatusIndicator.WARNING,
                     "Detected ${installedList.size} installed extension(s)",
-                    duration2
+                    duration2,
+                    failureReason = failReason,
+                    troubleshootingTip = tip
                 )
                 reportSb.appendLine("Extensions: ${if (extPass) "PASS" else "WARNING"} (${installedList.size} installed)")
+                if (failReason != null) reportSb.appendLine("  -> Reason: $failReason")
             } catch (t: Throwable) {
-                steps[1] = AutomatedTestStepState("2. Extensions Verification / Install", StatusIndicator.FAILED, "Error: ${t.message}", System.currentTimeMillis() - start2)
+                val duration2 = System.currentTimeMillis() - start2
+                val trace = getStackTraceString(t)
+                steps[1] = AutomatedTestStepState(
+                    "2. Extensions Verification / Install",
+                    StatusIndicator.FAILED,
+                    "Error: ${t.message}",
+                    duration2,
+                    failureReason = "${t.javaClass.simpleName}: ${t.message ?: "Extension install failed"}",
+                    failureStackTrace = trace,
+                    troubleshootingTip = "Verify storage permissions and check if .cs3 file is a valid zip archive."
+                )
                 reportSb.appendLine("Extensions: FAIL (${t.message})")
             }
             _automatedSteps.value = steps.toList()
@@ -1083,15 +1132,31 @@ class CloudStreamDiagnosticViewModel(
                 val providers = registry.getAllProviders()
                 val duration3 = System.currentTimeMillis() - start3
                 provPass = providers.isNotEmpty()
+                val failReason = if (!provPass) "0 active providers registered. DexClassLoader may have failed to find or instantiate MainAPI provider classes in loaded extensions." else null
+                val tip = if (!provPass) "Inspect the Live Logs tab to check for ClassNotFoundException, NoSuchMethodError, or Dex loading issues." else null
+
                 steps[2] = AutomatedTestStepState(
                     "3. Register Providers",
                     if (provPass) StatusIndicator.SUCCESS else StatusIndicator.WARNING,
                     "${providers.size} provider(s) active in runtime registry",
-                    duration3
+                    duration3,
+                    failureReason = failReason,
+                    troubleshootingTip = tip
                 )
                 reportSb.appendLine("Providers: ${if (provPass) "PASS" else "WARNING"} (${providers.size} registered)")
+                if (failReason != null) reportSb.appendLine("  -> Reason: $failReason")
             } catch (t: Throwable) {
-                steps[2] = AutomatedTestStepState("3. Register Providers", StatusIndicator.FAILED, "Error: ${t.message}", System.currentTimeMillis() - start3)
+                val duration3 = System.currentTimeMillis() - start3
+                val trace = getStackTraceString(t)
+                steps[2] = AutomatedTestStepState(
+                    "3. Register Providers",
+                    StatusIndicator.FAILED,
+                    "Error: ${t.message}",
+                    duration3,
+                    failureReason = "${t.javaClass.simpleName}: ${t.message ?: "Provider registration crashed"}",
+                    failureStackTrace = trace,
+                    troubleshootingTip = "Check DexClassLoader reflection instantiation errors in Live Logs."
+                )
                 reportSb.appendLine("Providers: FAIL (${t.message})")
             }
             _automatedSteps.value = steps.toList()
@@ -1104,26 +1169,49 @@ class CloudStreamDiagnosticViewModel(
             try {
                 val providers = registry.getAllProviders()
                 val allResults = mutableListOf<CineHubSearchItem>()
+                val providerErrors = mutableListOf<String>()
                 for (p in providers) {
                     try {
                         val res = p.search("One Piece")
                         allResults.addAll(res)
                     } catch (e: Throwable) {
+                        val err = "[${p.name}]: ${e.message ?: e.javaClass.simpleName}"
+                        providerErrors.add(err)
                         DiagnosticLogger.warn(TAG_AUTO, "Provider ${p.name} search warning: ${e.message}")
                     }
                 }
                 topResult = allResults.firstOrNull()
                 val duration4 = System.currentTimeMillis() - start4
                 searchPass = allResults.isNotEmpty()
+                val failReason = if (!searchPass) {
+                    if (providers.isEmpty()) "No providers were registered to execute search."
+                    else if (providerErrors.isNotEmpty()) "All providers failed during search: ${providerErrors.joinToString("; ")}"
+                    else "Search completed successfully with 0 items returned across ${providers.size} providers."
+                } else null
+                val tip = if (!searchPass) "Verify provider website domains are accessible, or test a different search query in Section 5." else null
+
                 steps[3] = AutomatedTestStepState(
                     "4. Search \"One Piece\"",
                     if (searchPass) StatusIndicator.SUCCESS else StatusIndicator.FAILED,
                     "Found ${allResults.size} search results across ${providers.size} providers",
-                    duration4
+                    duration4,
+                    failureReason = failReason,
+                    troubleshootingTip = tip
                 )
                 reportSb.appendLine("Search: ${if (searchPass) "PASS" else "FAIL"} (${allResults.size} results in ${duration4}ms)")
+                if (failReason != null) reportSb.appendLine("  -> Reason: $failReason")
             } catch (t: Throwable) {
-                steps[3] = AutomatedTestStepState("4. Search \"One Piece\"", StatusIndicator.FAILED, "Error: ${t.message}", System.currentTimeMillis() - start4)
+                val duration4 = System.currentTimeMillis() - start4
+                val trace = getStackTraceString(t)
+                steps[3] = AutomatedTestStepState(
+                    "4. Search \"One Piece\"",
+                    StatusIndicator.FAILED,
+                    "Error: ${t.message}",
+                    duration4,
+                    failureReason = "${t.javaClass.simpleName}: ${t.message ?: "Search execution error"}",
+                    failureStackTrace = trace,
+                    troubleshootingTip = "Check provider network client and Cloudflare bypass settings."
+                )
                 reportSb.appendLine("Search: FAIL (${t.message})")
             }
             _automatedSteps.value = steps.toList()
@@ -1142,19 +1230,42 @@ class CloudStreamDiagnosticViewModel(
                     metaPass = details != null
                     targetDataUrl = details?.episodes?.firstOrNull()?.data ?: details?.url ?: topResult.url
                     targetProviderId = topResult.providerId
+                    val failReason = if (!metaPass) "Provider ${topResult.providerName} returned null for URL: ${topResult.url}" else null
+                    val tip = if (!metaPass) "Check if the item page requires JavaScript rendering or has anti-scrape protections." else null
+
                     steps[4] = AutomatedTestStepState(
                         "5. Metadata Load (Top Result)",
                         if (metaPass) StatusIndicator.SUCCESS else StatusIndicator.FAILED,
                         if (details != null) "Loaded \"${details.title}\" (${details.episodes.size} episodes)" else "Metadata returned null",
-                        duration5
+                        duration5,
+                        failureReason = failReason,
+                        troubleshootingTip = tip
                     )
                     reportSb.appendLine("Metadata: ${if (metaPass) "PASS" else "FAIL"} (Title=\"${details?.title}\")")
+                    if (failReason != null) reportSb.appendLine("  -> Reason: $failReason")
                 } else {
-                    steps[4] = AutomatedTestStepState("5. Metadata Load (Top Result)", StatusIndicator.FAILED, "Skipped: No search result to load", 0L)
+                    steps[4] = AutomatedTestStepState(
+                        "5. Metadata Load (Top Result)",
+                        StatusIndicator.FAILED,
+                        "Skipped: No search result to load",
+                        0L,
+                        failureReason = "Step skipped because Step 4 (Search) returned 0 search items.",
+                        troubleshootingTip = "Fix Search step first to produce a candidate media item."
+                    )
                     reportSb.appendLine("Metadata: FAIL (No search result)")
                 }
             } catch (t: Throwable) {
-                steps[4] = AutomatedTestStepState("5. Metadata Load (Top Result)", StatusIndicator.FAILED, "Error: ${t.message}", System.currentTimeMillis() - start5)
+                val duration5 = System.currentTimeMillis() - start5
+                val trace = getStackTraceString(t)
+                steps[4] = AutomatedTestStepState(
+                    "5. Metadata Load (Top Result)",
+                    StatusIndicator.FAILED,
+                    "Error: ${t.message}",
+                    duration5,
+                    failureReason = "${t.javaClass.simpleName}: ${t.message ?: "Failed parsing loadDetails response"}",
+                    failureStackTrace = trace,
+                    troubleshootingTip = "Inspect HTML structure in loadDetails or check provider parsing logic."
+                )
                 reportSb.appendLine("Metadata: FAIL (${t.message})")
             }
             _automatedSteps.value = steps.toList()
@@ -1171,19 +1282,42 @@ class CloudStreamDiagnosticViewModel(
                     extractedStream = streams.firstOrNull()
                     val duration6 = System.currentTimeMillis() - start6
                     linkPass = streams.isNotEmpty()
+                    val failReason = if (!linkPass) "Provider $targetProviderId loadStreams returned 0 stream links for payload: $targetDataUrl" else null
+                    val tip = if (!linkPass) "Check extractor links, third-party video host resolvers (e.g. Streamwish, Filemoon, Vidstream), or referrer headers." else null
+
                     steps[5] = AutomatedTestStepState(
                         "6. Extract Video Streams",
                         if (linkPass) StatusIndicator.SUCCESS else StatusIndicator.FAILED,
                         "Extracted ${streams.size} streams (Top: ${extractedStream?.quality ?: "N/A"})",
-                        duration6
+                        duration6,
+                        failureReason = failReason,
+                        troubleshootingTip = tip
                     )
                     reportSb.appendLine("Link Extraction: ${if (linkPass) "PASS" else "FAIL"} (${streams.size} streams extracted)")
+                    if (failReason != null) reportSb.appendLine("  -> Reason: $failReason")
                 } else {
-                    steps[5] = AutomatedTestStepState("6. Extract Video Streams", StatusIndicator.FAILED, "Skipped: No target data payload", 0L)
+                    steps[5] = AutomatedTestStepState(
+                        "6. Extract Video Streams",
+                        StatusIndicator.FAILED,
+                        "Skipped: No target data payload",
+                        0L,
+                        failureReason = "Step skipped because Step 5 (Metadata) did not provide an episode data payload.",
+                        troubleshootingTip = "Ensure Metadata step succeeds and yields a valid episode data URL."
+                    )
                     reportSb.appendLine("Link Extraction: FAIL (No media payload)")
                 }
             } catch (t: Throwable) {
-                steps[5] = AutomatedTestStepState("6. Extract Video Streams", StatusIndicator.FAILED, "Error: ${t.message}", System.currentTimeMillis() - start6)
+                val duration6 = System.currentTimeMillis() - start6
+                val trace = getStackTraceString(t)
+                steps[5] = AutomatedTestStepState(
+                    "6. Extract Video Streams",
+                    StatusIndicator.FAILED,
+                    "Error: ${t.message}",
+                    duration6,
+                    failureReason = "${t.javaClass.simpleName}: ${t.message ?: "Extractor execution threw exception"}",
+                    failureStackTrace = trace,
+                    troubleshootingTip = "Check extractor resolvers or captcha/cookie handling."
+                )
                 reportSb.appendLine("Link Extraction: FAIL (${t.message})")
             }
             _automatedSteps.value = steps.toList()
@@ -1196,19 +1330,42 @@ class CloudStreamDiagnosticViewModel(
                 if (extractedStream != null) {
                     playPass = extractedStream.url.isNotBlank() && (extractedStream.url.startsWith("http://") || extractedStream.url.startsWith("https://"))
                     val duration7 = System.currentTimeMillis() - start7
+                    val failReason = if (!playPass) "Stream URL format is invalid: ${extractedStream.url}" else null
+                    val tip = if (!playPass) "Ensure stream extractor produces a direct HTTP/HTTPS or HLS m3u8 endpoint." else null
+
                     steps[6] = AutomatedTestStepState(
                         "7. MPV Playback Pipeline",
                         if (playPass) StatusIndicator.SUCCESS else StatusIndicator.FAILED,
                         "Stream URL and headers verified for MPV Player handoff (${extractedStream.quality})",
-                        duration7
+                        duration7,
+                        failureReason = failReason,
+                        troubleshootingTip = tip
                     )
                     reportSb.appendLine("Playback: ${if (playPass) "PASS" else "FAIL"} (Stream verified for MPV)")
+                    if (failReason != null) reportSb.appendLine("  -> Reason: $failReason")
                 } else {
-                    steps[6] = AutomatedTestStepState("7. MPV Playback Pipeline", StatusIndicator.FAILED, "Skipped: No extracted stream to verify", 0L)
+                    steps[6] = AutomatedTestStepState(
+                        "7. MPV Playback Pipeline",
+                        StatusIndicator.FAILED,
+                        "Skipped: No extracted stream to verify",
+                        0L,
+                        failureReason = "Step skipped because Step 6 (Link Extraction) yielded 0 streams.",
+                        troubleshootingTip = "Ensure Link Extraction step resolves at least one playable video link."
+                    )
                     reportSb.appendLine("Playback: FAIL (No extracted stream)")
                 }
             } catch (t: Throwable) {
-                steps[6] = AutomatedTestStepState("7. MPV Playback Pipeline", StatusIndicator.FAILED, "Error: ${t.message}", System.currentTimeMillis() - start7)
+                val duration7 = System.currentTimeMillis() - start7
+                val trace = getStackTraceString(t)
+                steps[6] = AutomatedTestStepState(
+                    "7. MPV Playback Pipeline",
+                    StatusIndicator.FAILED,
+                    "Error: ${t.message}",
+                    duration7,
+                    failureReason = "${t.javaClass.simpleName}: ${t.message ?: "Playback intent preparation failed"}",
+                    failureStackTrace = trace,
+                    troubleshootingTip = "Verify RexPlayerBridge and MPV activity intent parameters."
+                )
                 reportSb.appendLine("Playback: FAIL (${t.message})")
             }
             _automatedSteps.value = steps.toList()
