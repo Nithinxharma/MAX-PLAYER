@@ -56,7 +56,7 @@ class ExtensionManager(
     private val _failedPluginLoadsCount = MutableStateFlow(0)
     val failedPluginLoadsCount = _failedPluginLoadsCount.asStateFlow()
 
-    private val loadedPluginInstances = mutableListOf<com.lagradost.cloudstream3.plugins.BasePlugin>()
+    private val loadedPluginInstances = mutableListOf<Any>()
     val loadedPluginCount: Int get() = loadedPluginInstances.size
 
     init {
@@ -90,18 +90,54 @@ class ExtensionManager(
         _failedPluginLoadsCount.value = 0
         loadedPluginInstances.clear()
 
-        Log.i("ExtensionManager", "Beginning load of ${installedExts.size} installed extensions from database...")
+        Log.i("ExtensionManager", "EXTENSION_LOAD: Beginning load of ${installedExts.size} installed extensions from database...")
 
         for (ext in installedExts) {
             loadExtensionFromDisk(ext)
         }
 
+        // Also enumerate any .cs3 files on disk that might not be recorded in database or were placed manually
+        val diskDirs = listOf(extensionDir, File(context.filesDir, "cloudstream_plugins"))
+        val loadedFilePaths = loadedPluginInstances.mapNotNull { 
+            if (it is com.lagradost.cloudstream3.plugins.BasePlugin) it.filename 
+            else runCatching { it.javaClass.getMethod("getFilename").invoke(it) as? String }.getOrNull() 
+        }.toSet()
+        for (dir in diskDirs) {
+            if (dir.exists() && dir.isDirectory) {
+                val files = dir.listFiles { f -> f.extension.equals("cs3", ignoreCase = true) || f.extension.equals("zip", ignoreCase = true) } ?: emptyArray()
+                for (file in files) {
+                    if (!loadedFilePaths.contains(file.absolutePath)) {
+                        val basePkg = file.nameWithoutExtension
+                        val existing = installedExts.firstOrNull { it.pkgName.equals(basePkg, ignoreCase = true) || it.localFilePath == file.absolutePath }
+                        if (existing == null) {
+                            Log.i("ExtensionManager", "EXTENSION_LOAD: Found unindexed .cs3 file on disk: ${file.name}, loading it...")
+                            val ext = InstalledExtension(
+                                pkgName = basePkg,
+                                name = basePkg,
+                                version = "1.0.0",
+                                versionCode = 1,
+                                localFilePath = file.absolutePath,
+                                isEnabled = true
+                            )
+                            loadExtensionFromDisk(ext)
+                        }
+                    }
+                }
+            }
+        }
+
         // Trigger afterPluginsLoaded() on all loaded BasePlugin instances
         for (plugin in loadedPluginInstances) {
-            runCatching {
-                plugin.afterPluginsLoaded()
-            }.onFailure {
-                Log.w("ExtensionManager", "Error in afterPluginsLoaded for ${plugin.filename}: ${it.message}")
+            if (plugin is com.lagradost.cloudstream3.plugins.BasePlugin) {
+                runCatching {
+                    plugin.afterPluginsLoaded()
+                }.onFailure {
+                    Log.w("ExtensionManager", "Error in afterPluginsLoaded for ${plugin.filename}: ${it.message}")
+                }
+            } else {
+                runCatching {
+                    plugin.javaClass.methods.firstOrNull { it.name == "afterPluginsLoaded" && it.parameterTypes.isEmpty() }?.invoke(plugin)
+                }
             }
         }
 
@@ -253,19 +289,34 @@ class ExtensionManager(
         var file = localPath?.let { File(it) }
 
         if (file == null || !file.exists()) {
-            val fallback = File(extensionDir, "${ext.pkgName}.cs3")
-            if (fallback.exists()) {
-                file = fallback
-                localPath = fallback.absolutePath
+            val candidateFiles = listOfNotNull(
+                File(extensionDir, "${ext.pkgName}.cs3"),
+                File(extensionDir, "${ext.pkgName}"),
+                File(context.filesDir, "cloudstream_plugins/${ext.pkgName}.cs3"),
+                File(context.filesDir, "cloudstream_plugins/${ext.pkgName}"),
+                extensionDir.listFiles()?.firstOrNull { 
+                    it.name.contains(ext.pkgName, ignoreCase = true) || 
+                    (ext.name.isNotBlank() && it.name.contains(ext.name.replace(" ", ""), ignoreCase = true))
+                },
+                File(context.filesDir, "cloudstream_plugins").listFiles()?.firstOrNull { 
+                    it.name.contains(ext.pkgName, ignoreCase = true) || 
+                    (ext.name.isNotBlank() && it.name.contains(ext.name.replace(" ", ""), ignoreCase = true))
+                }
+            )
+            val found = candidateFiles.firstOrNull { it.exists() && it.isFile }
+            if (found != null) {
+                file = found
+                localPath = found.absolutePath
             }
         }
 
         if (file == null || !file.exists()) {
-            Log.w("ExtensionManager", "Extension file not found on disk for ${ext.pkgName} (path=$localPath)")
+            Log.w("ExtensionManager", "EXTENSION_LOAD: Extension file not found on disk for ${ext.pkgName} (path=$localPath)")
             _failedPluginLoadsCount.value++
             return
         }
 
+        Log.i("ExtensionManager", "EXTENSION_LOAD: Found extension file: ${file.absolutePath} (size: ${file.length()} bytes)")
         _pluginFilesFoundCount.value++
         var loadSuccess = false
 
@@ -293,6 +344,8 @@ class ExtensionManager(
                 classNames.addAll(extractClassesFromDex(file, optDir))
             }
 
+            Log.i("ExtensionManager", "EXTENSION_LOAD: Candidate classes to load for ${ext.pkgName}: $classNames")
+
             // If classes were extracted, self-heal database record
             if (classNames.isNotEmpty() && ext.classesFile != classNames.joinToString(", ")) {
                 scope.launch(Dispatchers.IO) {
@@ -311,6 +364,7 @@ class ExtensionManager(
 
             for (className in classNames) {
                 try {
+                    Log.i("ExtensionManager", "EXTENSION_LOAD: Loading plugin class: $className")
                     val clazz = classLoader.loadClass(className)
                     val instance = instantiateClass(clazz)
 
@@ -331,8 +385,10 @@ class ExtensionManager(
                                         )
                                     }
                                     instance.load(context)
+                                    Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load(context) executed for $className")
                                 } else {
                                     instance.load()
+                                    Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load() executed for $className")
                                 }
                                 loadSuccess = true
                                 Log.i("ExtensionManager", "Successfully executed BasePlugin: $className from ${file.name}")
@@ -367,9 +423,13 @@ class ExtensionManager(
                                     val loadMethodNoArgs = clazz.methods.firstOrNull { it.name == "load" && it.parameterTypes.isEmpty() }
                                     if (loadMethodWithContext != null) {
                                         loadMethodWithContext.invoke(instance, context)
+                                        Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load(context) executed (reflection) for $className")
+                                        loadedPluginInstances.add(instance)
                                         loadSuccess = true
                                     } else if (loadMethodNoArgs != null) {
                                         loadMethodNoArgs.invoke(instance)
+                                        Log.i("ExtensionManager", "EXTENSION_LOAD: plugin.load() executed (reflection) for $className")
+                                        loadedPluginInstances.add(instance)
                                         loadSuccess = true
                                     }
                                 } catch (_: Throwable) {}

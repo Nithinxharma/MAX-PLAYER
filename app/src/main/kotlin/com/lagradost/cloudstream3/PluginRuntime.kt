@@ -42,6 +42,7 @@ object APIHolder {
 
     fun addPlugin(api: MainAPI) {
         _registerMainApiCallsCount.incrementAndGet()
+        Log.i("ExtensionManager", "EXTENSION_LOAD: registerMainAPI called: ${api.name} (${api.mainUrl})")
         // Replace existing entry with same name if already present, or add new
         val existing = allProviders.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }
         if (existing != null) {
@@ -52,10 +53,12 @@ object APIHolder {
         apis.add(api)
         apiMap[api.name] = api
         Log.i("APIHolder", "Registered Cloudstream API: ${api.name} (${api.mainUrl}) [Total active: ${allProviders.size}]")
+        Log.i("ExtensionManager", "EXTENSION_LOAD: Provider registered: ${api.name}")
         runCatching { onApiAddedListener?.invoke(api) }
     }
 
     fun addExtractor(api: ExtractorApi) {
+        Log.i("ExtensionManager", "EXTENSION_LOAD: registerExtractorAPI called: ${api.name} (${api.mainUrl})")
         val existing = extractorApis.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }
         if (existing != null) {
             extractorApis.remove(existing)
