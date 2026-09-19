@@ -14,21 +14,21 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
-import xyz.mpv.rex.cinehub.extension.api.MainAPI
-import xyz.mpv.rex.cinehub.extension.api.MainApiProviderAdapter
 import xyz.mpv.rex.cinehub.extension.api.CloudstreamMainApiAdapter
+import xyz.mpv.rex.cinehub.extension.api.MainApiProviderAdapter
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.database.MpvExDatabase
 import java.io.File
+import java.lang.reflect.Constructor
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipFile
 
 /**
  * ExtensionManager coordinates installed extensions, life-cycles,
- * updates, and provider registrations.
- * Only real installed extensions are registered.
+ * class discovery, plugin instantiation, and provider registrations.
  */
 class ExtensionManager(
     private val context: Context,
@@ -43,6 +43,21 @@ class ExtensionManager(
     private val _isUpdating = MutableStateFlow(false)
     val isUpdating = _isUpdating.asStateFlow()
 
+    // Diagnostic tracking metrics
+    private val _installedExtensionsCount = MutableStateFlow(0)
+    val installedExtensionsCount = _installedExtensionsCount.asStateFlow()
+
+    private val _pluginFilesFoundCount = MutableStateFlow(0)
+    val pluginFilesFoundCount = _pluginFilesFoundCount.asStateFlow()
+
+    private val _successfullyLoadedPluginsCount = MutableStateFlow(0)
+    val successfullyLoadedPluginsCount = _successfullyLoadedPluginsCount.asStateFlow()
+
+    private val _failedPluginLoadsCount = MutableStateFlow(0)
+    val failedPluginLoadsCount = _failedPluginLoadsCount.asStateFlow()
+
+    private val loadedPluginInstances = mutableListOf<com.lagradost.cloudstream3.plugins.BasePlugin>()
+
     init {
         if (!extensionDir.exists()) extensionDir.mkdirs()
         scope.launch {
@@ -56,9 +71,39 @@ class ExtensionManager(
 
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
         val enabledExts = db.extensionDao().getEnabledExtensionsSync()
+        _installedExtensionsCount.value = enabledExts.size
+        _pluginFilesFoundCount.value = 0
+        _successfullyLoadedPluginsCount.value = 0
+        _failedPluginLoadsCount.value = 0
+        loadedPluginInstances.clear()
+
+        Log.i("ExtensionManager", "Beginning load of ${enabledExts.size} installed extensions...")
+
         for (ext in enabledExts) {
             loadExtensionFromDisk(ext)
         }
+
+        // Trigger afterPluginsLoaded() on all loaded BasePlugin instances
+        for (plugin in loadedPluginInstances) {
+            runCatching {
+                plugin.afterPluginsLoaded()
+            }.onFailure {
+                Log.w("ExtensionManager", "Error in afterPluginsLoaded for ${plugin.filename}: ${it.message}")
+            }
+        }
+
+        // Ensure all APIHolder providers are synchronized into ProviderRegistry
+        val allApis = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
+        for (api in allApis) {
+            val adapter = CloudstreamMainApiAdapter(api)
+            registry.register(adapter, isEnabledByDefault = true)
+        }
+
+        Log.i("ExtensionManager", "Extension loading complete: " +
+                "${_pluginFilesFoundCount.value} files found, " +
+                "${_successfullyLoadedPluginsCount.value} plugins loaded, " +
+                "${com.lagradost.cloudstream3.APIHolder.allProviders.size} APIs in APIHolder, " +
+                "${registry.getAllProviders().size} providers in ProviderRegistry.")
     }
 
     private fun extractClassNamesFromZip(file: File): List<String> {
@@ -66,31 +111,57 @@ class ExtensionManager(
         if (!file.exists()) return classNames
         runCatching {
             ZipFile(file).use { zip ->
-                val entry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json") ?: zip.getEntry("plugin.json")
+                // Search for manifest.json, make.json, or plugin.json case-insensitively across any path
+                val entry = zip.entries().asSequence().firstOrNull {
+                    val name = it.name.substringAfterLast('/')
+                    name.equals("manifest.json", ignoreCase = true) ||
+                    name.equals("make.json", ignoreCase = true) ||
+                    name.equals("plugin.json", ignoreCase = true)
+                }
+
                 if (entry != null) {
                     val text = zip.getInputStream(entry).bufferedReader().readText()
                     val json = JSONObject(text)
-                    val mainClass = json.optString("pluginClassName", json.optString("mainClass", json.optString("class", "")))
+                    
+                    val mainClass = json.optString("pluginClassName", 
+                        json.optString("pluginClass", 
+                            json.optString("mainClass", 
+                                json.optString("class", 
+                                    json.optString("plugin", 
+                                        json.optString("entrypoint", ""))))))
                     if (mainClass.isNotBlank()) {
-                        classNames.add(mainClass)
+                        classNames.add(mainClass.trim())
                     }
+
+                    // Array of classes
                     val classesArr = json.optJSONArray("classes")
                     if (classesArr != null) {
                         for (i in 0 until classesArr.length()) {
-                            val cName = classesArr.optString(i)
+                            val cName = classesArr.optString(i).trim()
                             if (cName.isNotBlank() && !classNames.contains(cName)) {
                                 classNames.add(cName)
                             }
                         }
-                    }
-                }
-                if (classNames.isEmpty()) {
-                    zip.entries().asSequence()
-                        .filter { !it.isDirectory && it.name.endsWith(".class") && !it.name.contains("$") }
-                        .forEach { classEntry ->
-                            val cName = classEntry.name.removeSuffix(".class").replace('/', '.')
-                            if (!classNames.contains(cName)) classNames.add(cName)
+                    } else if (json.has("classes") && json.optString("classes").isNotBlank()) {
+                        json.optString("classes").split(",").forEach {
+                            val c = it.trim()
+                            if (c.isNotBlank() && !classNames.contains(c)) classNames.add(c)
                         }
+                    }
+
+                    // Array of providers or plugins
+                    val providersArr = json.optJSONArray("providers") ?: json.optJSONArray("plugins")
+                    if (providersArr != null) {
+                        for (i in 0 until providersArr.length()) {
+                            val item = providersArr.opt(i)
+                            if (item is String && item.isNotBlank() && !classNames.contains(item.trim())) {
+                                classNames.add(item.trim())
+                            } else if (item is JSONObject) {
+                                val c = item.optString("class", item.optString("className", "")).trim()
+                                if (c.isNotBlank() && !classNames.contains(c)) classNames.add(c)
+                            }
+                        }
+                    }
                 }
             }
         }.onFailure {
@@ -99,10 +170,88 @@ class ExtensionManager(
         return classNames
     }
 
+    private fun extractClassesFromDex(file: File, optDir: File): List<String> {
+        val dexClasses = mutableListOf<String>()
+        runCatching {
+            val dexFile = dalvik.system.DexFile.loadDex(
+                file.absolutePath,
+                File(optDir, "${file.nameWithoutExtension}.dex.opt").absolutePath,
+                0
+            )
+            val entries = dexFile.entries()
+            while (entries.hasMoreElements()) {
+                val cName = entries.nextElement()
+                if (!cName.contains("$") &&
+                    !cName.startsWith("kotlin.") &&
+                    !cName.startsWith("kotlinx.") &&
+                    !cName.startsWith("java.") &&
+                    !cName.startsWith("android.") &&
+                    !cName.startsWith("androidx.")
+                ) {
+                    dexClasses.add(cName)
+                }
+            }
+        }.onFailure {
+            Log.d("ExtensionManager", "DexFile scan fallback for ${file.name}: ${it.message}")
+        }
+        return dexClasses
+    }
+
+    private fun instantiateClass(clazz: Class<*>): Any? {
+        // 1. Try public/declared 0-arg constructor
+        try {
+            val constructor: Constructor<*> = clazz.getDeclaredConstructor()
+            constructor.isAccessible = true
+            return constructor.newInstance()
+        } catch (_: Throwable) {}
+
+        // 2. Try Kotlin object singleton INSTANCE field
+        try {
+            val field = clazz.getField("INSTANCE")
+            field.isAccessible = true
+            return field.get(null)
+        } catch (_: Throwable) {}
+
+        try {
+            val field = clazz.getDeclaredField("INSTANCE")
+            field.isAccessible = true
+            return field.get(null)
+        } catch (_: Throwable) {}
+
+        // 3. Try constructor taking Context
+        for (constructor in clazz.declaredConstructors) {
+            try {
+                constructor.isAccessible = true
+                if (constructor.parameterTypes.isEmpty()) {
+                    return constructor.newInstance()
+                } else if (constructor.parameterTypes.size == 1 && Context::class.java.isAssignableFrom(constructor.parameterTypes[0])) {
+                    return constructor.newInstance(context)
+                }
+            } catch (_: Throwable) {}
+        }
+        return null
+    }
+
     private fun loadExtensionFromDisk(ext: InstalledExtension) {
-        val localPath = ext.localFilePath ?: return
-        val file = File(localPath)
-        if (!file.exists()) return
+        var localPath = ext.localFilePath
+        var file = localPath?.let { File(it) }
+
+        if (file == null || !file.exists()) {
+            val fallback = File(extensionDir, "${ext.pkgName}.cs3")
+            if (fallback.exists()) {
+                file = fallback
+                localPath = fallback.absolutePath
+            }
+        }
+
+        if (file == null || !file.exists()) {
+            Log.w("ExtensionManager", "Extension file not found on disk for ${ext.pkgName} (path=$localPath)")
+            _failedPluginLoadsCount.value++
+            return
+        }
+
+        _pluginFilesFoundCount.value++
+        var loadSuccess = false
 
         try {
             val optDir = File(context.codeCacheDir, "opt_${ext.pkgName}").apply { mkdirs() }
@@ -115,57 +264,100 @@ class ExtensionManager(
 
             val classNames = mutableListOf<String>()
 
-            // 1. Inspect manifest.json / make.json / plugin.json directly from the zip archive
+            // 1. Inspect manifest.json / make.json / plugin.json from zip archive
             classNames.addAll(extractClassNamesFromZip(file))
 
-            // 2. Also check classesFile recorded during install, filtering out any author names or non-class entries
+            // 2. Also check classesFile recorded during install
             ext.classesFile?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() && it.contains(".") }?.forEach {
                 if (!classNames.contains(it)) classNames.add(it)
             }
 
-            // If classesFile was previously corrupted and classNames were extracted from zip, self-heal database record
+            // 3. If class names list is still empty, scan DEX file directly
+            if (classNames.isEmpty()) {
+                classNames.addAll(extractClassesFromDex(file, optDir))
+            }
+
+            // If classes were extracted, self-heal database record
             if (classNames.isNotEmpty() && ext.classesFile != classNames.joinToString(", ")) {
                 scope.launch(Dispatchers.IO) {
                     runCatching {
-                        db.extensionDao().insertExtension(ext.copy(classesFile = classNames.joinToString(", ")))
+                        db.extensionDao().insertExtension(
+                            ext.copy(
+                                localFilePath = file.absolutePath,
+                                classesFile = classNames.joinToString(", ")
+                            )
+                        )
                     }
                 }
             }
 
-            val beforeApis = com.lagradost.cloudstream3.APIHolder.apis.toSet()
+            val beforeApis = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
 
             for (className in classNames) {
                 try {
                     val clazz = classLoader.loadClass(className)
-                    val instance = clazz.getDeclaredConstructor().newInstance()
-                    when (instance) {
-                        is com.lagradost.cloudstream3.plugins.BasePlugin -> {
-                            instance.filename = file.absolutePath
-                            if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
-                                runCatching {
-                                    val assets = android.content.res.AssetManager::class.java.getDeclaredConstructor().newInstance()
-                                    val addAssetPath = android.content.res.AssetManager::class.java.getMethod("addAssetPath", String::class.java)
-                                    addAssetPath.invoke(assets, file.absolutePath)
-                                    instance.resources = android.content.res.Resources(
-                                        assets,
-                                        context.resources.displayMetrics,
-                                        context.resources.configuration
-                                    )
+                    val instance = instantiateClass(clazz)
+
+                    if (instance != null) {
+                        when (instance) {
+                            is com.lagradost.cloudstream3.plugins.BasePlugin -> {
+                                instance.filename = file.absolutePath
+                                loadedPluginInstances.add(instance)
+                                if (instance is com.lagradost.cloudstream3.plugins.Plugin) {
+                                    runCatching {
+                                        val assets = android.content.res.AssetManager::class.java.getDeclaredConstructor().newInstance()
+                                        val addAssetPath = android.content.res.AssetManager::class.java.getMethod("addAssetPath", String::class.java)
+                                        addAssetPath.invoke(assets, file.absolutePath)
+                                        instance.resources = android.content.res.Resources(
+                                            assets,
+                                            context.resources.displayMetrics,
+                                            context.resources.configuration
+                                        )
+                                    }
+                                    instance.load(context)
+                                } else {
+                                    instance.load()
                                 }
-                                instance.load(context)
-                            } else {
-                                instance.load()
+                                loadSuccess = true
+                                Log.i("ExtensionManager", "Successfully executed BasePlugin: $className from ${file.name}")
                             }
-                        }
-                        is CineHubProvider -> {
-                            registry.register(instance, isEnabledByDefault = ext.isEnabled)
-                        }
-                        is com.lagradost.cloudstream3.MainAPI -> {
-                            instance.sourcePlugin = file.absolutePath
-                            com.lagradost.cloudstream3.APIHolder.addPlugin(instance)
-                        }
-                        is MainAPI -> {
-                            registry.register(MainApiProviderAdapter(instance), isEnabledByDefault = ext.isEnabled)
+                            is com.lagradost.cloudstream3.MainAPI -> {
+                                instance.sourcePlugin = file.absolutePath
+                                com.lagradost.cloudstream3.APIHolder.addPlugin(instance)
+                                registry.register(CloudstreamMainApiAdapter(instance), isEnabledByDefault = ext.isEnabled)
+                                loadSuccess = true
+                                Log.i("ExtensionManager", "Registered direct MainAPI instance: ${instance.name}")
+                            }
+                            is com.lagradost.cloudstream3.utils.ExtractorApi -> {
+                                instance.sourcePlugin = file.absolutePath
+                                com.lagradost.cloudstream3.APIHolder.addExtractor(instance)
+                                loadSuccess = true
+                                Log.i("ExtensionManager", "Registered direct ExtractorApi instance: ${instance.name}")
+                            }
+                            is CineHubProvider -> {
+                                registry.register(instance, isEnabledByDefault = ext.isEnabled)
+                                loadSuccess = true
+                                Log.i("ExtensionManager", "Registered direct CineHubProvider instance: ${instance.name}")
+                            }
+                            is xyz.mpv.rex.cinehub.extension.api.MainAPI -> {
+                                registry.register(MainApiProviderAdapter(instance), isEnabledByDefault = ext.isEnabled)
+                                loadSuccess = true
+                                Log.i("ExtensionManager", "Registered legacy MainAPI instance: ${instance.name}")
+                            }
+                            else -> {
+                                // Reflection fallback for load(Context) / load() methods
+                                try {
+                                    val loadMethodWithContext = clazz.methods.firstOrNull { it.name == "load" && it.parameterTypes.size == 1 && Context::class.java.isAssignableFrom(it.parameterTypes[0]) }
+                                    val loadMethodNoArgs = clazz.methods.firstOrNull { it.name == "load" && it.parameterTypes.isEmpty() }
+                                    if (loadMethodWithContext != null) {
+                                        loadMethodWithContext.invoke(instance, context)
+                                        loadSuccess = true
+                                    } else if (loadMethodNoArgs != null) {
+                                        loadMethodNoArgs.invoke(instance)
+                                        loadSuccess = true
+                                    }
+                                } catch (_: Throwable) {}
+                            }
                         }
                     }
                 } catch (e: Throwable) {
@@ -173,15 +365,24 @@ class ExtensionManager(
                 }
             }
 
-            // Synchronize newly added CloudStream APIs from this extension into ProviderRegistry
-            val newlyAddedApis = com.lagradost.cloudstream3.APIHolder.apis.filter {
-                it.sourcePlugin == file.absolutePath || !beforeApis.contains(it)
+            // Synchronize newly added or updated CloudStream APIs from this extension into ProviderRegistry
+            val currentApis = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
+            for (api in currentApis) {
+                if (api.sourcePlugin == file.absolutePath || !beforeApis.contains(api) || currentApis.size > beforeApis.size) {
+                    if (api.sourcePlugin == null) api.sourcePlugin = file.absolutePath
+                    registry.register(CloudstreamMainApiAdapter(api), isEnabledByDefault = ext.isEnabled)
+                    loadSuccess = true
+                }
             }
-            for (api in newlyAddedApis) {
-                api.sourcePlugin = file.absolutePath
-                registry.register(CloudstreamMainApiAdapter(api), isEnabledByDefault = ext.isEnabled)
+
+            if (loadSuccess) {
+                _successfullyLoadedPluginsCount.value++
+            } else {
+                _failedPluginLoadsCount.value++
+                Log.w("ExtensionManager", "No providers or plugins could be registered from ${file.name}")
             }
         } catch (e: Throwable) {
+            _failedPluginLoadsCount.value++
             Log.e("ExtensionManager", "Failed to load extension ${ext.pkgName} from $localPath", e)
         }
     }
@@ -202,6 +403,10 @@ class ExtensionManager(
                         }
                         localPath = targetFile.absolutePath
                         discoveredClasses = extractClassNamesFromZip(targetFile)
+                        if (discoveredClasses.isEmpty()) {
+                            val optDir = File(context.codeCacheDir, "opt_${plugin.internalName}").apply { mkdirs() }
+                            discoveredClasses = extractClassesFromDex(targetFile, optDir)
+                        }
                     }
                 }
             }
@@ -224,7 +429,7 @@ class ExtensionManager(
             loadExtensionFromDisk(installed)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("ExtensionManager", "Failed installing extension ${plugin.name}", e)
             false
         }
     }
@@ -245,13 +450,14 @@ class ExtensionManager(
             registry.unregister("cs3_${pkgName.lowercase()}")
             if (file.exists()) file.delete()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("ExtensionManager", "Failed uninstalling extension $pkgName", e)
         }
     }
 
     suspend fun toggleExtension(pkgName: String, isEnabled: Boolean) = withContext(Dispatchers.IO) {
         db.extensionDao().updateExtensionState(pkgName, isEnabled)
         registry.setProviderEnabled(pkgName, isEnabled)
+        registry.setProviderEnabled("cs3_${pkgName.lowercase()}", isEnabled)
     }
 
     suspend fun checkForUpdates(): List<PluginUpdateInfo> = withContext(Dispatchers.IO) {

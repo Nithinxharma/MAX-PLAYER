@@ -51,6 +51,13 @@ data class EnvironmentStatusState(
     val cloudstreamSdkVersion: String = "CloudStream 3 Core / Headless Engine v4.0",
     val loadedProvidersCount: Int = 0,
     val installedExtensionsCount: Int = 0,
+    val pluginFilesFoundCount: Int = 0,
+    val successfullyLoadedPluginsCount: Int = 0,
+    val failedPluginLoadsCount: Int = 0,
+    val registerMainApiCallsCount: Int = 0,
+    val apiHolderProviderCount: Int = 0,
+    val providerRegistryCount: Int = 0,
+    val loadedProviderNames: List<String> = emptyList(),
     val repositoriesCount: Int = 0,
     val networkStatus: String = "Unknown",
     val isNetworkConnected: Boolean = false,
@@ -210,6 +217,8 @@ class CloudStreamDiagnosticViewModel(
     private val _automatedReport = MutableStateFlow<AutomatedTestReport?>(null)
     val automatedReport: StateFlow<AutomatedTestReport?> = _automatedReport.asStateFlow()
 
+    val registeredProviders: StateFlow<List<CineHubProvider>> = registry.registeredProviders
+
     init {
         DiagnosticLogger.info(TAG_AUTO, "CloudStream Test Center Diagnostic Engine initialized.")
         refreshEnvironmentStatus()
@@ -237,12 +246,19 @@ class CloudStreamDiagnosticViewModel(
                 0
             }
 
+            // Diagnostic detailed counts
+            val filesFound = extensionManager.pluginFilesFoundCount.value
+            val loadedPlugins = extensionManager.successfullyLoadedPluginsCount.value
+            val failedPlugins = extensionManager.failedPluginLoadsCount.value
+            val registerCalls = com.lagradost.cloudstream3.APIHolder.registerMainApiCallsCount
+            val apiHolderCount = com.lagradost.cloudstream3.APIHolder.allProviders.size
+            val providerNames = registry.getAllProviders().map { it.name }
+
             // Check DB Repositories
             var repoCount = 0
             var dbHealthy = false
             var dbStatus = "Disconnected"
             try {
-                val repos = db.extensionDao().getEnabledExtensionsSync()
                 val cursor = db.openHelper.readableDatabase.query("SELECT count(*) FROM extension_repositories")
                 if (cursor.moveToFirst()) {
                     repoCount = cursor.getInt(0)
@@ -288,6 +304,13 @@ class CloudStreamDiagnosticViewModel(
                 cloudstreamSdkVersion = sdkVer,
                 loadedProvidersCount = loadedProviders,
                 installedExtensionsCount = installedCount,
+                pluginFilesFoundCount = filesFound,
+                successfullyLoadedPluginsCount = loadedPlugins,
+                failedPluginLoadsCount = failedPlugins,
+                registerMainApiCallsCount = registerCalls,
+                apiHolderProviderCount = apiHolderCount,
+                providerRegistryCount = loadedProviders,
+                loadedProviderNames = providerNames,
                 repositoriesCount = repoCount,
                 networkStatus = netStatus,
                 isNetworkConnected = netConnected,

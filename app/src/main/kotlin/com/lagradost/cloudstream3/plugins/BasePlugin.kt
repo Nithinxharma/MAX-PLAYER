@@ -19,6 +19,8 @@ abstract class BasePlugin {
     
     open fun beforeUnload() {}
 
+    open fun afterPluginsLoaded() {}
+
     fun registerMainAPI(element: MainAPI) {
         element.sourcePlugin = this.filename
         APIHolder.addPlugin(element)

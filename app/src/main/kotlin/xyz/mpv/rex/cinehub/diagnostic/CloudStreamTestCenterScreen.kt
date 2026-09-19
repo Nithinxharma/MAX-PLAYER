@@ -344,7 +344,11 @@ fun OverviewAndAutoTestSection(
                 StatusGridItem("App Version", envState.appVersion, Icons.Default.Info)
                 StatusGridItem("CloudStream SDK", envState.cloudstreamSdkVersion, Icons.Default.Code)
                 StatusGridItem("Loaded Providers", "${envState.loadedProvidersCount} active", Icons.Default.Widgets, onClick = { onNavigateToTab(3) })
-                StatusGridItem("Installed Extensions", "${envState.installedExtensionsCount} installed", Icons.Default.Extension, onClick = { onNavigateToTab(2) })
+                StatusGridItem("Installed Extensions", "${envState.installedExtensionsCount} in DB", Icons.Default.Extension, onClick = { onNavigateToTab(2) })
+                StatusGridItem("Plugin Files Found", "${envState.pluginFilesFoundCount} files on disk", Icons.Default.FolderOpen)
+                StatusGridItem("Plugin Load Status", "${envState.successfullyLoadedPluginsCount} succeeded / ${envState.failedPluginLoadsCount} failed", Icons.Default.CheckCircleOutline)
+                StatusGridItem("registerMainAPI Calls", "${envState.registerMainApiCallsCount} invoked", Icons.Default.Send)
+                StatusGridItem("APIHolder Providers", "${envState.apiHolderProviderCount} registered", Icons.Default.AccountTree)
                 StatusGridItem("Repositories", "${envState.repositoriesCount} configured", Icons.Default.CloudQueue, onClick = { onNavigateToTab(1) })
                 StatusGridItem("Network Status", envState.networkStatus, if (envState.isNetworkConnected) Icons.Default.Wifi else Icons.Default.WifiOff)
                 StatusGridItem("Database Status", envState.databaseStatus, Icons.Default.Storage)
@@ -752,7 +756,7 @@ fun ExtensionsSection(viewModel: CloudStreamDiagnosticViewModel) {
 
 @Composable
 fun ProvidersSection(viewModel: CloudStreamDiagnosticViewModel) {
-    val providers = remember(viewModel) { viewModel.getRegisteredProviders() }
+    val providers by viewModel.registeredProviders.collectAsState()
     val selfTests by viewModel.providerSelfTests.collectAsState()
 
     Column(

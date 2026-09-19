@@ -30,25 +30,34 @@ object APIHolder {
     val unixTimeMS: Long get() = System.currentTimeMillis()
     val unixTime: Long get() = unixTimeMS / 1000L
 
-    val apis = mutableListOf<MainAPI>()
-    val allProviders = mutableListOf<MainAPI>()
-    val extractorApis = mutableListOf<ExtractorApi>()
+    val apis = java.util.concurrent.CopyOnWriteArrayList<MainAPI>()
+    val allProviders = java.util.concurrent.CopyOnWriteArrayList<MainAPI>()
+    val extractorApis = java.util.concurrent.CopyOnWriteArrayList<ExtractorApi>()
     private val apiMap = ConcurrentHashMap<String, MainAPI>()
+    private val _registerMainApiCallsCount = java.util.concurrent.atomic.AtomicInteger(0)
+    val registerMainApiCallsCount: Int get() = _registerMainApiCallsCount.get()
 
     fun addPlugin(api: MainAPI) {
-        if (!allProviders.contains(api)) {
-            allProviders.add(api)
-            apis.add(api)
-            apiMap[api.name] = api
-            Log.i("APIHolder", "Registered Cloudstream API: ${api.name} (${api.mainUrl})")
+        _registerMainApiCallsCount.incrementAndGet()
+        // Replace existing entry with same name if already present, or add new
+        val existing = allProviders.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }
+        if (existing != null) {
+            allProviders.remove(existing)
+            apis.remove(existing)
         }
+        allProviders.add(api)
+        apis.add(api)
+        apiMap[api.name] = api
+        Log.i("APIHolder", "Registered Cloudstream API: ${api.name} (${api.mainUrl}) [Total active: ${allProviders.size}]")
     }
 
     fun addExtractor(api: ExtractorApi) {
-        if (!extractorApis.contains(api)) {
-            extractorApis.add(api)
-            Log.i("APIHolder", "Registered Extractor API: ${api.name} (${api.mainUrl})")
+        val existing = extractorApis.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }
+        if (existing != null) {
+            extractorApis.remove(existing)
         }
+        extractorApis.add(api)
+        Log.i("APIHolder", "Registered Extractor API: ${api.name} (${api.mainUrl}) [Total active: ${extractorApis.size}]")
     }
 
     fun removePlugin(api: MainAPI) {
@@ -71,6 +80,7 @@ object APIHolder {
         allProviders.clear()
         apiMap.clear()
         extractorApis.clear()
+        _registerMainApiCallsCount.set(0)
     }
 }
 
