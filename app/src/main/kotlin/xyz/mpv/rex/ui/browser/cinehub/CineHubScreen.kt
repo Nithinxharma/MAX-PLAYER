@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -1748,20 +1750,27 @@ fun CineDetailBottomSheet(
     else -> ""
   }
 
+  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val scrollState = rememberScrollState()
+
   ModalBottomSheet(
     onDismissRequest = onDismiss,
-    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    sheetState = sheetState,
+    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    containerColor = MaterialTheme.colorScheme.surface,
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
+        .fillMaxHeight(0.92f)
+        .verticalScroll(scrollState)
         .padding(bottom = 36.dp),
     ) {
       if (!backdropPath.isNullOrBlank()) {
         Box(
           modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp),
+            .height(210.dp),
         ) {
           AsyncImage(
             model = backdropPath,
@@ -1769,54 +1778,117 @@ fun CineDetailBottomSheet(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
           )
+          Box(
+            modifier = Modifier
+              .fillMaxSize()
+              .background(
+                Brush.verticalGradient(
+                  colors = listOf(
+                    Color.Transparent,
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                    MaterialTheme.colorScheme.surface
+                  )
+                )
+              )
+          )
         }
       }
 
-      Column(modifier = Modifier.padding(20.dp)) {
+      Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+          horizontalArrangement = Arrangement.spacedBy(16.dp),
+          verticalAlignment = Alignment.Top
         ) {
-          Column(modifier = Modifier.weight(1f)) {
-            Text(
-              text = title,
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.Bold,
-            )
-            if (genre.isNotBlank() || year.isNotBlank()) {
-              Text(
-                text = listOf(year, genre).filter { it.isNotBlank() }.joinToString(" • "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(top = 2.dp),
+          if (!posterPath.isNullOrBlank()) {
+            Card(
+              shape = RoundedCornerShape(14.dp),
+              elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+              modifier = Modifier
+                .width(100.dp)
+                .height(148.dp)
+            ) {
+              AsyncImage(
+                model = posterPath,
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
               )
             }
           }
 
-          if (rating > 0.0) {
+          Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Text(
+              text = title,
+              style = MaterialTheme.typography.titleLarge,
+              fontWeight = FontWeight.ExtraBold,
+              color = MaterialTheme.colorScheme.onSurface
+            )
+
             Row(
-              verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier
-                .background(
-                  MaterialTheme.colorScheme.primaryContainer,
-                  RoundedCornerShape(12.dp),
-                )
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                tint = Color(0xFFFFB800),
-                modifier = Modifier.size(16.dp),
-              )
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = String.format("%.1f", rating),
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-              )
+              if (year.isNotBlank()) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                  Text(
+                    text = year,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  )
+                }
+              }
+
+              if (genre.isNotBlank()) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                  Text(
+                    text = genre,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                  )
+                }
+              }
+            }
+
+            if (rating > 0.0) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                  .background(
+                    MaterialTheme.colorScheme.tertiaryContainer,
+                    RoundedCornerShape(10.dp)
+                  )
+                  .padding(horizontal = 8.dp, vertical = 4.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Star,
+                  contentDescription = null,
+                  tint = Color(0xFFFFB800),
+                  modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                  text = String.format("%.1f", rating),
+                  fontWeight = FontWeight.Bold,
+                  style = MaterialTheme.typography.labelMedium,
+                  color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+              }
             }
           }
         }
