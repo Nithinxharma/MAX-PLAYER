@@ -63,6 +63,29 @@
 -keepattributes *Annotation*
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
+-keepattributes Exceptions
+
+# Keep CloudStream extension SDK & plugins framework for dynamic DEX loading
+-keep class com.lagradost.cloudstream3.** { *; }
+-keep interface com.lagradost.cloudstream3.** { *; }
+-keepclassmembers class com.lagradost.cloudstream3.** { *; }
+
+-keep class com.lagradost.nicehttp.** { *; }
+-keep interface com.lagradost.nicehttp.** { *; }
+-keepclassmembers class com.lagradost.nicehttp.** { *; }
+
+-keep class com.fasterxml.jackson.** { *; }
+-keep interface com.fasterxml.jackson.** { *; }
+-keepclassmembers class com.fasterxml.jackson.** { *; }
+
+-keep class org.jsoup.** { *; }
+-keep interface org.jsoup.** { *; }
+-keepclassmembers class org.jsoup.** { *; }
+
+# Keep CineHub extension bridge models & interfaces
+-keep class xyz.mpv.rex.cinehub.extension.** { *; }
+-keep interface xyz.mpv.rex.cinehub.extension.** { *; }
+-keepclassmembers class xyz.mpv.rex.cinehub.extension.** { *; }
 
 # Keep serializable classes
 -keepclassmembers class * implements java.io.Serializable {

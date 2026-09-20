@@ -1,16 +1,19 @@
 package com.lagradost.cloudstream3.plugins
 
 import android.content.Context
+import androidx.annotation.Keep
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.utils.ExtractorApi
 
 const val PLUGIN_TAG = "Plugin"
 
+@Keep
 abstract class BasePlugin {
     var filename: String? = null
     var openSettings: ((context: Context) -> Unit)? = null
 
+    @Keep
     class Manifest {
         var name: String? = null
         var pluginClassName: String = ""

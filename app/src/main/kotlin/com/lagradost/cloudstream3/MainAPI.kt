@@ -1,6 +1,6 @@
 package com.lagradost.cloudstream3
 
-
+import androidx.annotation.Keep
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.fasterxml.jackson.databind.json.JsonMapper
@@ -45,14 +45,17 @@ fun newSubtitleFile(
     url: String
 ): SubtitleFile = SubtitleFile(lang, url)
 
+@Keep
 enum class TvType {
     Movie, TvSeries, Anime, AnimeMovie, OVA, Cartoon, Documentary, AsianDrama, Live, NSFW, Others
 }
 
+@Keep
 enum class DubStatus {
     None, Dubbed, Subbed
 }
 
+@Keep
 enum class SearchQuality(val value: Int) {
     Cam(1), CamRip(2), HdCam(3), Telesync(4), WorkPrint(5), Telecine(6), HQ(7), HD(8), HDR(9), BlueRay(10), DVD(11), SD(12), FourK(13), UHD(14), SDR(15), WebRip(16)
 }
@@ -433,6 +436,7 @@ const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/53
 
 data class SettingsJson(val enableAdult: Boolean = false)
 
+@Keep
 abstract class MainAPI {
     companion object {
         val settingsForProvider: SettingsJson = SettingsJson()

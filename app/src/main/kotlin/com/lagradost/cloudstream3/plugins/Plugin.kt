@@ -3,10 +3,12 @@ package com.lagradost.cloudstream3.plugins
 import android.content.Context
 import android.content.res.Resources
 import android.util.Log
+import androidx.annotation.Keep
 import com.lagradost.cloudstream3.actions.VideoClickAction
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
 import kotlin.Throws
 
+@Keep
 abstract class Plugin : BasePlugin() {
     /**
      * Called when your Plugin is loaded
