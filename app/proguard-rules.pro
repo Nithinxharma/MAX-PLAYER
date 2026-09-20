@@ -77,10 +77,14 @@
 -keep class com.fasterxml.jackson.** { *; }
 -keep interface com.fasterxml.jackson.** { *; }
 -keepclassmembers class com.fasterxml.jackson.** { *; }
+-dontwarn com.fasterxml.jackson.**
+-dontwarn java.beans.**
 
 -keep class org.jsoup.** { *; }
 -keep interface org.jsoup.** { *; }
 -keepclassmembers class org.jsoup.** { *; }
+-dontwarn org.jsoup.**
+-dontwarn com.google.re2j.**
 
 # Keep CineHub extension bridge models & interfaces
 -keep class xyz.mpv.rex.cinehub.extension.** { *; }
