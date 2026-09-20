@@ -1397,13 +1397,16 @@ fun DynamicMediaInfoRectangle(
 
   var activeResolution by remember { mutableStateOf<ActiveMediaResolution?>(null) }
 
-  LaunchedEffect(currentFilePath, mediaTitle) {
-    if (customSourceType == null) {
-      activeResolution = CineOnlineScraper.resolveActiveMedia(
-        context = context,
-        filePath = currentFilePath,
-        mediaTitle = mediaTitle
-      )
+  LaunchedEffect(currentFilePath, mediaTitle, customPoster) {
+    if (customPoster.isNullOrBlank()) {
+      val clean = xyz.mpv.rex.utils.media.MediaUtils.extractCleanMediaTitle(mediaTitle, currentFilePath)
+      if (clean.isNotBlank() || (currentFilePath.isNotBlank() && !currentFilePath.startsWith("http"))) {
+        activeResolution = CineOnlineScraper.resolveActiveMedia(
+          context = context,
+          filePath = currentFilePath,
+          mediaTitle = clean
+        )
+      }
     }
   }
 

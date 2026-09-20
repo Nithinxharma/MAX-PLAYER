@@ -72,29 +72,31 @@ fun MetadataSheet(
     var resolutionData by remember { mutableStateOf<ActiveMediaResolution?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    val cleanTitle = remember(mediaTitle) {
-        val t = mediaTitle
-        if (t.isBlank() || t.startsWith("http://") || t.startsWith("https://") || t.endsWith(".m3u8") || t.contains(".m3u8") || t == "index.m3u8" || t == "master.m3u8") {
-            "Max Stream"
-        } else {
-            t
-        }
+    val cleanTitle = remember(mediaTitle, currentFilePath) {
+        xyz.mpv.rex.utils.media.MediaUtils.extractCleanMediaTitle(mediaTitle, currentFilePath)
     }
 
     val effectiveMovie = remember(resolutionData, customPoster, customOverview, customYear, customRating, customProvider, cleanTitle, durationSec) {
         val fromResolution = (resolutionData as? ActiveMediaResolution.Movie)?.movie
         if (fromResolution != null) {
-            fromResolution.copy(title = cleanTitle.ifBlank { fromResolution.title })
-        } else if (!customPoster.isNullOrBlank() || !customOverview.isNullOrBlank() || !customYear.isNullOrBlank() || !customProvider.isNullOrBlank() || cleanTitle != "Max Stream") {
+            fromResolution.copy(
+                title = cleanTitle.ifBlank { fromResolution.title },
+                posterPath = customPoster?.takeIf { it.isNotBlank() } ?: fromResolution.posterPath,
+                plot = customOverview?.takeIf { it.isNotBlank() } ?: fromResolution.plot,
+                premiered = customYear?.takeIf { it.isNotBlank() } ?: fromResolution.premiered,
+                userRating = customRating?.toDoubleOrNull() ?: fromResolution.userRating
+            )
+        } else if (!customPoster.isNullOrBlank() || !customOverview.isNullOrBlank() || !customYear.isNullOrBlank() || !customProvider.isNullOrBlank() || cleanTitle.isNotBlank()) {
             val runtimeMins = if (durationSec > 0) (durationSec / 60).toInt() else 0
+            val displayTitle = cleanTitle.ifBlank { customProvider ?: "Movie Details" }
             MovieItem(
-                videoFilePath = "",
-                title = cleanTitle,
-                originalTitle = "",
+                videoFilePath = currentFilePath,
+                title = displayTitle,
+                originalTitle = displayTitle,
                 userRating = customRating?.toDoubleOrNull() ?: 8.0,
-                plot = customOverview ?: "Streamed directly via ${customProvider ?: "Max Stream"}.",
+                plot = customOverview?.takeIf { it.isNotBlank() } ?: "Streamed directly via ${customProvider ?: "Max Stream"}.",
                 mpaa = "",
-                genre = customProvider ?: "Max Stream",
+                genre = customProvider ?: "Cinema",
                 director = "",
                 premiered = customYear ?: "",
                 posterPath = customPoster,
@@ -108,17 +110,22 @@ fun MetadataSheet(
     var tvEpisodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
     var isLoadingTvEpisodes by remember { mutableStateOf(false) }
 
-    LaunchedEffect(currentFilePath, mediaTitle) {
+    LaunchedEffect(currentFilePath, mediaTitle, cleanTitle) {
         isLoading = true
-        val resolved = CineOnlineScraper.resolveActiveMedia(
-            context = context,
-            filePath = currentFilePath,
-            mediaTitle = mediaTitle,
-            durationSeconds = durationSec,
-            resolution = resolution,
-            videoCodec = videoCodec,
-            audioCodec = audioCodec
-        )
+        val targetQuery = cleanTitle.ifBlank {
+            if (!mediaTitle.isNullOrBlank() && !mediaTitle.startsWith("http")) mediaTitle else ""
+        }
+        val resolved = if (targetQuery.isNotBlank() || (currentFilePath.isNotBlank() && !currentFilePath.startsWith("http"))) {
+            CineOnlineScraper.resolveActiveMedia(
+                context = context,
+                filePath = currentFilePath,
+                mediaTitle = targetQuery,
+                durationSeconds = durationSec,
+                resolution = resolution,
+                videoCodec = videoCodec,
+                audioCodec = audioCodec
+            )
+        } else null
         resolutionData = resolved
         if (resolved is ActiveMediaResolution.TvShow) {
             selectedSeason = resolved.season
@@ -228,7 +235,7 @@ fun MetadataSheet(
                         } else {
                             val normalData = resolutionData as? ActiveMediaResolution.Normal
                             NormalMediaGlassmorphismContent(
-                                title = cleanTitle,
+                                title = cleanTitle.ifBlank { "Stream Playing" },
                                 year = customYear ?: "",
                                 duration = normalData?.durationFormatted ?: if (durationSec > 0) "${(durationSec / 60).toInt()}m" else "Live Stream",
                                 quality = currentQuality.ifBlank { resolution.ifBlank { "HD" } },

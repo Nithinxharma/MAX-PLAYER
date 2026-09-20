@@ -975,32 +975,12 @@ data class SearchScreen(
       )
     }
 
-    if (selectedExtensionItem != null) {
-      CineDetailBottomSheet(
-        item = selectedExtensionItem!!,
-        onDismiss = { selectedExtensionItem = null },
-        onPlay = {
-          val item = selectedExtensionItem!!
-          selectedExtensionItem = null
-          if (item is ExtensionMediaDetails) {
-            when (item.loadResponse) {
-              is MovieLoadResponse -> {
-                extractAndPlayMovie(
-                  context = context,
-                  providerName = item.providerName.ifBlank { item.loadResponse.apiName },
-                  dataUrl = item.loadResponse.dataUrl.ifBlank { item.loadResponse.url },
-                  movieTitle = item.loadResponse.name,
-                  scope = coroutineScope,
-                  onLinksLoaded = { _, _ -> }
-                )
-              }
-              is TvSeriesLoadResponse -> {
-                Toast.makeText(context, "Please select an episode from the series menu", Toast.LENGTH_SHORT).show()
-              }
-            }
-          }
-        }
-      )
+    LaunchedEffect(selectedExtensionItem) {
+      val item = selectedExtensionItem
+      if (item != null) {
+        selectedExtensionItem = null
+        xyz.mpv.rex.ui.browser.cinehub.CineDetailStateHolder.open(backstack, item)
+      }
     }
   }
 }

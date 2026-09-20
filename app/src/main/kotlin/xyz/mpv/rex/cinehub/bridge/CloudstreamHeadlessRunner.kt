@@ -179,9 +179,7 @@ object CloudstreamHeadlessRunner {
         if (sortedLinks.isNotEmpty()) {
             intent.putExtra("cinetv_links_urls", sortedLinks.map { it.url }.toTypedArray())
             intent.putExtra("cinetv_links_names", sortedLinks.map { l ->
-                val qual = if (l.quality > 0) "${l.quality}p" else "Auto"
-                val source = l.source.ifBlank { providerName ?: "Server" }
-                "$qual - $source"
+                xyz.mpv.rex.cinehub.utils.StreamLinkFormatter.formatQualityLanguage(l, providerName ?: "")
             }.toTypedArray())
             intent.putExtra("cinetv_links_qualities", sortedLinks.map { it.quality }.toIntArray())
             intent.putExtra("cinetv_links_referers", sortedLinks.map { it.referer }.toTypedArray())

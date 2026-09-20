@@ -30,6 +30,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.painterResource
+import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -436,10 +440,10 @@ object CineHubScreen : Screen {
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-              Icon(
-                imageVector = Icons.Outlined.Movie,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+              androidx.compose.foundation.Image(
+                painter = painterResource(id = R.drawable.ic_max_stream_mark),
+                contentDescription = "MaxStream Logo",
+                modifier = Modifier.size(28.dp)
               )
               Text(
                 text = stringResource(R.string.cinehub),
@@ -1165,59 +1169,13 @@ object CineHubScreen : Screen {
           }
         }
 
-        // Details Bottom Sheet
-        selectedDetailItem?.let { item ->
-          CineDetailBottomSheet(
-            item = item,
-            onDismiss = { selectedDetailItem = null },
-            onPlay = {
-              playMediaItem(
-                context = context,
-                item = item,
-                scope = scope,
-                onLinksLoaded = { links, subs, epMetaJson ->
-                  if (links.size == 1) {
-                    val link = links.first()
-                    val headersMap = buildMap {
-                      if (link.referer.isNotBlank()) put("Referer", link.referer)
-                      putAll(link.headers)
-                    }
-                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetaJson)
-                  } else if (links.size > 1) {
-                    pendingStreamLinks = links
-                    pendingSubtitles = subs
-                    pendingEpisodeMetadataJson = epMetaJson
-                    pendingStreamTitle = if (item is MovieItem) item.title else if (item is TvShowItem) item.title else ""
-                  } else {
-                    Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
-                  }
-                }
-              )
-            },
-            onRefreshItem = { updated ->
-              selectedDetailItem = updated
-              loadMedia()
-            },
-            onLinksLoaded = { links, subs, epMetaJson ->
-              if (links.size == 1) {
-                val link = links.first()
-                val headersMap = buildMap {
-                  if (link.referer.isNotBlank()) put("Referer", link.referer)
-                  putAll(link.headers)
-                }
-                val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetaJson)
-              } else if (links.size > 1) {
-                pendingStreamLinks = links
-                pendingSubtitles = subs
-                pendingEpisodeMetadataJson = epMetaJson
-                pendingStreamTitle = ""
-              } else {
-                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
-              }
-            }
-          )
+        // Navigate to full-screen movie/tv show details
+        LaunchedEffect(selectedDetailItem) {
+          val item = selectedDetailItem
+          if (item != null) {
+            selectedDetailItem = null
+            CineDetailStateHolder.open(backstack, item)
+          }
         }
 
         if (pendingStreamLinks.isNotEmpty()) {
@@ -1741,10 +1699,10 @@ private fun ExtensionSearchResultRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CineDetailBottomSheet(
+fun CineDetailView(
   item: Any,
   onDismiss: () -> Unit,
-  onPlay: () -> Unit,
+  onPlay: () -> Unit = {},
   onRefreshItem: (Any) -> Unit = {},
   onLinksLoaded: ((List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>, String?) -> Unit)? = null
 ) {
@@ -1752,6 +1710,7 @@ fun CineDetailBottomSheet(
   val libraryDao = database.cineLibraryDao()
   val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
   val scope = rememberCoroutineScope()
+  val context = LocalContext.current
   
   val tmdbId = when (item) {
     is MovieItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
@@ -1777,6 +1736,16 @@ fun CineDetailBottomSheet(
   val libraryEntry = libraryItems.find { it.url == tmdbId }
   val inLibrary = libraryEntry != null
   var showLibraryMenu by remember { mutableStateOf(false) }
+
+  var detailPendingLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
+  var detailPendingSubs by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
+  var detailPendingEpJson by remember { mutableStateOf<String?>(null) }
+  var detailPendingTitle by remember { mutableStateOf("") }
+  var detailPendingPoster by remember { mutableStateOf<String?>(null) }
+  var detailPendingOverview by remember { mutableStateOf<String?>(null) }
+  var detailPendingYear by remember { mutableStateOf<String?>(null) }
+  var detailPendingRating by remember { mutableStateOf<Double?>(null) }
+  var detailPendingProvider by remember { mutableStateOf<String?>(null) }
 
   val title = when (item) {
     is MovieItem -> item.title
@@ -1842,21 +1811,18 @@ fun CineDetailBottomSheet(
     else -> ""
   }
 
-  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val scrollState = rememberScrollState()
 
-  ModalBottomSheet(
-    onDismissRequest = onDismiss,
-    sheetState = sheetState,
-    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    containerColor = MaterialTheme.colorScheme.surface,
+  Box(
+    modifier = Modifier
+      .fillMaxSize()
+      .background(MaterialTheme.colorScheme.background)
   ) {
     Column(
       modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight(0.92f)
+        .fillMaxSize()
         .verticalScroll(scrollState)
-        .padding(bottom = 36.dp),
+        .padding(bottom = 56.dp),
     ) {
       if (!backdropPath.isNullOrBlank()) {
         Box(
@@ -2509,7 +2475,31 @@ fun CineDetailBottomSheet(
                           putAll(link.headers)
                         }
                         val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                        MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                        MediaUtils.playFile(
+                          source = link.url,
+                          context = context,
+                          launchSource = "cinehub",
+                          headers = headersMap,
+                          subtitlesJson = subtitlesJson,
+                          episodeMetadataJson = null,
+                          title = loadResp.name,
+                          posterUrl = loadResp.posterUrl,
+                          overview = loadResp.plot,
+                          year = loadResp.year?.toString(),
+                          rating = loadResp.score?.score,
+                          providerName = provName,
+                          allLinks = links
+                        )
+                      } else if (links.size > 1) {
+                        detailPendingLinks = links
+                        detailPendingSubs = subs
+                        detailPendingEpJson = null
+                        detailPendingTitle = loadResp.name
+                        detailPendingPoster = loadResp.posterUrl
+                        detailPendingOverview = loadResp.plot
+                        detailPendingYear = loadResp.year?.toString()
+                        detailPendingRating = loadResp.score?.score
+                        detailPendingProvider = provName
                       } else if (links.isEmpty()) {
                         Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                       }
@@ -2638,7 +2628,34 @@ fun CineDetailBottomSheet(
                                 }
                                 val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
                                 val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
-                                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epJson)
+                                val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                MediaUtils.playFile(
+                                  source = link.url,
+                                  context = context,
+                                  launchSource = "cinehub",
+                                  headers = headersMap,
+                                  subtitlesJson = subtitlesJson,
+                                  episodeMetadataJson = epJson,
+                                  title = epTitle,
+                                  posterUrl = ep.posterUrl ?: loadResp.posterUrl,
+                                  overview = ep.description ?: loadResp.plot,
+                                  year = loadResp.year?.toString(),
+                                  rating = loadResp.score?.score,
+                                  providerName = provName,
+                                  allLinks = links
+                                )
+                              } else if (links.size > 1) {
+                                val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                                detailPendingLinks = links
+                                detailPendingSubs = subs
+                                detailPendingEpJson = epJson
+                                detailPendingTitle = epTitle
+                                detailPendingPoster = ep.posterUrl ?: loadResp.posterUrl
+                                detailPendingOverview = ep.description ?: loadResp.plot
+                                detailPendingYear = loadResp.year?.toString()
+                                detailPendingRating = loadResp.score?.score
+                                detailPendingProvider = provName
                               } else if (links.isEmpty()) {
                                 Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                               }
@@ -2728,7 +2745,34 @@ fun CineDetailBottomSheet(
                                     }
                                     val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
                                     val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
-                                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epJson)
+                                    val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                    MediaUtils.playFile(
+                                      source = link.url,
+                                      context = context,
+                                      launchSource = "cinehub",
+                                      headers = headersMap,
+                                      subtitlesJson = subtitlesJson,
+                                      episodeMetadataJson = epJson,
+                                      title = epTitle,
+                                      posterUrl = ep.posterUrl ?: loadResp.posterUrl,
+                                      overview = ep.description ?: loadResp.plot,
+                                      year = loadResp.year?.toString(),
+                                      rating = loadResp.score?.score,
+                                      providerName = provName,
+                                      allLinks = links
+                                    )
+                                  } else if (links.size > 1) {
+                                    val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                    val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                                    detailPendingLinks = links
+                                    detailPendingSubs = subs
+                                    detailPendingEpJson = epJson
+                                    detailPendingTitle = epTitle
+                                    detailPendingPoster = ep.posterUrl ?: loadResp.posterUrl
+                                    detailPendingOverview = ep.description ?: loadResp.plot
+                                    detailPendingYear = loadResp.year?.toString()
+                                    detailPendingRating = loadResp.score?.score
+                                    detailPendingProvider = provName
                                   } else if (links.isEmpty()) {
                                     Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                                   }
@@ -2753,7 +2797,75 @@ fun CineDetailBottomSheet(
         }
       }
     }
+
+    if (detailPendingLinks.isNotEmpty()) {
+      QualitySelectorBottomSheet(
+        title = detailPendingTitle,
+        links = detailPendingLinks,
+        subtitles = detailPendingSubs,
+        episodeMetadataJson = detailPendingEpJson,
+        onDismiss = { detailPendingLinks = emptyList() },
+        onLinkSelected = { link ->
+          val headersMap = buildMap {
+            if (link.referer.isNotBlank()) put("Referer", link.referer)
+            putAll(link.headers)
+          }
+          val subtitlesJson = if (detailPendingSubs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(detailPendingSubs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+          MediaUtils.playFile(
+            source = link.url,
+            context = context,
+            launchSource = "cinehub",
+            headers = headersMap,
+            subtitlesJson = subtitlesJson,
+            episodeMetadataJson = detailPendingEpJson,
+            title = detailPendingTitle,
+            posterUrl = detailPendingPoster,
+            overview = detailPendingOverview,
+            year = detailPendingYear,
+            rating = detailPendingRating,
+            providerName = detailPendingProvider,
+            allLinks = detailPendingLinks
+          )
+          detailPendingLinks = emptyList()
+        }
+      )
+    }
+
+    // Pinned floating top glass bar with back button
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .statusBarsPadding()
+        .padding(horizontal = 16.dp, vertical = 8.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      IconButton(
+        onClick = onDismiss,
+        modifier = Modifier.intelligentGlassEffect(
+          shape = CircleShape,
+          backgroundColor = Color(0x77000000),
+          borderColor = Color.White.copy(alpha = 0.25f)
+        )
+      ) {
+        Icon(
+          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+          contentDescription = "Back",
+          tint = Color.White
+        )
+      }
+    }
   }
+}
+
+@Composable
+fun CineDetailBottomSheet(
+  item: Any,
+  onDismiss: () -> Unit,
+  onPlay: () -> Unit = {},
+  onRefreshItem: (Any) -> Unit = {},
+  onLinksLoaded: ((List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>, String?) -> Unit)? = null
+) {
+  CineDetailView(item, onDismiss, onPlay, onRefreshItem, onLinksLoaded)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -3046,14 +3158,22 @@ fun QualitySelectorBottomSheet(
       
       LazyColumn {
         items(sortedLinks) { link ->
-          Card(
+          val cleanLabel = remember(link) {
+            xyz.mpv.rex.cinehub.utils.StreamLinkFormatter.formatQualityLanguage(link)
+          }
+          Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color.Transparent,
             modifier = Modifier
               .fillMaxWidth()
               .padding(vertical = 4.dp)
-              .clickable { onLinkSelected(link) },
-            colors = CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            )
+              .clip(RoundedCornerShape(14.dp))
+              .intelligentGlassEffect(
+                shape = RoundedCornerShape(14.dp),
+                backgroundColor = Color.White.copy(alpha = 0.08f),
+                borderColor = Color.White.copy(alpha = 0.15f)
+              )
+              .clickable { onLinkSelected(link) }
           ) {
             Row(
               modifier = Modifier
@@ -3064,14 +3184,15 @@ fun QualitySelectorBottomSheet(
             ) {
               Column {
                 Text(
-                  text = "${link.quality}p",
+                  text = cleanLabel,
                   fontWeight = FontWeight.Bold,
-                  style = MaterialTheme.typography.bodyLarge
+                  style = MaterialTheme.typography.titleMedium,
+                  color = Color.White
                 )
                 Text(
-                  text = link.name,
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                  text = if (link.isM3u8) "Fast Direct Stream (HLS)" else "High Speed Direct Link",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = Color.White.copy(alpha = 0.7f)
                 )
               }
               if (link.isM3u8) {

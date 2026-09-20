@@ -2,6 +2,7 @@ package xyz.mpv.rex.ui.player.controls.components
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
@@ -183,3 +184,30 @@ fun Modifier.glassSurface(
         )
     }
 }
+
+/**
+ * Intelligent Glass Effect that seamlessly adapts across all app UI components
+ * (player controls, cards, dialogs, sheets, bottom navigation bars)
+ * without breaking layouts, clipping bounds, or touch areas.
+ */
+fun Modifier.intelligentGlassEffect(
+    shape: RoundedCornerShape = RoundedCornerShape(18.dp),
+    backgroundColor: Color = Color(0x3812131D),
+    borderColor: Color = Color.White.copy(alpha = 0.18f),
+    borderWidth: Dp = 1.dp
+): Modifier = this
+    .clip(shape)
+    .glassSurface(
+        shape = shape,
+        backgroundColor = backgroundColor,
+        borderColor = borderColor,
+        borderWidth = borderWidth,
+        innerHighlightColor = Color.White.copy(alpha = 0.22f),
+        innerHighlightBlur = 4.dp,
+        innerHighlightOffsetX = (-1).dp,
+        innerHighlightOffsetY = (-1).dp,
+        innerShadowColor = Color.Black.copy(alpha = 0.28f),
+        innerShadowBlur = 4.dp,
+        innerShadowOffsetX = 1.dp,
+        innerShadowOffsetY = 1.dp
+    )

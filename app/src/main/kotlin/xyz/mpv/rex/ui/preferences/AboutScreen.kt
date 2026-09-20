@@ -72,6 +72,7 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
+import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 import xyz.mpv.rex.ui.utils.TelegramIcon
 import xyz.mpv.rex.ui.utils.CommunityIcon
 import xyz.mpv.rex.MainActivity
@@ -194,13 +195,17 @@ object AboutScreen : Screen {
                       modifier = Modifier
                         .size(64.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .intelligentGlassEffect(
+                          shape = RoundedCornerShape(16.dp),
+                          backgroundColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f),
+                          borderColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.20f)
+                        ),
                       contentAlignment = Alignment.Center
                     ) {
                       Image(
                         painter = painterResource(id = R.drawable.ic_max_stream_mark),
                         contentDescription = "MAX STREAM Logo",
-                        modifier = Modifier.size(54.dp),
+                        modifier = Modifier.size(56.dp),
                       )
                     }
 

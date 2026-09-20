@@ -48,6 +48,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 import xyz.mpv.rex.R
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.BrowserPreferences
@@ -374,7 +377,14 @@ object MainScreen : Screen {
             )
           ) {
             NavigationBar(
-              containerColor = if (isShortsTabActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+              modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .intelligentGlassEffect(
+                  shape = RoundedCornerShape(24.dp),
+                  backgroundColor = if (isShortsTabActive) Color(0x33000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                  borderColor = Color.White.copy(alpha = 0.12f)
+                ),
+              containerColor = Color.Transparent,
               contentColor = if (isShortsTabActive) Color.White else MaterialTheme.colorScheme.onSurface,
             ) {
               val itemColors = if (isShortsTabActive) {

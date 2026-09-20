@@ -216,9 +216,7 @@ object MediaUtils : KoinComponent {
       val sortedLinks = allLinks.sortedByDescending { it.quality }
       intent.putExtra("cinetv_links_urls", sortedLinks.map { it.url }.toTypedArray())
       intent.putExtra("cinetv_links_names", sortedLinks.map { l ->
-        val qual = if (l.quality > 0) "${l.quality}p" else "Auto"
-        val source = l.source.ifBlank { providerName ?: "Server" }
-        "$qual - $source"
+        xyz.mpv.rex.cinehub.utils.StreamLinkFormatter.formatQualityLanguage(l, providerName ?: "")
       }.toTypedArray())
       intent.putExtra("cinetv_links_qualities", sortedLinks.map { it.quality }.toIntArray())
       intent.putExtra("cinetv_links_referers", sortedLinks.map { it.referer }.toTypedArray())
@@ -567,6 +565,75 @@ object MediaUtils : KoinComponent {
       }
     }
     context.startActivity(intent)
+  }
+
+  /**
+   * Intelligently extracts a clean media title from stream URLs, raw paths, or dirty media title strings.
+   * Eliminates raw filenames, URL paths, extensions (.m3u8, .mp4, .mkv), and URL query artifacts.
+   */
+  fun extractCleanMediaTitle(mediaTitle: String?, currentFilePath: String): String {
+    val t = mediaTitle ?: ""
+    // 1. If mediaTitle is a valid non-URL title
+    if (t.isNotBlank() && !t.startsWith("http://") && !t.startsWith("https://") && !t.endsWith(".m3u8") && !t.contains(".m3u8") && t != "index.m3u8" && t != "master.m3u8") {
+      val candidate = t.replace(Regex("(?i)^Max\\s*Stream\\s*[-:]?\\s*"), "")
+      val parsed = MediaInfoParser.parse(candidate)
+      return parsed.title.ifBlank { candidate }
+    }
+
+    // 2. If it's a raw URL (from mediaTitle or currentFilePath or share link)
+    val urlCandidate = when {
+      t.startsWith("http://") || t.startsWith("https://") -> t
+      currentFilePath.startsWith("http://") || currentFilePath.startsWith("https://") -> currentFilePath
+      else -> null
+    }
+    if (urlCandidate != null) {
+      val extractedFromUrl = runCatching {
+        val uri = Uri.parse(urlCandidate)
+        val queryTitle = uri.getQueryParameter("title")
+          ?: uri.getQueryParameter("name")
+          ?: uri.getQueryParameter("file")
+          ?: uri.getQueryParameter("q")
+        if (!queryTitle.isNullOrBlank() && !queryTitle.endsWith(".m3u8")) {
+          java.net.URLDecoder.decode(queryTitle, "UTF-8")
+        } else {
+          val segments = uri.pathSegments.reversed()
+          var foundSegment: String? = null
+          for (seg in segments) {
+            val decoded = java.net.URLDecoder.decode(seg, "UTF-8")
+            if (decoded.isNotBlank() &&
+              !decoded.equals("index.m3u8", true) &&
+              !decoded.equals("master.m3u8", true) &&
+              !decoded.equals("stream", true) &&
+              !decoded.equals("play", true) &&
+              !decoded.equals("video", true)
+            ) {
+              foundSegment = decoded
+              break
+            }
+          }
+          foundSegment
+        }
+      }.getOrNull()
+
+      if (!extractedFromUrl.isNullOrBlank()) {
+        val rawName = File(extractedFromUrl).nameWithoutExtension
+        if (rawName.isNotBlank() && !rawName.equals("index", true) && !rawName.equals("master", true)) {
+          val parsed = MediaInfoParser.parse(rawName)
+          return parsed.title.ifBlank { rawName }
+        }
+      }
+    }
+
+    // 3. Local file path
+    if (currentFilePath.isNotBlank() && !currentFilePath.startsWith("http")) {
+      val raw = runCatching { File(currentFilePath).nameWithoutExtension }.getOrDefault("")
+      if (raw.isNotBlank()) {
+        val parsed = MediaInfoParser.parse(raw)
+        return parsed.title.ifBlank { raw }
+      }
+    }
+
+    return ""
   }
 
 }

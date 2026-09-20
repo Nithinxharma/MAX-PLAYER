@@ -2133,7 +2133,7 @@ class PlayerActivity :
 
         // Skip fetching if title was provided in intent extras (e.g. from Jellyfin or other external launchers)
         // This prevents overwriting the correct title with a generic filename from the URL (like "stream")
-        if (intent.hasExtra("title") || intent.hasExtra("filename")) {
+        if (intent.hasExtra("title") || intent.hasExtra("cinetv_title") || intent.hasExtra("filename")) {
           Log.d(TAG, "Skipping title fetch because title was explicitly provided in intent: $fileName")
           return@launch
         }
@@ -2399,10 +2399,17 @@ class PlayerActivity :
     val linkReferers = intent.getStringArrayExtra("cinetv_links_referers")
 
     val customTitle = intent.getStringExtra("title") ?: intent.getStringExtra("cinetv_title") ?: intent.getStringExtra("filename")
-    if (!customTitle.isNullOrBlank() && !customTitle.startsWith("http") && !customTitle.endsWith(".m3u8") && customTitle != "index.m3u8") {
-      fileName = customTitle
-      viewModel.setMediaTitle(customTitle)
-      safeSetPropertyString("force-media-title", customTitle)
+    val rawPath = intent.dataString ?: intent.getStringExtra("path") ?: ""
+    val resolvedCleanTitle = if (!customTitle.isNullOrBlank() && !customTitle.startsWith("http") && !customTitle.endsWith(".m3u8") && customTitle != "index.m3u8") {
+      customTitle
+    } else {
+      xyz.mpv.rex.utils.media.MediaUtils.extractCleanMediaTitle(customTitle, rawPath)
+    }
+
+    if (resolvedCleanTitle.isNotBlank()) {
+      fileName = resolvedCleanTitle
+      viewModel.setMediaTitle(resolvedCleanTitle)
+      safeSetPropertyString("force-media-title", resolvedCleanTitle)
     }
 
     viewModel.setCustomMetadata(

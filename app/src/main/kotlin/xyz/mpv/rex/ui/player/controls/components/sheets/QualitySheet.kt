@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import xyz.mpv.rex.ui.player.PlayerViewModel
+import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,9 +81,15 @@ fun QualitySheet(
             if (qualities.isEmpty()) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color.White.copy(alpha = 0.05f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                    color = Color.Transparent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                        .intelligentGlassEffect(
+                            shape = RoundedCornerShape(16.dp),
+                            backgroundColor = Color.White.copy(alpha = 0.05f),
+                            borderColor = Color.White.copy(alpha = 0.12f)
+                        )
                 ) {
                     Column(
                         modifier = Modifier.padding(20.dp),
@@ -112,16 +119,26 @@ fun QualitySheet(
                                 currentQualityName.equals(item.name, ignoreCase = true) ||
                                 (currentQualityName == "Auto" && item == qualities.firstOrNull())
 
+                        val displayName = remember(item.name, item.quality, item.url) {
+                            xyz.mpv.rex.cinehub.utils.StreamLinkFormatter.formatQualityLanguage(
+                                quality = item.quality,
+                                rawName = item.name,
+                                source = null,
+                                url = item.url
+                            )
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.06f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
-                            ),
+                            color = Color.Transparent,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
+                                .intelligentGlassEffect(
+                                    shape = RoundedCornerShape(16.dp),
+                                    backgroundColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.06f),
+                                    borderColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.12f)
+                                )
                                 .clickable {
                                     viewModel.selectStreamQuality(context, item)
                                     onDismissRequest()
@@ -151,10 +168,10 @@ fun QualitySheet(
 
                                     Column {
                                         Text(
-                                            text = item.name,
+                                            text = displayName,
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else Color.White
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White
                                         )
                                         if (item.referer.isNotBlank()) {
                                             Text(
@@ -170,7 +187,7 @@ fun QualitySheet(
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = "Selected",
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
