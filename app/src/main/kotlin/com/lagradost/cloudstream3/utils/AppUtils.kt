@@ -18,6 +18,19 @@ object AppUtils {
         return mapper.readValue(value, kClass.java)
     }
 
+    fun <T> parseJson(value: String, clazz: Class<T>): T {
+        return mapper.readValue(value, clazz)
+    }
+
+    fun <T> tryParseJson(value: String?, clazz: Class<T>): T? {
+        if (value.isNullOrBlank()) return null
+        return try {
+            mapper.readValue(value, clazz)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     inline fun <reified T : Any> parseJson(value: String): T {
         return mapper.readValue(value)
     }

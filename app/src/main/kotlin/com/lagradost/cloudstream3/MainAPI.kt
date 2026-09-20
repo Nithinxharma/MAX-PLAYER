@@ -104,11 +104,12 @@ data class ActorData @JvmOverloads constructor(
     var voiceActor: Actor? = null
 )
 
-data class Actor @JvmOverloads constructor(
+data class Actor(
     val name: String,
-    val image: String? = null,
-    val role: String? = null
-)
+    val image: String? = null
+) {
+    constructor(name: String, image: String?, role: String?) : this(name, image)
+}
 
 data class MainPageData(
     val name: String,

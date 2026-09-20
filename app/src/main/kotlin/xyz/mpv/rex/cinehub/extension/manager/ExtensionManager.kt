@@ -394,7 +394,8 @@ class ExtensionManager(
             Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via 0-arg constructor")
             return obj
         } catch (e: Throwable) {
-            Log.d("ExtensionManager", "0-arg constructor failed for ${clazz.name}: ${e.message}")
+            val cause = (e as? java.lang.reflect.InvocationTargetException)?.targetException ?: e
+            Log.d("ExtensionManager", "0-arg constructor failed for ${clazz.name}: ${cause.javaClass.simpleName} - ${cause.message}")
         }
 
         // 2. Try Kotlin object singleton INSTANCE field
@@ -418,23 +419,52 @@ class ExtensionManager(
             }
         } catch (_: Throwable) {}
 
-        // 3. Try constructor taking Context
-        for (constructor in clazz.declaredConstructors) {
+        // 3. Try all declared constructors with sorted parameter matching
+        val constructors = clazz.declaredConstructors.sortedBy { it.parameterTypes.size }
+        for (constructor in constructors) {
             try {
                 constructor.isAccessible = true
-                if (constructor.parameterTypes.isEmpty()) {
-                    val obj = constructor.newInstance()
-                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via declared constructor")
-                    return obj
-                } else if (constructor.parameterTypes.size == 1 && Context::class.java.isAssignableFrom(constructor.parameterTypes[0])) {
-                    val obj = constructor.newInstance(context)
-                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via Context constructor")
+                val paramTypes = constructor.parameterTypes
+                val args = Array(paramTypes.size) { idx ->
+                    val type = paramTypes[idx]
+                    when {
+                        Context::class.java.isAssignableFrom(type) -> context
+                        android.content.res.Resources::class.java.isAssignableFrom(type) -> context.resources
+                        type == java.lang.String::class.java -> ""
+                        type == java.lang.Integer.TYPE || type == java.lang.Integer::class.java -> 0
+                        type == java.lang.Long.TYPE || type == java.lang.Long::class.java -> 0L
+                        type == java.lang.Boolean.TYPE || type == java.lang.Boolean::class.java -> false
+                        type == java.lang.Float.TYPE || type == java.lang.Float::class.java -> 0f
+                        type == java.lang.Double.TYPE || type == java.lang.Double::class.java -> 0.0
+                        else -> null
+                    }
+                }
+                val obj = constructor.newInstance(*args)
+                if (obj != null) {
+                    Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via constructor(${paramTypes.joinToString { it.simpleName }})")
                     return obj
                 }
             } catch (e: Throwable) {
-                Log.d("ExtensionManager", "Constructor invocation failed for ${clazz.name}: ${e.message}")
+                val cause = (e as? java.lang.reflect.InvocationTargetException)?.targetException ?: e
+                Log.d("ExtensionManager", "Constructor(${constructor.parameterTypes.joinToString { it.simpleName }}) failed for ${clazz.name}: ${cause.javaClass.simpleName} - ${cause.message}")
             }
         }
+
+        // 4. Try sun.misc.Unsafe allocateInstance
+        try {
+            val unsafeClass = Class.forName("sun.misc.Unsafe")
+            val theUnsafeField = unsafeClass.getDeclaredField("theUnsafe").apply { isAccessible = true }
+            val unsafe = theUnsafeField.get(null)
+            val allocateInstanceMethod = unsafeClass.getMethod("allocateInstance", Class::class.java)
+            val obj = allocateInstanceMethod.invoke(unsafe, clazz)
+            if (obj != null) {
+                Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 10: Plugin instance created for ${clazz.name} via Unsafe.allocateInstance")
+                return obj
+            }
+        } catch (e: Throwable) {
+            Log.d("ExtensionManager", "Unsafe allocation failed for ${clazz.name}: ${e.message}")
+        }
+
         Log.e("ExtensionManager", "EXTENSION_AUDIT: Step 10: FAILED: Could not create plugin instance for ${clazz.name} (package: $pkgName)")
         return null
     }
