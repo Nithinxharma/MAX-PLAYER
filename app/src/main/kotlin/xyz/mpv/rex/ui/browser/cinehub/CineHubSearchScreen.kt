@@ -543,7 +543,7 @@ fun MediaDetailView(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Extract & Play Movie in REX-Player",
+                                text = "Extract & Play Movie in MAX STREAM",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
