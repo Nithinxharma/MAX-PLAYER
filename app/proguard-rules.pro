@@ -74,6 +74,69 @@
 -keep interface com.lagradost.nicehttp.** { *; }
 -keepclassmembers class com.lagradost.nicehttp.** { *; }
 
+# Keep kotlinx.coroutines for dynamic DEX plugin execution
+-keep class kotlinx.coroutines.** {
+    <fields>;
+    <methods>;
+}
+-keep interface kotlinx.coroutines.** { *; }
+-keepclassmembers class kotlinx.coroutines.** {
+    <fields>;
+    <methods>;
+}
+
+-keep class kotlinx.coroutines.Dispatchers {
+    public static *** *;
+    public static *** *(...);
+}
+-keepclassmembers class kotlinx.coroutines.Dispatchers {
+    public static *** *;
+    public static *** *(...);
+}
+
+# Keep Kotlin standard library & reflect
+-keep class kotlin.** {
+    <fields>;
+    <methods>;
+}
+-keep interface kotlin.** { *; }
+-keepclassmembers class kotlin.** {
+    <fields>;
+    <methods>;
+}
+
+# Keep OkHttp & Okio networking libraries
+-keep class okhttp3.** {
+    <fields>;
+    <methods>;
+}
+-keep interface okhttp3.** { *; }
+-keepclassmembers class okhttp3.** {
+    <fields>;
+    <methods>;
+}
+
+-keep class okio.** {
+    <fields>;
+    <methods>;
+}
+-keep interface okio.** { *; }
+-keepclassmembers class okio.** {
+    <fields>;
+    <methods>;
+}
+
+# Keep Gson & Jackson JSON parsers
+-keep class com.google.gson.** {
+    <fields>;
+    <methods>;
+}
+-keep interface com.google.gson.** { *; }
+-keepclassmembers class com.google.gson.** {
+    <fields>;
+    <methods>;
+}
+
 -keep class com.fasterxml.jackson.** { *; }
 -keep interface com.fasterxml.jackson.** { *; }
 -keepclassmembers class com.fasterxml.jackson.** { *; }
