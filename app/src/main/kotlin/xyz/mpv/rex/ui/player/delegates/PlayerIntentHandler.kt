@@ -120,16 +120,24 @@ class PlayerIntentHandler(
    */
   fun getFileName(intent: Intent): String {
     // First check if a custom title/filename was provided via intent extras
-    intent.getStringExtra("title")?.let { return it }
-    intent.getStringExtra("filename")?.let { return it }
+    intent.getStringExtra("title")?.takeIf { it.isNotBlank() && !it.equals("index.m3u8", ignoreCase = true) && !it.startsWith("http://") && !it.startsWith("https://") }?.let { return it }
+    intent.getStringExtra("filename")?.takeIf { it.isNotBlank() && !it.equals("index.m3u8", ignoreCase = true) && !it.startsWith("http://") && !it.startsWith("https://") }?.let { return it }
 
     val uri = extractUriFromIntent(intent) ?: return ""
 
     // Try content resolver first for content:// URIs
-    getDisplayNameFromUri(uri)?.let { return it }
+    getDisplayNameFromUri(uri)?.takeIf { !it.contains("index.m3u8") }?.let { return it }
 
     // Extract filename from URL/URI
-    return extractFileNameFromUri(uri)
+    val name = extractFileNameFromUri(uri)
+    if (name.contains("index.m3u8") || name.startsWith("http")) {
+      val provider = intent.getStringExtra("cinetv_provider")
+      if (!provider.isNullOrBlank()) {
+        return "$provider Stream"
+      }
+      return "Online Stream"
+    }
+    return name
   }
 
   /**

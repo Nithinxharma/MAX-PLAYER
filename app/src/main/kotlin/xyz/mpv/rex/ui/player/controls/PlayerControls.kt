@@ -1,5 +1,7 @@
 package xyz.mpv.rex.ui.player.controls
 
+import xyz.mpv.rex.ui.player.controls.components.MaxStreamIntroOverlay
+
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -10,6 +12,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.animation.graphics.ExperimentalAnimationGraphicsApi
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
@@ -38,7 +44,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -244,8 +252,31 @@ fun PlayerControls(
   val isSpeedNonOne by remember(playbackSpeed) {
     derivedStateOf { abs((playbackSpeed ?: 1f) - 1f) > 0.001f }
   }
+  val autoSkipCredits by playerPreferences.autoSkipCredits.collectAsState()
   val playerTimeToDisappear by playerPreferences.playerTimeToDisappear.collectAsState()
   val chapters by viewModel.chapters.collectAsState(persistentListOf())
+  val currentPos = position ?: 0
+  val currentDur = duration ?: 0
+  val activeChapterName = chapters.getOrNull(currentChapter ?: -1)?.name ?: ""
+  val isIntroChapter = activeChapterName.contains("Intro", ignoreCase = true) ||
+      activeChapterName.contains("Opening", ignoreCase = true) ||
+      activeChapterName.contains("OP", ignoreCase = true)
+  val isOutroChapter = activeChapterName.contains("Ending", ignoreCase = true) ||
+      activeChapterName.contains("Outro", ignoreCase = true) ||
+      activeChapterName.contains("ED", ignoreCase = true) ||
+      activeChapterName.contains("Credits", ignoreCase = true)
+
+  val isOpeningWindow = (currentPos in 3..85 && currentDur > 180) || isIntroChapter
+  val isEndingWindow = (currentDur > 180 && (currentDur - currentPos) in 5..110) || isOutroChapter
+
+  var hasAutoSkippedIntro by remember(mediaIdentifier.ifBlank { mediaTitle }) { mutableStateOf(false) }
+
+  LaunchedEffect(currentPos, autoSkipCredits) {
+    if (autoSkipCredits && !hasAutoSkippedIntro && currentPos in 3..12 && currentDur > 180) {
+      hasAutoSkippedIntro = true
+      MPVLib.command("seek", "85", "absolute")
+    }
+  }
   val playlist by viewModel.playlistManager.playlist.collectAsState()
   val playlistMode by playerPreferences.playlistMode.collectAsState()
   val haptic = LocalHapticFeedback.current
@@ -410,6 +441,7 @@ fun PlayerControls(
         val customButtonsPortraitRef = createRef()
         val floatingABLoop = createRef()
         val floatingFrameNav = createRef()
+        val skipCreditsRef = createRef()
 
         val bottomControlsBelowSeekbar by playerPreferences.bottomControlsBelowSeekbar.collectAsState()
 
@@ -1023,21 +1055,17 @@ fun PlayerControls(
           )
         }
 
-        PlayerLoadingIndicator(
-          loadingState = loadingState,
+        MaxStreamIntroOverlay(
+          isLoading = loadingState.visible,
+          loadingPercent = loadingState.percent,
+          mediaTitle = mediaTitle.ifBlank { mediaIdentifier },
           modifier =
             Modifier.constrainAs(playerLoadingRef) {
               end.linkTo(parent.absoluteRight)
               start.linkTo(parent.absoluteLeft)
-              if (isPortrait) {
-                top.linkTo(parent.top)
-                bottom.linkTo(parent.bottom)
-                verticalBias = 0.5f
-              } else {
-                top.linkTo(parent.top)
-                bottom.linkTo(parent.bottom)
-              }
-            },
+              top.linkTo(parent.top)
+              bottom.linkTo(parent.bottom)
+            }
         )
 
         AnimatedVisibility(
@@ -1244,6 +1272,61 @@ fun PlayerControls(
                   )
                 }
               }
+        }
+
+        AnimatedVisibility(
+          visible = (isOpeningWindow || isEndingWindow) && !loadingState.visible,
+          enter = fadeIn(tween(300)) + scaleIn(initialScale = 0.85f),
+          exit = fadeOut(tween(300)) + scaleOut(targetScale = 0.85f),
+          modifier = Modifier.constrainAs(skipCreditsRef) {
+            end.linkTo(parent.end, spacing.large)
+            bottom.linkTo(seekbar.top, spacing.medium)
+          }
+        ) {
+          Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFFE50914),
+            tonalElevation = 6.dp,
+            shadowElevation = 10.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+            modifier = Modifier.clickable {
+              if (isOpeningWindow) {
+                val nextCh = (currentChapter ?: -1) + 1
+                if (isIntroChapter && nextCh < chapters.size) {
+                  MPVLib.setPropertyInt("chapter", nextCh)
+                } else {
+                  MPVLib.command("seek", "85", "absolute")
+                }
+              } else {
+                if (viewModel.hasNext()) {
+                  viewModel.handleMediaNext()
+                } else {
+                  val target = ((duration ?: 0) - 2).coerceAtLeast(0)
+                  MPVLib.command("seek", target.toString(), "absolute")
+                }
+              }
+            }
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(
+                imageVector = if (isOpeningWindow) Icons.Default.FastForward else Icons.Default.SkipNext,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = if (isOpeningWindow) "SKIP INTRO" else if (viewModel.hasNext()) "NEXT EPISODE" else "SKIP CREDITS",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                letterSpacing = 1.sp
+              )
+            }
+          }
         }
 
         AnimatedVisibility(
