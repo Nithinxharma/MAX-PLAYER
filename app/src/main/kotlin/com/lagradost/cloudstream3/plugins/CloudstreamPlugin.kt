@@ -1,10 +1,7 @@
 package com.lagradost.cloudstream3.plugins
 
-import android.content.Context
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class CloudstreamPlugin
 
-abstract class CloudstreamPlugin : Plugin() {
-    override fun load(context: Context) {
-        // Default implementation
-    }
-}
 

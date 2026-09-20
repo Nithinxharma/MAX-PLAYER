@@ -79,8 +79,6 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import xyz.mpv.rex.cinehub.bridge.RexPlayerBridge
-import xyz.mpv.rex.ui.theme.liquidglass.isLiquidGlassActive
-import xyz.mpv.rex.ui.theme.liquidglass.liquidGlassSurface
 
 /**
  * CineHubSearchScreen provides a complete Compose UI for Cloudstream headless scraping:
@@ -338,30 +336,17 @@ fun SearchResultCard(
     item: SearchResponse,
     onClick: () -> Unit
 ) {
-    val isGlass = isLiquidGlassActive()
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (isGlass) {
-                    Modifier.liquidGlassSurface(
-                        shape = RoundedCornerShape(16.dp),
-                        alpha = 0.78f,
-                        elevation = 10.dp,
-                        borderWidth = 1.dp
-                    )
-                } else {
-                    Modifier
-                }
-            )
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .testTag("cinehub_item_${item.name.replace(" ", "_")}"),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isGlass) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isGlass) 0.dp else 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
             Box(

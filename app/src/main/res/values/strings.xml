@@ -38,12 +38,6 @@
     <string name="pref_cinehub_summary">Media library engine, metadata scraper &amp; extensions</string>
     <string name="pref_appearance_summary">Dark mode, Material You</string>
     <string name="pref_appearance_category_theme">Theme</string>
-    <string name="pref_appearance_ui_style_title">UI Style</string>
-    <string name="pref_appearance_ui_style_summary">Choose between Material 3 Default and Material 3 Liquid Glass</string>
-    <string name="pref_appearance_ui_style_material3">Material 3 (Default)</string>
-    <string name="pref_appearance_ui_style_liquid_glass">Material 3 Liquid Glass</string>
-    <string name="pref_appearance_enable_liquid_glass_title">Enable Liquid Glass UI</string>
-    <string name="pref_appearance_enable_liquid_glass_summary">Enhance surfaces with dynamic blur, frosted glass transparency, specular reflections and floating layers</string>
     <string name="pref_appearance_darkmode_system">System</string>
     <string name="pref_appearance_darkmode_light">Light</string>
     <string name="pref_appearance_darkmode_dark">Dark</string>

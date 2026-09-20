@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.plugins
 
+import android.content.Context
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.utils.ExtractorApi
@@ -8,6 +9,7 @@ const val PLUGIN_TAG = "Plugin"
 
 abstract class BasePlugin {
     var filename: String? = null
+    var openSettings: ((context: Context) -> Unit)? = null
 
     class Manifest {
         var name: String? = null
@@ -16,8 +18,14 @@ abstract class BasePlugin {
         var requiresResources: Boolean = false
     }
 
+    open fun load(context: Context) {
+        load()
+    }
+
     open fun load() {}
-    
+
+    open fun unload() {}
+
     open fun beforeUnload() {}
 
     open fun afterPluginsLoaded() {}
@@ -34,3 +42,4 @@ abstract class BasePlugin {
         APIHolder.addExtractor(element)
     }
 }
+

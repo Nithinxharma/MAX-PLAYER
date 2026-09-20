@@ -1,6 +1,5 @@
 package xyz.mpv.rex.preferences
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -23,8 +22,6 @@ class AppearancePreferences(
 ) {
   val darkMode = preferenceStore.getEnum("dark_mode", DarkMode.Dark)
   val appTheme = preferenceStore.getEnum("app_theme", AppTheme.Default)
-  val uiStyle = preferenceStore.getEnum("ui_style", UiStyleOption.Material3)
-  val enableLiquidGlassUi = preferenceStore.getBoolean("enable_liquid_glass_ui", false)
   val appLanguage = preferenceStore.getString("app_language", "")
   val onboardingCompleted = preferenceStore.getBoolean("onboarding_completed", false)
   val materialYou = preferenceStore.getBoolean("material_you", true)
@@ -108,13 +105,6 @@ class AppearancePreferences(
       }.filter { it != PlayerButton.NONE }
       .filter { usedButtons.add(it) }
       .toList()
-}
-
-enum class UiStyleOption(
-  @StringRes val titleRes: Int,
-) {
-  Material3(R.string.pref_appearance_ui_style_material3),
-  LiquidGlass(R.string.pref_appearance_ui_style_liquid_glass),
 }
 
 enum class ThumbnailStrategy {

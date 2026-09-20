@@ -28,8 +28,6 @@ import org.json.JSONObject
 import xyz.mpv.rex.cinehub.diagnostic.DiagnosticLogger
 import xyz.mpv.rex.cinehub.extension.api.CloudstreamMainApiAdapter
 import xyz.mpv.rex.cinehub.extension.manager.ExtensionManager
-import xyz.mpv.rex.cinehub.extension.model.ClassResolutionStatus
-import xyz.mpv.rex.cinehub.extension.model.DependencyResolutionCheckResult
 import xyz.mpv.rex.cinehub.extension.model.DexExecutionCheckResult
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginTraceSession
@@ -481,60 +479,26 @@ class PluginExecutionTraceViewModel(
                         }
 
                         10 -> {
-                            // STEP 10: loadClass(pluginClassName) & DEPENDENCY_RESOLUTION_CHECK
+                            // STEP 10: loadClass(pluginClassName)
                             val targetClass = resolvedPluginClassName
                             if (targetClass.isNullOrBlank()) {
                                 throw ClassNotFoundException("No valid pluginClassName identified from manifest or DEX entries.")
                             }
-                            logTrace("STEP 10: Running DEPENDENCY_RESOLUTION_CHECK before classLoader.loadClass('$targetClass')...")
-
-                            val depCheck = runDependencyResolutionCheck(
-                                targetClassName = targetClass,
-                                pluginClassLoader = classLoader!!,
-                                hostClassLoader = context.classLoader,
-                                discoveredDexClasses = discoveredClasses
-                            )
-                            session.dependencyResolutionCheck = depCheck
-
-                            logTrace("DEPENDENCY_RESOLUTION_CHECK Summary:")
-                            logTrace("- Target Plugin Class: ${depCheck.pluginClass}")
-                            logTrace("- ClassLoader Used: ${depCheck.classLoaderUsed}")
-                            logTrace("- Parent Loader Used: ${depCheck.parentLoaderUsed}")
-                            logTrace("- Superclass Chain: ${depCheck.superclassChain.joinToString(" -> ")}")
-                            logTrace("- Interfaces: ${depCheck.interfaces.joinToString(", ")}")
-                            logTrace("- Missing Dependency: ${depCheck.missingDependency ?: "None (All Resolved)"}")
-                            logTrace("- Diagnostic Summary: ${depCheck.diagnosticSummary}")
-
-                            logTrace("Runtime Presence of Core Cloudstream Classes:")
-                            depCheck.coreClassesStatus.forEach { status ->
-                                val symbol = if (status.isPresent) "✅ PASS" else "❌ FAIL"
-                                logTrace("  $symbol ${status.className} (Super: ${status.superclassName ?: "None"})")
-                                if (!status.isPresent) {
-                                    logTrace("      Error: ${status.exceptionMessage}")
-                                }
-                            }
-
-                            if (!depCheck.isSuccess) {
-                                val causeMsg = depCheck.diagnosticSummary
-                                throw ClassNotFoundException("DEPENDENCY_RESOLUTION_CHECK FAILED for '$targetClass'. Missing dependency: ${depCheck.missingDependency}. $causeMsg")
-                            }
-
+                            logTrace("STEP 10: Attempting classLoader.loadClass('$targetClass')...")
                             val clazz = classLoader!!.loadClass(targetClass)
                             loadedClass = clazz
 
+                            val superTypes = mutableListOf<String>()
+                            var curr: Class<*>? = clazz.superclass
+                            while (curr != null && curr != Any::class.java) {
+                                superTypes.add(curr.name)
+                                curr = curr.superclass
+                            }
+                            val interfaces = clazz.interfaces.map { it.name }
+
                             step.status = TraceStepStatus.PASSED
-                            step.resultSummary = "Successfully loaded class: ${clazz.name} (Dependency Resolution Checked)"
-                            step.detailedOutput = "Class Information:\n- Name: ${clazz.name}\n- Canonical Name: ${clazz.canonicalName}\n" +
-                                    "- Superclasses: ${depCheck.superclassChain.joinToString(" -> ")}\n" +
-                                    "- Interfaces: ${depCheck.interfaces.joinToString(", ")}\n" +
-                                    "- Referenced CloudStream Classes (${depCheck.referencedCloudstreamClasses.size}): ${depCheck.referencedCloudstreamClasses.joinToString(", ")}\n" +
-                                    "- Declared Constructors: ${clazz.declaredConstructors.size}\n" +
-                                    "- Declared Methods: ${clazz.declaredMethods.size}\n\n" +
-                                    "Core Runtime Presence Check:\n" +
-                                    depCheck.coreClassesStatus.joinToString("\n") { cs ->
-                                        if (cs.isPresent) "  ✅ ${cs.className} [Methods: ${cs.methods.size}, Ctors: ${cs.constructors.size}]"
-                                        else "  ❌ ${cs.className} [Error: ${cs.exceptionMessage}]"
-                                    }
+                            step.resultSummary = "Successfully loaded class: ${clazz.name}"
+                            step.detailedOutput = "Class Information:\n- Name: ${clazz.name}\n- Canonical Name: ${clazz.canonicalName}\n- Superclasses: ${superTypes.joinToString(" -> ")}\n- Interfaces: ${interfaces.joinToString(", ")}\n- Declared Constructors: ${clazz.declaredConstructors.size}\n- Declared Methods: ${clazz.declaredMethods.size}"
                             logTrace("STEP 10: PASS - Class loaded: ${clazz.name}")
                         }
 
@@ -889,36 +853,6 @@ class PluginExecutionTraceViewModel(
             sb.appendLine()
         }
 
-        val dep = s.dependencyResolutionCheck
-        if (dep != null) {
-            sb.appendLine("==================================================")
-            sb.appendLine("DEPENDENCY RESOLUTION CHECK")
-            sb.appendLine("==================================================")
-            sb.appendLine("Plugin Class: ${dep.pluginClass}")
-            sb.appendLine("ClassLoader Used: ${dep.classLoaderUsed}")
-            sb.appendLine("Parent Loader Used: ${dep.parentLoaderUsed}")
-            sb.appendLine("Superclass Chain: ${if (dep.superclassChain.isNotEmpty()) dep.superclassChain.joinToString(" -> ") else "None / Failed to resolve"}")
-            sb.appendLine("Interfaces: ${if (dep.interfaces.isNotEmpty()) dep.interfaces.joinToString(", ") else "None"}")
-            sb.appendLine("Referenced CloudStream Classes (${dep.referencedCloudstreamClasses.size}): ${dep.referencedCloudstreamClasses.joinToString(", ")}")
-            sb.appendLine("Missing Dependency: ${dep.missingDependency ?: "None (All Resolved)"}")
-            sb.appendLine("Resolution Status: ${if (dep.isSuccess) "✅ PASSED" else "❌ FAILED"}")
-            sb.appendLine("Diagnostic Summary: ${dep.diagnosticSummary}")
-            sb.appendLine()
-            sb.appendLine("Runtime Presence of Core CloudStream Classes:")
-            dep.coreClassesStatus.forEach { cs ->
-                val symbol = if (cs.isPresent) "✅" else "❌"
-                sb.appendLine("  $symbol ${cs.className}")
-                if (cs.isPresent) {
-                    sb.appendLine("     Superclass: ${cs.superclassName ?: "Object"}")
-                    sb.appendLine("     Constructors: ${cs.constructors.joinToString("; ")}")
-                    sb.appendLine("     Methods (${cs.methods.size}): ${cs.methods.take(8).joinToString("; ")}${if (cs.methods.size > 8) " ... +${cs.methods.size - 8} more" else ""}")
-                } else {
-                    sb.appendLine("     Error: ${cs.exceptionMessage}")
-                }
-            }
-            sb.appendLine()
-        }
-
         for (step in s.steps) {
             val symbol = when (step.status) {
                 TraceStepStatus.PASSED -> "✅"
@@ -950,147 +884,6 @@ class PluginExecutionTraceViewModel(
         s.rawLogLines.forEach { sb.appendLine(it) }
         sb.appendLine("==================================================")
         return sb.toString()
-    }
-
-    private fun runDependencyResolutionCheck(
-        targetClassName: String,
-        pluginClassLoader: ClassLoader,
-        hostClassLoader: ClassLoader,
-        discoveredDexClasses: List<String>
-    ): DependencyResolutionCheckResult {
-        val coreClassNames = listOf(
-            "com.lagradost.cloudstream3.plugins.Plugin",
-            "com.lagradost.cloudstream3.plugins.BasePlugin",
-            "com.lagradost.cloudstream3.plugins.CloudstreamPlugin",
-            "com.lagradost.cloudstream3.MainAPI",
-            "com.lagradost.cloudstream3.utils.ExtractorApi",
-            "com.lagradost.cloudstream3.utils.ExtractorLink",
-            "com.lagradost.cloudstream3.actions.VideoClickAction",
-            "com.lagradost.cloudstream3.actions.VideoClickActionHolder",
-            "com.lagradost.cloudstream3.APIHolder",
-            "com.lagradost.cloudstream3.plugins.PluginManager",
-            "com.lagradost.cloudstream3.plugins.RepositoryManager",
-            "com.lagradost.cloudstream3.SubtitleFile",
-            "com.lagradost.cloudstream3.TvType",
-            "com.lagradost.cloudstream3.SearchQuality",
-            "com.lagradost.cloudstream3.DubStatus",
-            "com.lagradost.cloudstream3.ShowStatus",
-            "com.lagradost.cloudstream3.HomePageResponse",
-            "com.lagradost.cloudstream3.LoadResponse",
-            "com.lagradost.cloudstream3.SearchResponse",
-            "com.lagradost.cloudstream3.TvSeriesLoadResponse",
-            "com.lagradost.cloudstream3.MovieLoadResponse",
-            "com.lagradost.cloudstream3.AnimeLoadResponse",
-            "com.lagradost.cloudstream3.app",
-            "com.lagradost.cloudstream3.AcraApplication"
-        )
-
-        val coreStatuses = mutableListOf<ClassResolutionStatus>()
-
-        for (cName in coreClassNames) {
-            val status = try {
-                val cls = Class.forName(cName, false, hostClassLoader)
-                val superName = cls.superclass?.name
-                val ifaces = cls.interfaces.map { it.name }
-                val ctors = cls.declaredConstructors.map { c ->
-                    "${c.name}(${c.parameterTypes.joinToString { p -> p.simpleName }})"
-                }
-                val mths = cls.declaredMethods.map { m ->
-                    "${m.name}(${m.parameterTypes.joinToString { p -> p.simpleName }}): ${m.returnType.simpleName}"
-                }
-                ClassResolutionStatus(
-                    className = cName,
-                    isPresent = true,
-                    exceptionMessage = null,
-                    superclassName = superName,
-                    interfaces = ifaces,
-                    constructors = ctors,
-                    methods = mths
-                )
-            } catch (t: Throwable) {
-                ClassResolutionStatus(
-                    className = cName,
-                    isPresent = false,
-                    exceptionMessage = "${t.javaClass.simpleName}: ${t.message}"
-                )
-            }
-            coreStatuses.add(status)
-        }
-
-        var superclassChain = emptyList<String>()
-        var interfaces = emptyList<String>()
-        var referencedCsClasses = mutableListOf<String>()
-        var missingDep: String? = null
-        var isSuccess = false
-        var diagSummary = ""
-
-        val csInDex = discoveredDexClasses.filter { it.startsWith("com.lagradost.") }
-
-        try {
-            val loadedClass = pluginClassLoader.loadClass(targetClassName)
-            isSuccess = true
-
-            val sList = mutableListOf<String>()
-            var curr: Class<*>? = loadedClass.superclass
-            while (curr != null && curr != Any::class.java) {
-                sList.add(curr.name)
-                curr = curr.superclass
-            }
-            superclassChain = sList
-            interfaces = loadedClass.interfaces.map { it.name }
-
-            val csRefs = mutableSetOf<String>()
-            loadedClass.declaredFields.forEach { f ->
-                if (f.type.name.startsWith("com.lagradost.")) csRefs.add(f.type.name)
-            }
-            loadedClass.declaredMethods.forEach { m ->
-                if (m.returnType.name.startsWith("com.lagradost.")) csRefs.add(m.returnType.name)
-                m.parameterTypes.forEach { p ->
-                    if (p.name.startsWith("com.lagradost.")) csRefs.add(p.name)
-                }
-            }
-            loadedClass.declaredConstructors.forEach { c ->
-                c.parameterTypes.forEach { p ->
-                    if (p.name.startsWith("com.lagradost.")) csRefs.add(p.name)
-                }
-            }
-            referencedCsClasses = csRefs.toList().toMutableList()
-            diagSummary = "Successfully loaded $targetClassName and verified superclass chain: ${superclassChain.joinToString(" -> ")}"
-        } catch (t: Throwable) {
-            isSuccess = false
-            val msg = t.message ?: t.toString()
-            val suppressedMsgs = t.suppressed.joinToString("; ") { "${it.javaClass.simpleName}: ${it.message}" }
-
-            val descriptorRegex = Regex("""L([a-zA-Z0-9/_$]+);""")
-            val matches = descriptorRegex.findAll("$msg $suppressedMsgs").map { it.groupValues[1].replace('/', '.') }.toList()
-
-            missingDep = matches.firstOrNull { it.startsWith("com.lagradost.") }
-                ?: matches.firstOrNull()
-                ?: t.cause?.message
-                ?: "Failed resolution during loadClass($targetClassName)"
-
-            val failingDexClass = csInDex.firstOrNull { cName ->
-                runCatching { pluginClassLoader.loadClass(cName) }.isFailure
-            }
-            if (failingDexClass != null && missingDep.isNullOrBlank()) {
-                missingDep = failingDexClass
-            }
-
-            diagSummary = "Failed to load $targetClassName: ${t.javaClass.simpleName}: $msg. Suppressed: $suppressedMsgs. First missing dependency: $missingDep"
-        }
-
-        return DependencyResolutionCheckResult(
-            pluginClass = targetClassName,
-            superclassChain = superclassChain,
-            interfaces = interfaces,
-            referencedCloudstreamClasses = referencedCsClasses,
-            coreClassesStatus = coreStatuses,
-            missingDependency = missingDep,
-            classLoaderUsed = pluginClassLoader.javaClass.name,
-            parentLoaderUsed = hostClassLoader.javaClass.name,
-            isSuccess = isSuccess,
-            diagnosticSummary = diagSummary
-        )
     }
 
     fun exportTrace(context: Context) {

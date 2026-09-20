@@ -13,7 +13,7 @@ abstract class Plugin : BasePlugin() {
      * @param context Context
      */
     @Throws(Throwable::class)
-    open fun load(context: Context) {
+    override fun load(context: Context) {
         // If not overridden by an extension then try the cross-platform load()
         load()
     }
@@ -32,9 +32,4 @@ abstract class Plugin : BasePlugin() {
      * This will contain your resources if you specified requiresResources in gradle
      */
     var resources: Resources? = null
-
-    /**
-     * This will add a button in the settings allowing you to add custom settings
-     */
-    var openSettings: ((context: Context) -> Unit)? = null
 }
