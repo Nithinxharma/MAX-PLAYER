@@ -1563,4 +1563,20 @@
   <string name="no_plugins_updated_manually">All extensions are up to date</string>
   <string name="extension_install_first">Please install extension first</string>
   <string name="already_voted">Already voted</string>
+
+  <!-- CloudStream Sync & Tracking Strings -->
+  <string name="none">None</string>
+  <string name="type_watching">Watching</string>
+  <string name="type_completed">Completed</string>
+  <string name="type_on_hold">On Hold</string>
+  <string name="type_dropped">Dropped</string>
+  <string name="type_plan_to_watch">Plan to Watch</string>
+  <string name="type_re_watching">Re-watching</string>
+  <string name="favorites_list_name">Favorites</string>
+  <string name="subscription_list_name">Subscriptions</string>
+  <string name="authenticated_user_fail">Authentication failed</string>
+  <string name="sync_login_success">Logged in successfully</string>
+  <string name="sync_logout_success">Logged out successfully</string>
+  <string name="sync_error">Sync error</string>
+  <string name="subs_error">Subtitle error</string>
 </resources>

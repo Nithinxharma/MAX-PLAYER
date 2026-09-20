@@ -65,14 +65,22 @@ enum class ShowStatus {
 }
 
 class Score(var score: Double, var max: Int = 100) {
+    fun toInt(targetMax: Int = 100): Int = if (max > 0) ((score / max) * targetMax).toInt() else score.toInt()
+
     companion object {
         fun fromOld(rating: Int?): Score? = rating?.let { Score(it.toDouble(), 100) }
         fun from(rating: Int?, max: Int = 100): Score? = rating?.let { Score(it.toDouble(), max) }
+        fun from100(rating: Int?): Score? = rating?.let { Score(it.toDouble(), 100) }
         fun from10(rating: Double?): Score? = rating?.let { Score(it, 10) }
         fun from10(rating: Float?): Score? = rating?.toDouble()?.let { Score(it, 10) }
         fun from10(rating: String?): Score? = rating?.toDoubleOrNull()?.let { Score(it, 10) }
     }
 }
+
+data class NextAiring(
+    val episode: Int,
+    val unixTime: Long
+)
 
 data class TrailerData(
     val url: String,
@@ -297,8 +305,52 @@ interface LoadResponse {
                 ?: duration.filter { it.isDigit() }.toIntOrNull()
             if (mins != null) this.duration = mins
         }
+
+        var malIdPrefix: String? = "mal"
+        var kitsuIdPrefix: String? = "kitsu"
+        var aniListIdPrefix: String? = "anilist"
+        var simklIdPrefix: String? = "simkl"
+
+        fun readIdFromString(id: String): Map<SimklSyncServices, String> {
+            if (id.startsWith("{") && id.endsWith("}")) {
+                return try {
+                    val map = mapper.readValue<Map<String, Any>>(id)
+                    map.mapNotNull { (k, v) ->
+                        val service = SimklSyncServices.entries.firstOrNull { it.originalName.equals(k, true) || it.name.equals(k, true) }
+                        if (service != null) service to v.toString() else null
+                    }.toMap()
+                } catch (_: Throwable) {
+                    emptyMap()
+                }
+            }
+            val service = SimklSyncServices.entries.firstOrNull { id.startsWith(it.originalName, true) }
+            if (service != null) {
+                val cleanId = id.substringAfter("=").substringAfter(":")
+                return mapOf(service to cleanId)
+            }
+            return mapOf(SimklSyncServices.Simkl to id)
+        }
     }
 }
+
+enum class SimklSyncServices(val originalName: String) {
+    Simkl("simkl"),
+    Imdb("imdb"),
+    Tmdb("tmdb"),
+    Mal("mal"),
+    AniList("anilist")
+}
+
+fun splitUrlParameters(url: String): Map<String, String> {
+    val query = url.substringAfter("?", "").ifEmpty { url.substringAfter("#", "") }
+    if (query.isEmpty()) return emptyMap()
+    return query.split("&").mapNotNull {
+        val parts = it.split("=", limit = 2)
+        if (parts.size == 2) parts[0] to java.net.URLDecoder.decode(parts[1], "UTF-8") else null
+    }.toMap()
+}
+
+fun base64Encode(bytes: ByteArray): String = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
 
 data class MovieLoadResponse(
     override var name: String,

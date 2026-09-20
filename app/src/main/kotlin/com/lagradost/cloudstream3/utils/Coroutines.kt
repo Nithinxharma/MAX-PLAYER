@@ -66,4 +66,10 @@ object Coroutines {
             work()
         }
     }
+
+    class AtomicList<T>(private val list: MutableList<T> = mutableListOf()) : MutableList<T> by list {
+        private val lock = Any()
+        fun <R> withLock(action: (MutableList<T>) -> R): R = synchronized(lock) { action(list) }
+    }
+    fun <T> atomicListOf(): AtomicList<T> = AtomicList()
 }

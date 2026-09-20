@@ -12,4 +12,9 @@ object CommonActivity {
             } catch (_: Throwable) {}
         }
     }
+
+    fun showToast(message: com.lagradost.cloudstream3.utils.UiText?, duration: Int = Toast.LENGTH_SHORT) {
+        val str = message?.asStringNull(AcraApplication.context) ?: return
+        showToast(str, duration)
+    }
 }

@@ -96,6 +96,7 @@ object APIHolder {
     }
 
     fun getApi(name: String): MainAPI? = apiMap[name]
+    fun getApiFromNameNull(name: String?): MainAPI? = if (name != null) apiMap[name] ?: allProviders.find { it.name.equals(name, ignoreCase = true) } else null
 
     fun removePluginsBySource(sourceFilename: String) {
         allProviders.removeAll { it.sourcePlugin == sourceFilename }

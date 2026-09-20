@@ -47,4 +47,8 @@ object SubtitleHelper {
         val match = languages.firstOrNull { it.name.equals(language, ignoreCase = true) }
         return match?.ISO_639_1 ?: language
     }
+
+    fun fromTagToEnglishLanguageName(tag: String?): String? = fromTwoLettersToLanguage(tag)
+    fun fromCodeToOpenSubtitlesTag(code: String?): String? = code?.lowercase()
+    fun fromCodeToLangTagIETF(code: String?): String? = code?.lowercase()
 }
