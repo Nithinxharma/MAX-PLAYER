@@ -318,7 +318,6 @@ object CineHubScreen : Screen {
     var providerHomeRows by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubHomePageList>>(emptyList()) }
 
     var selectedDetailItem by remember { mutableStateOf<Any?>(null) }
-    var showCloudstreamSearch by remember { mutableStateOf(false) }
 
     var pendingStreamTitle by remember { mutableStateOf("") }
     var pendingStreamLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
@@ -427,18 +426,6 @@ object CineHubScreen : Screen {
             }
             IconButton(
               onClick = {
-                showCloudstreamSearch = true
-              },
-              modifier = Modifier.testTag("cinehub_cloudstream_search_action_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Cloudstream Stream Search",
-                tint = MaterialTheme.colorScheme.primary,
-              )
-            }
-            IconButton(
-              onClick = {
                 backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
               },
               modifier = Modifier.testTag("cinehub_extensions_button"),
@@ -463,17 +450,6 @@ object CineHubScreen : Screen {
         )
       },
     ) { innerPadding ->
-      if (showCloudstreamSearch) {
-        Box(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-        ) {
-          CineHubSearchScreen(
-            onBack = { showCloudstreamSearch = false }
-          )
-        }
-      } else {
         Box(
           modifier = Modifier
             .fillMaxSize()
@@ -1262,7 +1238,6 @@ object CineHubScreen : Screen {
               scrapeFinishedResult = null
             }
           )
-        }
         }
       }
     }

@@ -66,16 +66,16 @@ object DeveloperOptionsScreen : Screen {
                     GroupedListColumn {
                         GroupedPreferenceCard(position = GroupPosition.FIRST) {
                             Preference(
-                                title = { Text("Plugin Execution Trace") },
+                                title = { Text("CloudStream Diagnostic & Test Center") },
                                 summary = {
                                     Text(
-                                        "16-step execution lifecycle trace & failure point pinpointing",
+                                        "End-to-end integration suite, live 16-stage trace, force DEX activation, and link resolution tests",
                                         color = MaterialTheme.colorScheme.outline
                                     )
                                 },
                                 icon = {
                                     Icon(
-                                        imageVector = Icons.Outlined.Troubleshoot,
+                                        imageVector = Icons.Default.Science,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary
                                     )
@@ -85,28 +85,7 @@ object DeveloperOptionsScreen : Screen {
                                 }
                             )
                         }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
-                            Preference(
-                                title = { Text("Force Plugin Activation") },
-                                summary = {
-                                    Text(
-                                        "Directly load DEX files, activate plugins, reload and test providers",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.FlashOn,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(CloudStreamTestCenterScreen)
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                        GroupedPreferenceCard(position = GroupPosition.LAST) {
                             Preference(
                                 title = { Text("Repository Presets & MegaRepo") },
                                 summary = {
@@ -124,27 +103,6 @@ object DeveloperOptionsScreen : Screen {
                                 },
                                 onClick = {
                                     backstack.add(RepositoryPresetsScreenRoute)
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.LAST) {
-                            Preference(
-                                title = { Text(stringResource(id = R.string.pref_cloudstream_test_center_title)) },
-                                summary = {
-                                    Text(
-                                        stringResource(id = R.string.pref_cloudstream_test_center_summary),
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Science,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(CloudStreamTestCenterScreen)
                                 }
                             )
                         }

@@ -157,17 +157,10 @@ fun ExtensionPreferencesScreen(
                 )
 
                 Preference(
-                    title = { Text("Plugin Execution Trace") },
-                    summary = { Text("Step-by-step 16-stage live lifecycle trace and failure point detector") },
-                    icon = { Icon(Icons.Outlined.Troubleshoot, contentDescription = null) },
-                    onClick = onNavigateToExecutionTrace
-                )
-
-                Preference(
-                    title = { Text("Force Plugin Activation") },
-                    summary = { Text("Force load DEX binaries, activate plugins, reload & run tests") },
-                    icon = { Icon(Icons.Outlined.FlashOn, contentDescription = null) },
-                    onClick = onNavigateToForceActivation
+                    title = { Text("CloudStream Diagnostic & Test Center") },
+                    summary = { Text("Multi-tool test suite: provider search test, live 16-stage execution trace & DEX activation") },
+                    icon = { Icon(Icons.Outlined.Science, contentDescription = null) },
+                    onClick = onNavigateToTestCenter
                 )
 
                 Preference(
@@ -203,13 +196,6 @@ fun ExtensionPreferencesScreen(
                         extensionManager.clearCache()
                         Toast.makeText(context, "Extension cache cleared", Toast.LENGTH_SHORT).show()
                     }
-                )
-
-                Preference(
-                    title = { Text("CloudStream Test Center") },
-                    summary = { Text("End-to-end integration and provider diagnostic suite") },
-                    icon = { Icon(Icons.Outlined.Build, contentDescription = null) },
-                    onClick = onNavigateToTestCenter
                 )
 
                 Preference(
