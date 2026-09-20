@@ -142,14 +142,14 @@ object RepositoryManager {
         } else if (fixedUrl.matches("^[a-zA-Z0-9!_-]+$".toRegex())) {
             safeAsync {
                 if (fixedUrl.startsWith("!")) {
-                    val response = app.get("https://py.md/${fixedUrl.removePrefix("!")}", allowRedirects = false)
-                    val url = response.headers["Location"] ?: return@safeAsync null
+                    val response = app.get("https://py.md/${fixedUrl.removePrefix("!")}")
+                    val url = response.okhttpResponse.header("Location") ?: return@safeAsync null
                     if (url.startsWith("https://py.md/404")) return@safeAsync null
                     if (url.removeSuffix("/") == "https://py.md") return@safeAsync null
                     return@safeAsync url
                 } else {
-                    val response = app.get("https://cutt.ly/${fixedUrl}", allowRedirects = false)
-                    val url = response.headers["Location"] ?: return@safeAsync null
+                    val response = app.get("https://cutt.ly/${fixedUrl}")
+                    val url = response.okhttpResponse.header("Location") ?: return@safeAsync null
                     if (url.startsWith("https://cutt.ly/404")) return@safeAsync null
                     if (url.removeSuffix("/") == "https://cutt.ly") return@safeAsync null
                     return@safeAsync url
@@ -161,7 +161,7 @@ object RepositoryManager {
     suspend fun parseRepository(url: String): Repository? {
         return safeAsync {
             // Take manifestVersion and such into account later
-            app.get(convertRawGitUrl(url), cacheTime = 5, cacheUnit = TimeUnit.MINUTES)
+            app.get(convertRawGitUrl(url))
                 .parsedSafe<Repository>()
         }
     }
@@ -169,7 +169,7 @@ object RepositoryManager {
     private suspend fun parsePlugins(pluginUrls: String): List<SitePlugin> {
         // Take manifestVersion and such into account later
         return try {
-            app.get(convertRawGitUrl(pluginUrls), cacheTime = 5, cacheUnit = TimeUnit.MINUTES)
+            app.get(convertRawGitUrl(pluginUrls))
                 .parsed<Array<SitePlugin>>().toList()
         } catch (t: Throwable) {
             logError(t)

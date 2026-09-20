@@ -38,7 +38,6 @@ import xyz.mpv.rex.R
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.actions.VideoClickAction
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
-import com.lagradost.cloudstream3.actions.withLock
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.mvvm.debugPrint
 import com.lagradost.cloudstream3.mvvm.logError
@@ -50,14 +49,10 @@ import com.lagradost.cloudstream3.plugins.RepositoryManager.getRepoPlugins
 import com.lagradost.cloudstream3.plugins.RepositoryManager.sha256
 import com.lagradost.cloudstream3.ui.settings.extensions.REPOSITORIES_KEY
 import com.lagradost.cloudstream3.ui.settings.extensions.RepositoryData
-import com.lagradost.cloudstream3.utils.AppContextUtils.getApiProviderLangSettings
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.Coroutines.main
 import com.lagradost.cloudstream3.utils.ExtractorApi
-import com.lagradost.cloudstream3.utils.UIHelper.colorFromAttribute
 import com.lagradost.cloudstream3.utils.UiText
-import com.lagradost.cloudstream3.utils.downloader.DownloadFileManagement.sanitizeFilename
-import com.lagradost.cloudstream3.utils.extractorApis
 import com.lagradost.cloudstream3.utils.txt
 import dalvik.system.PathClassLoader
 import kotlinx.coroutines.sync.Mutex
@@ -66,6 +61,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.io.InputStreamReader
+
+private fun Context.getApiProviderLangSettings(): Set<String> = setOf("All", "en")
+private fun Context.colorFromAttribute(attr: Int): Int = 0xFF00ADB5.toInt()
+fun String.sanitizeFilename(): String = this.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+private val extractorApis get() = APIHolder.extractorApis
 
 // Different keys for local and not since local can be removed at any time without app knowing, hence the local are getting rebuilt on every app start
 const val PLUGINS_KEY = "PLUGINS_KEY"
@@ -323,7 +323,7 @@ object PluginManager {
         }
 
         main {
-            val uitext = txt(R.string.plugins_updated, updatedPlugins.size)
+            val uitext = txt("Updated ${updatedPlugins.size} plugins")
             createNotification(activity, uitext, updatedPlugins)
             /*val navBadge = (activity as MainActivity).binding?.navRailView?.getOrCreateBadge(R.id.navigation_settings)
             navBadge?.isVisible = true
@@ -434,7 +434,7 @@ object PluginManager {
         }
 
         main {
-            val uitext = txt(R.string.plugins_downloaded, newDownloadPlugins.size)
+            val uitext = txt("Downloaded ${newDownloadPlugins.size} plugins")
             createNotification(activity, uitext, newDownloadPlugins)
         }
 
@@ -706,15 +706,15 @@ object PluginManager {
             removePluginMapping(it)
         }
 
-        APIHolder.allProviders.withLock {
+        synchronized(APIHolder.allProviders) {
             APIHolder.allProviders.removeAll { provider -> provider.sourcePlugin == plugin.filename }
         }
 
-        extractorApis.withLock {
+        synchronized(extractorApis) {
             extractorApis.removeAll { provider -> provider.sourcePlugin == plugin.filename }
         }
 
-        VideoClickActionHolder.allVideoClickActions.withLock {
+        synchronized(VideoClickActionHolder.allVideoClickActions) {
             VideoClickActionHolder.allVideoClickActions.removeAll { action -> action.sourcePlugin == plugin.filename }
         }
 
@@ -736,10 +736,7 @@ object PluginManager {
      * Used for repo folders (using repo url) and plugin file names (using internalName)
      * */
     fun getPluginSanitizedFileName(name: String): String {
-        return sanitizeFilename(
-            name,
-            true
-        ) + "." + name.hashCode()
+        return name.sanitizeFilename() + "." + name.hashCode()
     }
 
     /**
