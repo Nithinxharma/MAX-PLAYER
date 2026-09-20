@@ -506,6 +506,19 @@ suspend fun MainAPI.newMovieLoadResponse(
     name: String,
     url: String,
     type: TvType,
+    dataUrl: Any,
+    initializer: suspend MovieLoadResponse.() -> Unit
+): MovieLoadResponse {
+    val dataStr = if (dataUrl is String) dataUrl else dataUrl.toJson()
+    val res = MovieLoadResponse(name, url, this.name, type, dataStr)
+    res.initializer()
+    return res
+}
+
+suspend fun MainAPI.newMovieLoadResponse(
+    name: String,
+    url: String,
+    type: TvType,
     dataUrl: String,
     initializer: suspend MovieLoadResponse.() -> Unit
 ): MovieLoadResponse {
@@ -514,8 +527,43 @@ suspend fun MainAPI.newMovieLoadResponse(
     return res
 }
 
-fun MainAPI.newMovieLoadResponse(name: String, url: String, type: TvType, dataUrl: String, initializer: MovieLoadResponse.() -> Unit = {}): MovieLoadResponse {
+fun MainAPI.newMovieLoadResponse(
+    name: String,
+    url: String,
+    type: TvType,
+    dataUrl: Any,
+    initializer: MovieLoadResponse.() -> Unit = {}
+): MovieLoadResponse {
+    val dataStr = if (dataUrl is String) dataUrl else dataUrl.toJson()
+    return MovieLoadResponse(name, url, this.name, type, dataStr).apply(initializer)
+}
+
+fun MainAPI.newMovieLoadResponse(
+    name: String,
+    url: String,
+    type: TvType,
+    dataUrl: String,
+    initializer: MovieLoadResponse.() -> Unit = {}
+): MovieLoadResponse {
     return MovieLoadResponse(name, url, this.name, type, dataUrl).apply(initializer)
+}
+
+suspend fun MainAPI.newMovieLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.Movie,
+    initializer: suspend MovieLoadResponse.() -> Unit
+): MovieLoadResponse {
+    return newMovieLoadResponse(name, url, type, url as Any, initializer)
+}
+
+fun MainAPI.newMovieLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.Movie,
+    initializer: MovieLoadResponse.() -> Unit = {}
+): MovieLoadResponse {
+    return newMovieLoadResponse(name, url, type, url as Any, initializer)
 }
 
 suspend fun MainAPI.newTvSeriesLoadResponse(
@@ -534,6 +582,24 @@ fun MainAPI.newTvSeriesLoadResponse(name: String, url: String, type: TvType, epi
     return TvSeriesLoadResponse(name, url, this.name, type, episodes).apply(initializer)
 }
 
+suspend fun MainAPI.newTvSeriesLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.TvSeries,
+    initializer: suspend TvSeriesLoadResponse.() -> Unit
+): TvSeriesLoadResponse {
+    return newTvSeriesLoadResponse(name, url, type, emptyList(), initializer)
+}
+
+fun MainAPI.newTvSeriesLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.TvSeries,
+    initializer: TvSeriesLoadResponse.() -> Unit = {}
+): TvSeriesLoadResponse {
+    return newTvSeriesLoadResponse(name, url, type, emptyList(), initializer)
+}
+
 suspend fun MainAPI.newAnimeLoadResponse(
     name: String,
     url: String,
@@ -548,7 +614,17 @@ suspend fun MainAPI.newAnimeLoadResponse(
 fun MainAPI.newAnimeLoadResponse(name: String, url: String, type: TvType, initializer: AnimeLoadResponse.() -> Unit = {}): AnimeLoadResponse {
     return AnimeLoadResponse(name, url, this.name, type).apply(initializer)
 }
+
 fun MainAPI.newEpisode(data: Any, initializer: Episode.() -> Unit = {}): Episode {
+    val dataStr = if (data is String) data else data.toJson()
+    return Episode(dataStr).apply(initializer)
+}
+
+fun MainAPI.newEpisode(data: String, initializer: Episode.() -> Unit = {}): Episode {
+    return Episode(data).apply(initializer)
+}
+
+fun newEpisode(data: Any, initializer: Episode.() -> Unit = {}): Episode {
     val dataStr = if (data is String) data else data.toJson()
     return Episode(dataStr).apply(initializer)
 }
