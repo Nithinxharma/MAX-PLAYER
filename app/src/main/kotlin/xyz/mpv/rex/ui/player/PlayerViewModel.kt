@@ -417,9 +417,84 @@ class PlayerViewModel(
   private val _customMediaSourceType = MutableStateFlow<String?>(null)
   val customMediaSourceType: StateFlow<String?> = _customMediaSourceType.asStateFlow()
 
-  fun setCustomMetadata(posterUrl: String?, sourceType: String?) {
+  private val _customMediaOverview = MutableStateFlow<String?>(null)
+  val customMediaOverview: StateFlow<String?> = _customMediaOverview.asStateFlow()
+
+  private val _customMediaYear = MutableStateFlow<String?>(null)
+  val customMediaYear: StateFlow<String?> = _customMediaYear.asStateFlow()
+
+  private val _customMediaRating = MutableStateFlow<String?>(null)
+  val customMediaRating: StateFlow<String?> = _customMediaRating.asStateFlow()
+
+  private val _customMediaProvider = MutableStateFlow<String?>(null)
+  val customMediaProvider: StateFlow<String?> = _customMediaProvider.asStateFlow()
+
+  fun setCustomMetadata(
+    posterUrl: String?,
+    sourceType: String?,
+    overview: String? = null,
+    year: String? = null,
+    rating: String? = null,
+    provider: String? = null
+  ) {
     _customMediaPosterUrl.value = posterUrl
     _customMediaSourceType.value = sourceType
+    _customMediaOverview.value = overview
+    _customMediaYear.value = year
+    _customMediaRating.value = rating
+    _customMediaProvider.value = provider
+  }
+
+  data class QualityStreamItem(
+    val url: String,
+    val name: String,
+    val quality: Int,
+    val referer: String
+  )
+
+  private val _availableStreamQualities = MutableStateFlow<List<QualityStreamItem>>(emptyList())
+  val availableStreamQualities: StateFlow<List<QualityStreamItem>> = _availableStreamQualities.asStateFlow()
+
+  private val _currentQualityName = MutableStateFlow<String>("Auto")
+  val currentQualityName: StateFlow<String> = _currentQualityName.asStateFlow()
+
+  fun setAvailableStreamQualities(
+    urls: Array<String>?,
+    names: Array<String>?,
+    qualities: IntArray?,
+    referers: Array<String>?
+  ) {
+    if (urls == null || urls.isEmpty()) {
+      _availableStreamQualities.value = emptyList()
+      _currentQualityName.value = "Auto"
+      return
+    }
+    val list = mutableListOf<QualityStreamItem>()
+    for (i in urls.indices) {
+      val url = urls[i]
+      val name = names?.getOrNull(i) ?: "Server ${i + 1}"
+      val qual = qualities?.getOrNull(i) ?: 0
+      val ref = referers?.getOrNull(i) ?: ""
+      list.add(QualityStreamItem(url, name, qual, ref))
+    }
+    _availableStreamQualities.value = list
+    val topItem = list.firstOrNull()
+    if (topItem != null) {
+      _currentQualityName.value = if (topItem.quality > 0) "${topItem.quality}p" else topItem.name.substringBefore(" -")
+    }
+  }
+
+  fun selectStreamQuality(context: android.content.Context, item: QualityStreamItem) {
+    _currentQualityName.value = if (item.quality > 0) "${item.quality}p" else item.name.substringBefore(" -")
+    viewModelScope.launch {
+      if (item.referer.isNotBlank()) {
+        try {
+          `is`.xyz.mpv.MPVLib.setPropertyString("http-header-fields", "Referer: ${item.referer}")
+        } catch (_: Exception) {}
+      }
+      `is`.xyz.mpv.MPVLib.command("loadfile", item.url)
+      android.widget.Toast.makeText(context, "Switched quality to ${item.name}", android.widget.Toast.LENGTH_SHORT).show()
+    }
   }
 
   private val _mediaIdentifier = MutableStateFlow("")

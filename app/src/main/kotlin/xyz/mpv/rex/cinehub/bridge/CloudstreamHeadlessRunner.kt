@@ -104,30 +104,44 @@ object CloudstreamHeadlessRunner {
     }
 
     /**
-     * 5. The Handoff: REX-Player Intent Launcher
+     * 5. The Handoff: MAX STREAM Player Intent Launcher
      */
     fun buildRexPlayerIntent(
         context: Context,
         link: ExtractorLink,
-        title: String? = null
+        title: String? = null,
+        posterUrl: String? = null,
+        overview: String? = null,
+        year: String? = null,
+        rating: Double? = null,
+        providerName: String? = null,
+        allLinks: List<ExtractorLink> = emptyList()
     ): Intent {
+        // Sort allLinks descending by quality (highest resolution first)
+        val sortedLinks = if (allLinks.isNotEmpty()) {
+            allLinks.distinctBy { it.url }.sortedByDescending { it.quality }
+        } else {
+            listOf(link)
+        }
+        val bestLink = sortedLinks.firstOrNull() ?: link
+
         val intent = Intent(context, PlayerActivity::class.java).apply {
             action = Intent.ACTION_VIEW
-            this.data = Uri.parse(link.url)
+            this.data = Uri.parse(bestLink.url)
         }
 
         val headerPairs = mutableListOf<String>()
 
         // 1. Pack Referer
-        if (link.referer.isNotBlank()) {
+        if (bestLink.referer.isNotBlank()) {
             headerPairs.add("Referer")
-            headerPairs.add(link.referer)
+            headerPairs.add(bestLink.referer)
         }
 
         // 2. Pack custom extractor headers
-        link.headers.forEach { (key, value) ->
+        bestLink.headers.forEach { (key, value) ->
             if (key.isNotBlank() && value.isNotBlank()) {
-                if (key.equals("Referer", ignoreCase = true) && link.referer.isNotBlank()) {
+                if (key.equals("Referer", ignoreCase = true) && bestLink.referer.isNotBlank()) {
                     return@forEach
                 }
                 headerPairs.add(key)
@@ -137,11 +151,38 @@ object CloudstreamHeadlessRunner {
 
         if (headerPairs.isNotEmpty()) {
             intent.putExtra("headers", headerPairs.toTypedArray())
-            Log.d(TAG, "Injected ${headerPairs.size / 2} headers into REX player intent for ${link.url}")
+            Log.d(TAG, "Injected ${headerPairs.size / 2} headers into player intent for ${bestLink.url}")
         }
 
         if (!title.isNullOrBlank()) {
             intent.putExtra("title", title)
+        }
+        if (!posterUrl.isNullOrBlank()) {
+            intent.putExtra("cinetv_poster", posterUrl)
+        }
+        if (!overview.isNullOrBlank()) {
+            intent.putExtra("cinetv_overview", overview)
+        }
+        if (!year.isNullOrBlank()) {
+            intent.putExtra("cinetv_year", year)
+        }
+        if (rating != null && rating > 0) {
+            intent.putExtra("cinetv_rating", rating.toString())
+        }
+        if (!providerName.isNullOrBlank()) {
+            intent.putExtra("cinetv_provider", providerName)
+        }
+        intent.putExtra("cinetv_source_type", "cinehub")
+
+        if (sortedLinks.isNotEmpty()) {
+            intent.putExtra("cinetv_links_urls", sortedLinks.map { it.url }.toTypedArray())
+            intent.putExtra("cinetv_links_names", sortedLinks.map { l ->
+                val qual = if (l.quality > 0) "${l.quality}p" else "Auto"
+                val source = l.source.ifBlank { providerName ?: "Server" }
+                "$qual - $source"
+            }.toTypedArray())
+            intent.putExtra("cinetv_links_qualities", sortedLinks.map { it.quality }.toIntArray())
+            intent.putExtra("cinetv_links_referers", sortedLinks.map { it.referer }.toTypedArray())
         }
 
         return intent
@@ -150,9 +191,25 @@ object CloudstreamHeadlessRunner {
     fun launchRexPlayer(
         context: Context,
         link: ExtractorLink,
-        title: String? = null
+        title: String? = null,
+        posterUrl: String? = null,
+        overview: String? = null,
+        year: String? = null,
+        rating: Double? = null,
+        providerName: String? = null,
+        allLinks: List<ExtractorLink> = emptyList()
     ) {
-        val intent = buildRexPlayerIntent(context, link, title)
+        val intent = buildRexPlayerIntent(
+            context = context,
+            link = link,
+            title = title,
+            posterUrl = posterUrl,
+            overview = overview,
+            year = year,
+            rating = rating,
+            providerName = providerName,
+            allLinks = allLinks
+        )
         context.startActivity(intent)
     }
 

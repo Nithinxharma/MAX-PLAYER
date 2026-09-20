@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Hd
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
@@ -1283,6 +1284,15 @@ fun RenderPlayerButton(
     }
 
     PlayerButton.NONE -> { /* Do nothing */ }
+    PlayerButton.QUALITY -> {
+      ControlsButton(
+        icon = androidx.compose.material.icons.Icons.Outlined.Hd,
+        onClick = {
+          clickEvent()
+          onOpenSheet(Sheets.Quality)
+        }
+      )
+    }
     PlayerButton.METADATA -> {
       val isCineHubEnabled = org.koin.compose.koinInject<xyz.mpv.rex.preferences.BrowserPreferences>().enableCineHubIntegration.get()
       if (isCineHubEnabled) {

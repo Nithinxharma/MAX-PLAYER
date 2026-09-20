@@ -1824,7 +1824,31 @@ class PlayerActivity :
     // Handle custom CineTV metadata
     val customSourceType = intent.getStringExtra("cinetv_source_type")
     val customPoster = intent.getStringExtra("cinetv_poster")
-    viewModel.setCustomMetadata(customPoster, customSourceType)
+    val customOverview = intent.getStringExtra("cinetv_overview")
+    val customYear = intent.getStringExtra("cinetv_year")
+    val customRating = intent.getStringExtra("cinetv_rating")
+    val customProvider = intent.getStringExtra("cinetv_provider")
+
+    val linkUrls = intent.getStringArrayExtra("cinetv_links_urls")
+    val linkNames = intent.getStringArrayExtra("cinetv_links_names")
+    val linkQualities = intent.getIntArrayExtra("cinetv_links_qualities")
+    val linkReferers = intent.getStringArrayExtra("cinetv_links_referers")
+
+    viewModel.setCustomMetadata(
+      posterUrl = customPoster,
+      sourceType = customSourceType,
+      overview = customOverview,
+      year = customYear,
+      rating = customRating,
+      provider = customProvider
+    )
+
+    viewModel.setAvailableStreamQualities(
+      urls = linkUrls,
+      names = linkNames,
+      qualities = linkQualities,
+      referers = linkReferers
+    )
 
     // Start media notification service only when going to background (like stock mpv-android)
     // startBackgroundPlayback() is now deferred to backgrounding lifecycle events

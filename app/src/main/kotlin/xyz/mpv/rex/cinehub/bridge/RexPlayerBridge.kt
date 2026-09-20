@@ -11,9 +11,25 @@ object RexPlayerBridge {
     fun playStream(
         context: Context,
         link: ExtractorLink,
-        title: String? = null
+        title: String? = null,
+        posterUrl: String? = null,
+        overview: String? = null,
+        year: String? = null,
+        rating: Double? = null,
+        providerName: String? = null,
+        allLinks: List<ExtractorLink> = emptyList()
     ) {
-        CloudstreamHeadlessRunner.launchRexPlayer(context, link, title)
+        CloudstreamHeadlessRunner.launchRexPlayer(
+            context = context,
+            link = link,
+            title = title,
+            posterUrl = posterUrl,
+            overview = overview,
+            year = year,
+            rating = rating,
+            providerName = providerName,
+            allLinks = allLinks
+        )
     }
 
     fun applyMpvHeaders(link: ExtractorLink) {

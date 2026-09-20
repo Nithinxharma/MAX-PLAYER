@@ -83,6 +83,12 @@ fun PlayerSheets(
         onDismissRequest = onDismissRequest,
       )
     }
+    Sheets.Quality -> {
+      xyz.mpv.rex.ui.player.controls.components.sheets.QualitySheet(
+        viewModel = viewModel,
+        onDismissRequest = onDismissRequest,
+      )
+    }
     Sheets.None -> {}
     Sheets.SubtitleTracks -> {
       val subtitlesPicker =

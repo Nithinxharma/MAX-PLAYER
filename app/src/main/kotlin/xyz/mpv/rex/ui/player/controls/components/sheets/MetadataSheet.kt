@@ -62,8 +62,34 @@ fun MetadataSheet(
     val videoCodec = `is`.xyz.mpv.MPVLib.getPropertyString("video-format") ?: ""
     val audioCodec = `is`.xyz.mpv.MPVLib.getPropertyString("audio-codec-name") ?: ""
 
+    val customPoster by viewModel.customMediaPosterUrl.collectAsState()
+    val customOverview by viewModel.customMediaOverview.collectAsState()
+    val customYear by viewModel.customMediaYear.collectAsState()
+    val customRating by viewModel.customMediaRating.collectAsState()
+    val customProvider by viewModel.customMediaProvider.collectAsState()
+
     var resolutionData by remember { mutableStateOf<ActiveMediaResolution?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+
+    val effectiveMovie = remember(resolutionData, customPoster, customOverview, customYear, customRating, customProvider) {
+        val fromResolution = (resolutionData as? ActiveMediaResolution.Movie)?.movie
+        if (fromResolution != null) {
+            fromResolution
+        } else if (!customPoster.isNullOrBlank() || !customOverview.isNullOrBlank() || !customYear.isNullOrBlank() || !customProvider.isNullOrBlank()) {
+            MovieItem(
+                videoFilePath = currentFilePath,
+                title = mediaTitle.ifBlank { if (currentFilePath.isNotBlank()) File(currentFilePath).nameWithoutExtension else "Media Content" },
+                originalTitle = "",
+                userRating = customRating?.toDoubleOrNull() ?: 8.0,
+                plot = customOverview ?: "Streamed directly via ${customProvider ?: "Extension Provider"}.",
+                mpaa = "",
+                genre = customProvider ?: "Stream",
+                director = "",
+                premiered = customYear ?: "",
+                posterPath = customPoster
+            )
+        } else null
+    }
 
     // For TV Show Season/Episodes in Sheet
     var selectedSeason by remember { mutableIntStateOf(1) }
@@ -159,7 +185,7 @@ fun MetadataSheet(
                     }
                     is ActiveMediaResolution.Movie -> {
                         MovieGlassmorphismContent(
-                            movie = data.movie,
+                            movie = effectiveMovie ?: data.movie,
                             onRefresh = {
                                 isLoading = true
                                 scope.launch {
@@ -178,16 +204,23 @@ fun MetadataSheet(
                         )
                     }
                     is ActiveMediaResolution.Normal, null -> {
-                        val normalData = data as? ActiveMediaResolution.Normal
-                        NormalMediaGlassmorphismContent(
-                            title = normalData?.title ?: mediaTitle.ifBlank { File(currentFilePath).nameWithoutExtension },
-                            fileName = normalData?.fileName ?: File(currentFilePath).name,
-                            duration = normalData?.durationFormatted ?: "",
-                            resolution = resolution,
-                            videoCodec = videoCodec,
-                            audioCodec = audioCodec,
-                            filePath = currentFilePath
-                        )
+                        if (effectiveMovie != null) {
+                            MovieGlassmorphismContent(
+                                movie = effectiveMovie,
+                                onRefresh = {}
+                            )
+                        } else {
+                            val normalData = resolutionData as? ActiveMediaResolution.Normal
+                            NormalMediaGlassmorphismContent(
+                                title = normalData?.title ?: mediaTitle.ifBlank { File(currentFilePath).nameWithoutExtension },
+                                fileName = normalData?.fileName ?: File(currentFilePath).name,
+                                duration = normalData?.durationFormatted ?: "",
+                                resolution = resolution,
+                                videoCodec = videoCodec,
+                                audioCodec = audioCodec,
+                                filePath = currentFilePath
+                            )
+                        }
                     }
                 }
             }

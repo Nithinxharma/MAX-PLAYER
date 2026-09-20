@@ -179,7 +179,13 @@ fun CineHubSearchScreen(
                                 RexPlayerBridge.playStream(
                                     context = context,
                                     link = bestLink,
-                                    title = epTitle ?: selectedDetails!!.name
+                                    title = epTitle ?: selectedDetails!!.name,
+                                    posterUrl = selectedDetails!!.posterUrl,
+                                    overview = selectedDetails!!.plot,
+                                    year = selectedDetails!!.year?.toString(),
+                                    rating = 8.0,
+                                    providerName = selectedDetails!!.apiName,
+                                    allLinks = links
                                 )
                             } else {
                                 Toast.makeText(context, "No stream links could be extracted", Toast.LENGTH_SHORT).show()

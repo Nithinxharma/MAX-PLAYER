@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -325,6 +327,7 @@ object CineHubScreen : Screen {
     var pendingStreamLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
     var pendingSubtitles by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
     var pendingEpisodeMetadataJson by remember { mutableStateOf<String?>(null) }
+    var showProviderSelector by remember { mutableStateOf(false) }
 
     val navBarHeight = LocalNavigationBarHeight.current
 
@@ -381,6 +384,18 @@ object CineHubScreen : Screen {
     }
 
     Scaffold(
+      floatingActionButton = {
+        val enabledCount = activeProvidersList.filter { providerRegistry.isProviderEnabled(it.id) }.size
+        ExtendedFloatingActionButton(
+          onClick = { showProviderSelector = true },
+          icon = { Icon(Icons.Outlined.Tune, contentDescription = "Providers") },
+          text = { Text("Providers ($enabledCount)") },
+          containerColor = MaterialTheme.colorScheme.primaryContainer,
+          contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+          elevation = FloatingActionButtonDefaults.elevation(8.dp),
+          modifier = Modifier.padding(bottom = navBarHeight)
+        )
+      },
       topBar = {
         TopAppBar(
           title = {
@@ -1239,6 +1254,14 @@ object CineHubScreen : Screen {
               showScraperSheet = false
               scrapeFinishedResult = null
             }
+          )
+        }
+
+        if (showProviderSelector) {
+          ProviderSelectorSheet(
+            providerRegistry = providerRegistry,
+            onDismissRequest = { showProviderSelector = false },
+            onProvidersChanged = { loadMedia() }
           )
         }
       }
@@ -2993,4 +3016,151 @@ fun QualitySelectorBottomSheet(
       }
     }
   }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProviderSelectorSheet(
+    providerRegistry: xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry,
+    onDismissRequest: () -> Unit,
+    onProvidersChanged: () -> Unit
+) {
+    val registeredProviders by providerRegistry.registeredProviders.collectAsState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = Color(0xF210111A),
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0x66FFFFFF)) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Extension Providers",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Enable or disable providers to optimize home loading speed",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.70f)
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            registeredProviders.forEach { providerRegistry.setProviderEnabled(it.id, true) }
+                            onProvidersChanged()
+                        }
+                    ) {
+                        Text("Enable All", style = MaterialTheme.typography.labelMedium)
+                    }
+                    TextButton(
+                        onClick = {
+                            registeredProviders.forEach { providerRegistry.setProviderEnabled(it.id, false) }
+                            onProvidersChanged()
+                        }
+                    ) {
+                        Text("Disable All", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            if (registeredProviders.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No providers currently registered. Install or reload extensions.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.60f)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(registeredProviders) { provider ->
+                        val isEnabled = providerRegistry.isProviderEnabled(provider.id)
+
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.05f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.10f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Extension,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(8.dp).size(20.dp)
+                                        )
+                                    }
+
+                                    Column {
+                                        Text(
+                                            text = provider.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "ID: ${provider.id} • ${if (isEnabled) "Active" else "Disabled"}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White.copy(alpha = 0.55f)
+                                        )
+                                    }
+                                }
+
+                                Switch(
+                                    checked = isEnabled,
+                                    onCheckedChange = { checked ->
+                                        providerRegistry.setProviderEnabled(provider.id, checked)
+                                        onProvidersChanged()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
