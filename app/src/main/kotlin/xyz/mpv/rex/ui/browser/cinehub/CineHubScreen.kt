@@ -46,8 +46,11 @@ import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.TvType
+import xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem
+import xyz.mpv.rex.cinehub.extension.api.CineHubMediaDetails
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +87,10 @@ fun loadExtensionItemDetails(
   providerName: String,
   url: String,
   scope: kotlinx.coroutines.CoroutineScope,
+  fallbackTitle: String = "",
+  fallbackPoster: String? = null,
+  fallbackYear: Int? = null,
+  fallbackType: TvType = TvType.Movie,
   onLoaded: (ExtensionMediaDetails) -> Unit,
 ) {
   scope.launch(Dispatchers.IO) {
@@ -92,6 +99,7 @@ fun loadExtensionItemDetails(
     val loadedResponse: LoadResponse? = try {
       api?.load(url)
     } catch (t: Throwable) {
+      Log.e("CineHub", "api.load error for $url on $providerName: ${t.message}", t)
       null
     }
 
@@ -99,28 +107,42 @@ fun loadExtensionItemDetails(
       if (loadedResponse is com.lagradost.cloudstream3.AnimeLoadResponse) {
         val flattenedEps = loadedResponse.episodes.values.flatten().distinctBy { it.data }
         TvSeriesLoadResponse(
-          name = loadedResponse.name,
+          name = loadedResponse.name.ifBlank { fallbackTitle.ifBlank { url } },
           url = loadedResponse.url,
-          apiName = loadedResponse.apiName,
+          apiName = loadedResponse.apiName.ifBlank { providerName },
           type = TvType.Anime,
           episodes = flattenedEps,
-          posterUrl = loadedResponse.posterUrl,
-          year = loadedResponse.year,
+          posterUrl = loadedResponse.posterUrl ?: fallbackPoster,
+          year = loadedResponse.year ?: fallbackYear,
           plot = loadedResponse.plot,
-          backgroundPosterUrl = loadedResponse.backgroundPosterUrl
+          backgroundPosterUrl = loadedResponse.backgroundPosterUrl ?: loadedResponse.posterUrl ?: fallbackPoster
         )
       } else {
+        if (loadedResponse.name.isBlank() && fallbackTitle.isNotBlank()) {
+          loadedResponse.name = fallbackTitle
+        }
+        if (loadedResponse.posterUrl.isNullOrBlank() && !fallbackPoster.isNullOrBlank()) {
+          loadedResponse.posterUrl = fallbackPoster
+        }
+        if (loadedResponse.year == null && fallbackYear != null) {
+          loadedResponse.year = fallbackYear
+        }
         loadedResponse
       }
     } else {
       val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
       val provider = registry.getProvider(providerId)
         ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
-      val details = provider?.loadDetails(url)
+      val details = try {
+        provider?.loadDetails(url)
+      } catch (t: Throwable) {
+        Log.e("CineHub", "provider.loadDetails error for $url: ${t.message}", t)
+        null
+      }
       if (details != null) {
         if (details.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries || details.episodes.isNotEmpty()) {
           TvSeriesLoadResponse(
-            name = details.title,
+            name = details.title.ifBlank { fallbackTitle.ifBlank { url } },
             url = details.url,
             apiName = details.providerName.ifBlank { providerName },
             type = TvType.TvSeries,
@@ -134,24 +156,35 @@ fun loadExtensionItemDetails(
                 description = ep.description
               )
             },
-            posterUrl = details.posterUrl,
-            year = details.year,
+            posterUrl = details.posterUrl ?: fallbackPoster,
+            year = details.year ?: fallbackYear,
             plot = details.overview,
-            backgroundPosterUrl = details.backdropUrl ?: details.posterUrl
+            backgroundPosterUrl = details.backdropUrl ?: details.posterUrl ?: fallbackPoster
           )
         } else {
           MovieLoadResponse(
-            name = details.title,
+            name = details.title.ifBlank { fallbackTitle.ifBlank { url } },
             url = details.url,
             apiName = details.providerName.ifBlank { providerName },
             type = TvType.Movie,
             dataUrl = details.url,
-            posterUrl = details.posterUrl,
-            year = details.year,
+            posterUrl = details.posterUrl ?: fallbackPoster,
+            year = details.year ?: fallbackYear,
             plot = details.overview,
-            backgroundPosterUrl = details.backdropUrl ?: details.posterUrl
+            backgroundPosterUrl = details.backdropUrl ?: details.posterUrl ?: fallbackPoster
           )
         }
+      } else if (fallbackTitle.isNotBlank() || url.isNotBlank()) {
+        MovieLoadResponse(
+          name = fallbackTitle.ifBlank { url },
+          url = url,
+          apiName = providerName,
+          type = fallbackType,
+          dataUrl = url,
+          posterUrl = fallbackPoster,
+          year = fallbackYear,
+          backgroundPosterUrl = fallbackPoster
+        )
       } else null
     }
 
@@ -693,7 +726,11 @@ object CineHubScreen : Screen {
                         providerId = extItem.providerId,
                         providerName = extItem.providerName,
                         url = extItem.url,
-                        scope = scope
+                        scope = scope,
+                        fallbackTitle = extItem.title,
+                        fallbackPoster = extItem.posterUrl,
+                        fallbackYear = extItem.year,
+                        fallbackType = if (extItem.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
                       ) { details ->
                         selectedDetailItem = details
                       }
@@ -819,7 +856,11 @@ object CineHubScreen : Screen {
                                   providerId = item.providerId,
                                   providerName = item.providerName,
                                   url = item.url,
-                                  scope = scope
+                                  scope = scope,
+                                  fallbackTitle = item.title,
+                                  fallbackPoster = item.posterUrl,
+                                  fallbackYear = item.year,
+                                  fallbackType = if (item.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
                                 ) { details ->
                                   selectedDetailItem = details
                                 }
@@ -922,7 +963,11 @@ object CineHubScreen : Screen {
                                   providerId = item.providerId,
                                   providerName = item.providerName,
                                   url = item.url,
-                                  scope = scope
+                                  scope = scope,
+                                  fallbackTitle = item.title,
+                                  fallbackPoster = item.posterUrl,
+                                  fallbackYear = item.year,
+                                  fallbackType = TvType.Movie
                                 ) { details ->
                                   selectedDetailItem = details
                                 }
@@ -999,7 +1044,11 @@ object CineHubScreen : Screen {
                                   providerId = item.providerId,
                                   providerName = item.providerName,
                                   url = item.url,
-                                  scope = scope
+                                  scope = scope,
+                                  fallbackTitle = item.title,
+                                  fallbackPoster = item.posterUrl,
+                                  fallbackYear = item.year,
+                                  fallbackType = TvType.TvSeries
                                 ) { details ->
                                   selectedDetailItem = details
                                 }
@@ -1709,6 +1758,9 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
     is ExtensionMediaDetails -> item.loadResponse.url
     is LoadResponse -> item.url
+    is SearchResponse -> item.url
+    is CineHubSearchItem -> item.url
+    is CineHubMediaDetails -> item.id
     else -> ""
   }
   val isMovie = when (item) {
@@ -1717,6 +1769,9 @@ fun CineDetailBottomSheet(
     is MovieLoadResponse -> true
     is TvShowItem -> false
     is TvSeriesLoadResponse -> false
+    is SearchResponse -> item.type != TvType.TvSeries && item.type != TvType.Anime
+    is CineHubSearchItem -> item.type != xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries
+    is CineHubMediaDetails -> item.type != xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries
     else -> true
   }
   val libraryEntry = libraryItems.find { it.url == tmdbId }
@@ -1728,6 +1783,9 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.title
     is ExtensionMediaDetails -> item.loadResponse.name
     is LoadResponse -> item.name
+    is SearchResponse -> item.name
+    is CineHubSearchItem -> item.title
+    is CineHubMediaDetails -> item.title
     else -> ""
   }
   val plot = when (item) {
@@ -1735,6 +1793,7 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.plot
     is ExtensionMediaDetails -> item.loadResponse.plot ?: ""
     is LoadResponse -> item.plot ?: ""
+    is CineHubMediaDetails -> item.overview ?: ""
     else -> ""
   }
   val posterPath = when (item) {
@@ -1742,6 +1801,9 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.posterPath
     is ExtensionMediaDetails -> item.loadResponse.posterUrl
     is LoadResponse -> item.posterUrl
+    is SearchResponse -> item.posterUrl
+    is CineHubSearchItem -> item.posterUrl
+    is CineHubMediaDetails -> item.posterUrl
     else -> null
   }
   val backdropPath = when (item) {
@@ -1749,6 +1811,8 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.backdropPath ?: item.posterPath
     is ExtensionMediaDetails -> item.loadResponse.backgroundPosterUrl ?: item.loadResponse.posterUrl
     is LoadResponse -> item.backgroundPosterUrl ?: item.posterUrl
+    is CineHubMediaDetails -> item.backdropUrl ?: item.posterUrl
+    is SearchResponse -> item.posterUrl
     else -> null
   }
   val rating = when (item) {
@@ -1756,6 +1820,7 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.userRating
     is ExtensionMediaDetails -> item.loadResponse.score?.score ?: 0.0
     is LoadResponse -> item.score?.score ?: 0.0
+    is SearchResponse -> item.score?.score ?: 0.0
     else -> 0.0
   }
   val year = when (item) {
@@ -1763,6 +1828,7 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.premiered.take(4)
     is ExtensionMediaDetails -> item.loadResponse.year?.toString() ?: ""
     is LoadResponse -> item.year?.toString() ?: ""
+    is CineHubMediaDetails -> item.year?.toString() ?: ""
     else -> ""
   }
   val genre = when (item) {
@@ -1770,6 +1836,9 @@ fun CineDetailBottomSheet(
     is TvShowItem -> item.genre
     is ExtensionMediaDetails -> item.loadResponse.tags?.firstOrNull() ?: item.loadResponse.type.name
     is LoadResponse -> item.tags?.firstOrNull() ?: item.type.name
+    is SearchResponse -> item.type?.name ?: ""
+    is CineHubSearchItem -> item.type.name
+    is CineHubMediaDetails -> item.type.name
     else -> ""
   }
 

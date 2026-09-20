@@ -642,7 +642,17 @@ class PluginExecutionTraceViewModel(
                                                 context.resources.configuration
                                             )
                                         }
-                                        instance.load(context)
+                                        val pluginCtx = xyz.mpv.rex.App.currentActivity ?: context
+                                        try {
+                                            instance.load(pluginCtx)
+                                        } catch (t: Throwable) {
+                                            logTrace("STEP 12: instance.load(pluginCtx) threw ${t.message}, retrying fallback")
+                                            try {
+                                                instance.load(context)
+                                            } catch (_: Throwable) {
+                                                instance.load()
+                                            }
+                                        }
                                     } else {
                                         instance.load()
                                     }

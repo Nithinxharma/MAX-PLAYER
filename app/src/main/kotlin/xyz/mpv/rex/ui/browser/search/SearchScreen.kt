@@ -716,7 +716,10 @@ data class SearchScreen(
                 providerId = searchResp.apiName,
                 providerName = searchResp.apiName,
                 url = searchResp.url,
-                scope = coroutineScope
+                scope = coroutineScope,
+                fallbackTitle = searchResp.name,
+                fallbackPoster = searchResp.posterUrl,
+                fallbackType = searchResp.type ?: com.lagradost.cloudstream3.TvType.Movie
               ) { details ->
                 selectedExtensionItem = details
               }

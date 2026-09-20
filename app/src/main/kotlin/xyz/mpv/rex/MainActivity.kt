@@ -75,7 +75,7 @@ val LocalUpdateViewModel = staticCompositionLocalOf<UpdateViewModel?> { null }
 /**
  * Main entry point for the application
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.appcompat.app.AppCompatActivity() {
   private val appearancePreferences by inject<AppearancePreferences>()
   private val networkRepository by inject<NetworkRepository>()
   private val miniPlayerStateManager by inject<MiniPlayerStateManager>()

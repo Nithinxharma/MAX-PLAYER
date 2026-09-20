@@ -63,6 +63,26 @@ class App : Application() {
     // Initialize Headless Cloudstream / Plugin Engine
     xyz.mpv.rex.cinehub.bridge.CloudstreamHeadlessRunner.init(this)
 
+    registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+      override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {
+        currentActivity = activity
+      }
+      override fun onActivityStarted(activity: android.app.Activity) {
+        currentActivity = activity
+      }
+      override fun onActivityResumed(activity: android.app.Activity) {
+        currentActivity = activity
+      }
+      override fun onActivityPaused(activity: android.app.Activity) {}
+      override fun onActivityStopped(activity: android.app.Activity) {
+        if (currentActivity === activity) currentActivity = null
+      }
+      override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
+      override fun onActivityDestroyed(activity: android.app.Activity) {
+        if (currentActivity === activity) currentActivity = null
+      }
+    })
+
     Thread.setDefaultUncaughtExceptionHandler(GlobalExceptionHandler(applicationContext, CrashActivity::class.java))
 
     try { FastThumbnails.initialize(this) } catch (e: Throwable) { android.util.Log.e("App", "FastThumbnails failed", e) }
@@ -137,5 +157,6 @@ class App : Application() {
   companion object {
     lateinit var instance: App
       private set
+    var currentActivity: android.app.Activity? = null
   }
 }

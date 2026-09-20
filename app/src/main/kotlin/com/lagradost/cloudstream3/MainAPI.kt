@@ -97,18 +97,38 @@ enum class ActorRole {
 
 class ErrorLoadingException(message: String) : Exception(message)
 
+@Keep
 data class ActorData @JvmOverloads constructor(
     var actor: Actor,
     var role: ActorRole? = null,
     var roleString: String? = null,
     var voiceActor: Actor? = null
-)
+) {
+    constructor(actor: Actor, roleString: String?) : this(actor, null, roleString, null)
+}
 
+@Keep
 data class Actor(
     val name: String,
     val image: String? = null
 ) {
-    constructor(name: String, image: String?, role: String?) : this(name, image)
+    var role: ActorRole? = null
+    var roleString: String? = null
+    var voiceActor: Actor? = null
+
+    constructor(name: String, image: String?, role: String?) : this(name, image) {
+        this.roleString = role
+    }
+
+    constructor(name: String, image: String?, role: ActorRole?) : this(name, image) {
+        this.role = role
+    }
+
+    constructor(name: String, image: String?, role: ActorRole?, roleString: String?, voiceActor: Actor?) : this(name, image) {
+        this.role = role
+        this.roleString = roleString
+        this.voiceActor = voiceActor
+    }
 }
 
 data class MainPageData(
@@ -191,6 +211,18 @@ data class TorrentSearchResponse(
     override val url: String,
     override val apiName: String,
     override var type: TvType? = null,
+    override var posterUrl: String? = null,
+    override var id: Int? = null,
+    override var quality: SearchQuality? = null,
+    override var posterHeaders: Map<String, String>? = null,
+    override var score: Score? = null
+) : SearchResponse
+
+data class LiveSearchResponse(
+    override val name: String,
+    override val url: String,
+    override val apiName: String,
+    override var type: TvType? = TvType.Live,
     override var posterUrl: String? = null,
     override var id: Int? = null,
     override var quality: SearchQuality? = null,
@@ -429,6 +461,30 @@ data class AnimeLoadResponse(
     var jpnName: String? = null
 ) : LoadResponse
 
+data class LiveStreamLoadResponse(
+    override var name: String,
+    override var url: String,
+    override var apiName: String,
+    var dataUrl: String,
+    override var type: TvType = TvType.Live,
+    override var posterUrl: String? = null,
+    override var year: Int? = null,
+    override var plot: String? = null,
+    override var score: Score? = null,
+    override var tags: List<String>? = null,
+    override var duration: Int? = null,
+    override var trailers: MutableList<TrailerData> = mutableListOf(),
+    override var recommendations: List<SearchResponse>? = null,
+    override var actors: List<ActorData>? = null,
+    override var comingSoon: Boolean = false,
+    override var syncData: MutableMap<String, String> = mutableMapOf(),
+    override var posterHeaders: Map<String, String>? = null,
+    override var backgroundPosterUrl: String? = null,
+    override var logoUrl: String? = null,
+    override var contentRating: String? = null,
+    override var uniqueUrl: String = ""
+) : LoadResponse
+
 data class Episode(
     var data: String,
     var name: String? = null,
@@ -439,7 +495,25 @@ data class Episode(
     var description: String? = null,
     var date: Long? = null,
     var runTime: Int? = null
-)
+) {
+    var rating: Int?
+        get() = score?.toInt(100)
+        set(value) {
+            score = Score.from100(value)
+        }
+
+    constructor(
+        data: String,
+        name: String?,
+        season: Int?,
+        episode: Int?,
+        posterUrl: String?,
+        rating: Int?,
+        description: String?,
+        date: Long?,
+        runTime: Int?
+    ) : this(data, name, season, episode, posterUrl, Score.from100(rating), description, date, runTime)
+}
 
 fun Episode.addDate(date: String?, format: String? = null) {
     if (date.isNullOrBlank()) return
@@ -544,16 +618,70 @@ abstract class MainAPI {
 }
 
 fun MainAPI.newMovieSearchResponse(name: String, url: String, type: TvType = TvType.Movie, fix: Boolean = true, initializer: MovieSearchResponse.() -> Unit = {}): MovieSearchResponse {
-    return MovieSearchResponse(name, url, this.name, type).apply(initializer)
+    val fixedUrl = if (fix) fixUrl(url) else url
+    return MovieSearchResponse(name, fixedUrl, this.name, type).apply(initializer)
 }
 fun MainAPI.newTvSeriesSearchResponse(name: String, url: String, type: TvType = TvType.TvSeries, fix: Boolean = true, initializer: TvSeriesSearchResponse.() -> Unit = {}): TvSeriesSearchResponse {
-    return TvSeriesSearchResponse(name, url, this.name, type).apply(initializer)
+    val fixedUrl = if (fix) fixUrl(url) else url
+    return TvSeriesSearchResponse(name, fixedUrl, this.name, type).apply(initializer)
 }
 fun MainAPI.newAnimeSearchResponse(name: String, url: String, type: TvType = TvType.Anime, fix: Boolean = true, initializer: AnimeSearchResponse.() -> Unit = {}): AnimeSearchResponse {
-    return AnimeSearchResponse(name, url, this.name, type).apply(initializer)
+    val fixedUrl = if (fix) fixUrl(url) else url
+    return AnimeSearchResponse(name, fixedUrl, this.name, type).apply(initializer)
 }
 fun MainAPI.newTorrentSearchResponse(name: String, url: String, type: TvType = TvType.Others, fix: Boolean = true, initializer: TorrentSearchResponse.() -> Unit = {}): TorrentSearchResponse {
-    return TorrentSearchResponse(name, url, this.name, type).apply(initializer)
+    val fixedUrl = if (fix) fixUrl(url) else url
+    return TorrentSearchResponse(name, fixedUrl, this.name, type).apply(initializer)
+}
+fun MainAPI.newLiveSearchResponse(name: String, url: String, type: TvType = TvType.Live, fix: Boolean = true, initializer: LiveSearchResponse.() -> Unit = {}): LiveSearchResponse {
+    val fixedUrl = if (fix) fixUrl(url) else url
+    return LiveSearchResponse(name, fixedUrl, this.name, type).apply(initializer)
+}
+
+suspend fun MainAPI.newLiveStreamLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.Live,
+    dataUrl: Any,
+    initializer: suspend LiveStreamLoadResponse.() -> Unit = {}
+): LiveStreamLoadResponse {
+    val dataStr = if (dataUrl is String) dataUrl else dataUrl.toJson()
+    val res = LiveStreamLoadResponse(name, url, this.name, dataStr, type)
+    res.initializer()
+    return res
+}
+
+fun MainAPI.newLiveStreamLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.Live,
+    dataUrl: Any,
+    initializer: LiveStreamLoadResponse.() -> Unit = {}
+): LiveStreamLoadResponse {
+    val dataStr = if (dataUrl is String) dataUrl else dataUrl.toJson()
+    return LiveStreamLoadResponse(name, url, this.name, dataStr, type).apply(initializer)
+}
+
+suspend fun MainAPI.newLiveStreamLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.Live,
+    dataUrl: String,
+    initializer: suspend LiveStreamLoadResponse.() -> Unit = {}
+): LiveStreamLoadResponse {
+    val res = LiveStreamLoadResponse(name, url, this.name, dataUrl, type)
+    res.initializer()
+    return res
+}
+
+fun MainAPI.newLiveStreamLoadResponse(
+    name: String,
+    url: String,
+    type: TvType = TvType.Live,
+    dataUrl: String,
+    initializer: LiveStreamLoadResponse.() -> Unit = {}
+): LiveStreamLoadResponse {
+    return LiveStreamLoadResponse(name, url, this.name, dataUrl, type).apply(initializer)
 }
 suspend fun MainAPI.newMovieLoadResponse(
     name: String,

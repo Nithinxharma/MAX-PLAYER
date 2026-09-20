@@ -66,9 +66,17 @@
 -keepattributes Exceptions
 
 # Keep CloudStream extension SDK & plugins framework for dynamic DEX loading
--keep class com.lagradost.cloudstream3.** { *; }
+-keep class com.lagradost.cloudstream3.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
 -keep interface com.lagradost.cloudstream3.** { *; }
--keepclassmembers class com.lagradost.cloudstream3.** { *; }
+-keepclassmembers class com.lagradost.cloudstream3.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
 
 -keep class com.lagradost.nicehttp.** { *; }
 -keep interface com.lagradost.nicehttp.** { *; }

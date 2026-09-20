@@ -596,8 +596,18 @@ class ExtensionManager(
                                             context.resources.configuration
                                         )
                                     }
+                                    val pluginCtx = xyz.mpv.rex.App.currentActivity ?: context
                                     Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoking plugin.load(context) for $className (package: ${ext.pkgName})")
-                                    instance.load(context)
+                                    try {
+                                        instance.load(pluginCtx)
+                                    } catch (t: Throwable) {
+                                        Log.w("ExtensionManager", "instance.load(pluginCtx) failed with ${t.message}, retrying with base context or load()")
+                                        try {
+                                            instance.load(context)
+                                        } catch (_: Throwable) {
+                                            instance.load()
+                                        }
+                                    }
                                     Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoked plugin.load(context) successfully for $className")
                                 } else {
                                     Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 11: Invoking plugin.load() for $className (package: ${ext.pkgName})")
@@ -760,15 +770,33 @@ class ExtensionManager(
             val f = File(localPath)
             if (f.exists() && f.isFile) return f
         }
-        val candidates = listOfNotNull(
-            File(extensionDir, "$pkgName.cs3"),
-            File(extensionDir, pkgName),
-            File(context.filesDir, "cloudstream_plugins/$pkgName.cs3"),
-            File(context.filesDir, "cloudstream_plugins/$pkgName"),
-            extensionDir.listFiles()?.firstOrNull { it.name.contains(pkgName, ignoreCase = true) },
-            File(context.filesDir, "cloudstream_plugins").listFiles()?.firstOrNull { it.name.contains(pkgName, ignoreCase = true) }
+        val cleanPkg = pkgName.replace(" ", "").replace("_", "").lowercase()
+        val dirsToSearch = listOfNotNull(
+            extensionDir,
+            File(context.filesDir, "cinehub_extensions"),
+            File(context.filesDir, "cloudstream_plugins"),
+            File(context.codeCacheDir, "plugin_exec"),
+            context.filesDir,
+            context.cacheDir
         )
-        return candidates.firstOrNull { it.exists() && it.isFile }
+        for (dir in dirsToSearch) {
+            if (!dir.exists() || !dir.isDirectory) continue
+            val direct = File(dir, "$pkgName.cs3")
+            if (direct.exists() && direct.isFile) return direct
+            val directNoExt = File(dir, pkgName)
+            if (directNoExt.exists() && directNoExt.isFile) return directNoExt
+            
+            val files = dir.listFiles() ?: continue
+            val found = files.firstOrNull { file ->
+                val fClean = file.nameWithoutExtension.replace(" ", "").replace("_", "").lowercase()
+                fClean == cleanPkg ||
+                fClean.contains(cleanPkg) ||
+                cleanPkg.contains(fClean) ||
+                fClean.replace("provider", "").replace("plugin", "") == cleanPkg.replace("provider", "").replace("plugin", "")
+            }
+            if (found != null && found.isFile) return found
+        }
+        return null
     }
 
     suspend fun forceDexAudit(file: File): xyz.mpv.rex.cinehub.extension.model.DexAuditReport = withContext(Dispatchers.IO) {

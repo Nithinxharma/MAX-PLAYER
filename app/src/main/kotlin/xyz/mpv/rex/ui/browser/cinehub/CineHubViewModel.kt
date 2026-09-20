@@ -11,6 +11,7 @@ import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -114,7 +115,7 @@ class CineHubViewModel : ViewModel() {
      * Fetches the specific provider by name, calls provider.load(url), and
      * updates selectedMediaDetails.
      */
-    fun loadMediaDetails(providerName: String, url: String) {
+    fun loadMediaDetails(providerName: String, url: String, fallbackItem: SearchResponse? = null) {
         viewModelScope.launch {
             _isLoadingDetails.value = true
             _selectedMediaDetails.value = null
@@ -124,6 +125,17 @@ class CineHubViewModel : ViewModel() {
             val provider = findProvider(providerName)
             if (provider == null) {
                 Log.e(TAG, "Provider not found: $providerName")
+                if (fallbackItem != null) {
+                    _selectedMediaDetails.value = MovieLoadResponse(
+                        name = fallbackItem.name,
+                        url = fallbackItem.url,
+                        apiName = fallbackItem.apiName.ifBlank { providerName },
+                        type = fallbackItem.type ?: TvType.Movie,
+                        dataUrl = fallbackItem.url,
+                        posterUrl = fallbackItem.posterUrl,
+                        backgroundPosterUrl = fallbackItem.posterUrl
+                    )
+                }
                 _isLoadingDetails.value = false
                 _statusMessage.value = "Provider '$providerName' not found"
                 return@launch
@@ -138,7 +150,29 @@ class CineHubViewModel : ViewModel() {
                 }
             }
 
-            _selectedMediaDetails.value = details
+            val finalDetails = if (details != null) {
+                if (details.name.isBlank() && fallbackItem != null && fallbackItem.name.isNotBlank()) {
+                    details.name = fallbackItem.name
+                }
+                if (details.posterUrl.isNullOrBlank() && fallbackItem != null && !fallbackItem.posterUrl.isNullOrBlank()) {
+                    details.posterUrl = fallbackItem.posterUrl
+                }
+                details
+            } else if (fallbackItem != null) {
+                MovieLoadResponse(
+                    name = fallbackItem.name,
+                    url = fallbackItem.url,
+                    apiName = fallbackItem.apiName.ifBlank { providerName },
+                    type = fallbackItem.type ?: TvType.Movie,
+                    dataUrl = fallbackItem.url,
+                    posterUrl = fallbackItem.posterUrl,
+                    backgroundPosterUrl = fallbackItem.posterUrl
+                )
+            } else {
+                null
+            }
+
+            _selectedMediaDetails.value = finalDetails
             _isLoadingDetails.value = false
         }
     }

@@ -299,7 +299,7 @@ fun CineHubSearchScreen(
                                 SearchResultCard(
                                     item = item,
                                     onClick = {
-                                        viewModel.loadMediaDetails(item.apiName, item.url)
+                                        viewModel.loadMediaDetails(item.apiName, item.url, item)
                                     }
                                 )
                             }
