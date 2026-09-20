@@ -20,6 +20,9 @@ import java.util.concurrent.ConcurrentHashMap
  * RepositoryManager manages remote extension repositories,
  * manifest synchronization, and plugin catalog discovery.
  */
+private fun JSONObject.optStringOrNull(key: String): String? =
+    if (has(key) && !isNull(key)) getString(key) else null
+
 class RepositoryManager(
     private val client: OkHttpClient,
     private val db: MpvExDatabase
@@ -325,7 +328,7 @@ class RepositoryManager(
             if (trimmed.startsWith("{")) {
                 val json = JSONObject(trimmed)
                 repoTitle = json.optString("name", repoTitle)
-                repoDesc = json.optString("description", null)
+                repoDesc = json.optStringOrNull("description")
 
                 if (json.has("pluginLists")) {
                     // CloudStream repo.json format
@@ -400,10 +403,10 @@ class RepositoryManager(
         val internalName = obj.optString("internalName", obj.optString("id", name.lowercase().replace(" ", "_")))
         val version = obj.optString("version", "1.0.0")
         val versionCode = obj.optInt("versionCode", 1)
-        val description = obj.optString("description", null)
+        val description = obj.optStringOrNull("description")
         var url = obj.optString("url", "")
-        var tvUrl = obj.optString("tvUrl", null)
-        var iconUrl = obj.optString("iconUrl", obj.optString("icon", null))
+        var tvUrl = obj.optStringOrNull("tvUrl")
+        var iconUrl = obj.optStringOrNull("iconUrl") ?: obj.optStringOrNull("icon")
 
         // Resolve relative URLs if needed
         val baseUrl = repoUrl.substringBeforeLast("/") + "/"
