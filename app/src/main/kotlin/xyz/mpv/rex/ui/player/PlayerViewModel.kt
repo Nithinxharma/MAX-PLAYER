@@ -485,15 +485,39 @@ class PlayerViewModel(
   }
 
   fun selectStreamQuality(context: android.content.Context, item: QualityStreamItem) {
-    _currentQualityName.value = if (item.quality > 0) "${item.quality}p" else item.name.substringBefore(" -")
-    viewModelScope.launch {
-      if (item.referer.isNotBlank()) {
-        try {
-          `is`.xyz.mpv.MPVLib.setPropertyString("http-header-fields", "Referer: ${item.referer}")
-        } catch (_: Exception) {}
+    val qualLabel = if (item.quality > 0) "${item.quality}p" else item.name.substringBefore(" -")
+    _currentQualityName.value = qualLabel
+    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+      try {
+        val currentPos = runCatching { `is`.xyz.mpv.MPVLib.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
+        val isPaused = runCatching { `is`.xyz.mpv.MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: false
+
+        if (item.referer.isNotBlank()) {
+          runCatching {
+            `is`.xyz.mpv.MPVLib.setPropertyString("http-header-fields", "Referer: ${item.referer}")
+          }
+        }
+
+        val loadOptions = buildList {
+          if (isPaused) add("pause=yes") else add("pause=no")
+          if (currentPos > 0.5) add("start=$currentPos")
+        }.joinToString(",")
+
+        if (loadOptions.isNotEmpty()) {
+          `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace", "-1", loadOptions)
+        } else {
+          `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace")
+        }
+
+        val currentTitle = _mediaTitle.value
+        if (currentTitle.isNotBlank() && !currentTitle.startsWith("http") && !currentTitle.endsWith(".m3u8") && currentTitle != "index.m3u8") {
+          runCatching { `is`.xyz.mpv.MPVLib.setPropertyString("force-media-title", currentTitle) }
+        }
+
+        android.widget.Toast.makeText(context, "Switched to $qualLabel", android.widget.Toast.LENGTH_SHORT).show()
+      } catch (_: Exception) {
+        runCatching { `is`.xyz.mpv.MPVLib.command("loadfile", item.url) }
       }
-      `is`.xyz.mpv.MPVLib.command("loadfile", item.url)
-      android.widget.Toast.makeText(context, "Switched quality to ${item.name}", android.widget.Toast.LENGTH_SHORT).show()
     }
   }
 

@@ -156,6 +156,8 @@ object CloudstreamHeadlessRunner {
 
         if (!title.isNullOrBlank()) {
             intent.putExtra("title", title)
+            intent.putExtra("cinetv_title", title)
+            intent.putExtra("filename", title)
         }
         if (!posterUrl.isNullOrBlank()) {
             intent.putExtra("cinetv_poster", posterUrl)

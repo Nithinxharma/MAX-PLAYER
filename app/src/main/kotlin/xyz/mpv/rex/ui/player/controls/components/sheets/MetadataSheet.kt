@@ -67,26 +67,38 @@ fun MetadataSheet(
     val customYear by viewModel.customMediaYear.collectAsState()
     val customRating by viewModel.customMediaRating.collectAsState()
     val customProvider by viewModel.customMediaProvider.collectAsState()
+    val currentQuality by viewModel.currentQualityName.collectAsState()
 
     var resolutionData by remember { mutableStateOf<ActiveMediaResolution?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    val effectiveMovie = remember(resolutionData, customPoster, customOverview, customYear, customRating, customProvider) {
+    val cleanTitle = remember(mediaTitle) {
+        val t = mediaTitle
+        if (t.isBlank() || t.startsWith("http://") || t.startsWith("https://") || t.endsWith(".m3u8") || t.contains(".m3u8") || t == "index.m3u8" || t == "master.m3u8") {
+            "Max Stream"
+        } else {
+            t
+        }
+    }
+
+    val effectiveMovie = remember(resolutionData, customPoster, customOverview, customYear, customRating, customProvider, cleanTitle, durationSec) {
         val fromResolution = (resolutionData as? ActiveMediaResolution.Movie)?.movie
         if (fromResolution != null) {
-            fromResolution
-        } else if (!customPoster.isNullOrBlank() || !customOverview.isNullOrBlank() || !customYear.isNullOrBlank() || !customProvider.isNullOrBlank()) {
+            fromResolution.copy(title = cleanTitle.ifBlank { fromResolution.title })
+        } else if (!customPoster.isNullOrBlank() || !customOverview.isNullOrBlank() || !customYear.isNullOrBlank() || !customProvider.isNullOrBlank() || cleanTitle != "Max Stream") {
+            val runtimeMins = if (durationSec > 0) (durationSec / 60).toInt() else 0
             MovieItem(
-                videoFilePath = currentFilePath,
-                title = mediaTitle.ifBlank { if (currentFilePath.isNotBlank()) File(currentFilePath).nameWithoutExtension else "Media Content" },
+                videoFilePath = "",
+                title = cleanTitle,
                 originalTitle = "",
                 userRating = customRating?.toDoubleOrNull() ?: 8.0,
-                plot = customOverview ?: "Streamed directly via ${customProvider ?: "Extension Provider"}.",
+                plot = customOverview ?: "Streamed directly via ${customProvider ?: "Max Stream"}.",
                 mpaa = "",
-                genre = customProvider ?: "Stream",
+                genre = customProvider ?: "Max Stream",
                 director = "",
                 premiered = customYear ?: "",
-                posterPath = customPoster
+                posterPath = customPoster,
+                runtime = runtimeMins
             )
         } else null
     }
@@ -186,12 +198,14 @@ fun MetadataSheet(
                     is ActiveMediaResolution.Movie -> {
                         MovieGlassmorphismContent(
                             movie = effectiveMovie ?: data.movie,
+                            quality = currentQuality.ifBlank { resolution.ifBlank { "HD" } },
+                            provider = customProvider ?: "Max Stream",
                             onRefresh = {
                                 isLoading = true
                                 scope.launch {
                                     val refreshed = CineOnlineScraper.getOrFetchMovie(
                                         context,
-                                        File(currentFilePath).name,
+                                        cleanTitle,
                                         data.movie.tmdbId,
                                         forceRefresh = true
                                     )
@@ -207,18 +221,20 @@ fun MetadataSheet(
                         if (effectiveMovie != null) {
                             MovieGlassmorphismContent(
                                 movie = effectiveMovie,
+                                quality = currentQuality.ifBlank { resolution.ifBlank { "HD" } },
+                                provider = customProvider ?: "Max Stream",
                                 onRefresh = {}
                             )
                         } else {
                             val normalData = resolutionData as? ActiveMediaResolution.Normal
                             NormalMediaGlassmorphismContent(
-                                title = normalData?.title ?: mediaTitle.ifBlank { File(currentFilePath).nameWithoutExtension },
-                                fileName = normalData?.fileName ?: File(currentFilePath).name,
-                                duration = normalData?.durationFormatted ?: "",
-                                resolution = resolution,
+                                title = cleanTitle,
+                                year = customYear ?: "",
+                                duration = normalData?.durationFormatted ?: if (durationSec > 0) "${(durationSec / 60).toInt()}m" else "Live Stream",
+                                quality = currentQuality.ifBlank { resolution.ifBlank { "HD" } },
+                                provider = customProvider ?: "Max Stream",
                                 videoCodec = videoCodec,
-                                audioCodec = audioCodec,
-                                filePath = currentFilePath
+                                audioCodec = audioCodec
                             )
                         }
                     }
@@ -566,6 +582,8 @@ private fun TvShowGlassmorphismContent(
 @Composable
 private fun MovieGlassmorphismContent(
     movie: MovieItem,
+    quality: String = "HD",
+    provider: String = "Max Stream",
     onRefresh: () -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxWidth()) {
@@ -707,6 +725,42 @@ private fun MovieGlassmorphismContent(
                                 )
                             }
                         }
+
+                        // Quality and Provider pills
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                            ) {
+                                Text(
+                                    text = quality.ifBlank { "HD" },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                )
+                            }
+                            if (provider.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0x28FFFFFF),
+                                    border = BorderStroke(1.dp, Color(0x35FFFFFF))
+                                ) {
+                                    Text(
+                                        text = provider,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                         if (movie.genre.isNotBlank()) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -822,12 +876,12 @@ private fun MovieGlassmorphismContent(
 @Composable
 private fun NormalMediaGlassmorphismContent(
     title: String,
-    fileName: String,
+    year: String,
     duration: String,
-    resolution: String,
+    quality: String,
+    provider: String,
     videoCodec: String,
-    audioCodec: String,
-    filePath: String
+    audioCodec: String
 ) {
     Column(
         modifier = Modifier
@@ -839,14 +893,14 @@ private fun NormalMediaGlassmorphismContent(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.Outlined.Videocam,
+                        imageVector = Icons.Outlined.Movie,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
@@ -860,13 +914,40 @@ private fun NormalMediaGlassmorphismContent(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = fileName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (year.isNotBlank()) {
+                        Text(
+                            text = year,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                    ) {
+                        Text(
+                            text = quality.ifBlank { "HD" },
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                    if (provider.isNotBlank()) {
+                        Text(
+                            text = "• $provider",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                }
             }
         }
 
@@ -881,7 +962,7 @@ private fun NormalMediaGlassmorphismContent(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Text(
-                    text = "Technical Media Properties",
+                    text = "Stream Details",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -893,13 +974,13 @@ private fun NormalMediaGlassmorphismContent(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     TechSpecPill(
-                        label = "Resolution",
-                        value = resolution.ifBlank { "Standard" },
+                        label = "Quality",
+                        value = quality.ifBlank { "HD" },
                         modifier = Modifier.weight(1f)
                     )
                     TechSpecPill(
-                        label = "Duration",
-                        value = duration.ifBlank { "Live / Stream" },
+                        label = "Runtime",
+                        value = duration.ifBlank { "Live Stream" },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -911,42 +992,34 @@ private fun NormalMediaGlassmorphismContent(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     TechSpecPill(
-                        label = "Video Codec",
-                        value = videoCodec.ifBlank { "Auto" },
+                        label = "Source",
+                        value = provider.ifBlank { "Max Stream" },
                         modifier = Modifier.weight(1f)
                     )
                     TechSpecPill(
-                        label = "Audio Codec",
-                        value = audioCodec.ifBlank { "Auto" },
+                        label = "Year",
+                        value = year.ifBlank { "N/A" },
                         modifier = Modifier.weight(1f)
                     )
                 }
-            }
-        }
 
-        if (filePath.isNotBlank()) {
-            Spacer(modifier = Modifier.height(14.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0x10FFFFFF)),
-                border = BorderStroke(1.dp, Color(0x1AFFFFFF))
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        text = "Source URI",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.5f)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = filePath,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.8f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                if (videoCodec.isNotBlank() || audioCodec.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        TechSpecPill(
+                            label = "Video Codec",
+                            value = videoCodec.ifBlank { "Auto" },
+                            modifier = Modifier.weight(1f)
+                        )
+                        TechSpecPill(
+                            label = "Audio Codec",
+                            value = audioCodec.ifBlank { "Auto" },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }

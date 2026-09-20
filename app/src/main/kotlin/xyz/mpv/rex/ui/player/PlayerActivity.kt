@@ -724,6 +724,8 @@ class PlayerActivity :
     viewModel.setMediaTitle(fileName)
     viewModel.setMediaIdentifier(mediaIdentifier)
 
+    extractAndApplyCustomStreamMetadata(intent)
+
     jellyfinExternalInfo = xyz.mpv.rex.jellyfin.JellyfinExternalHelper.detect(intent)
 
     // Set HTTP headers (including referer) BEFORE playing the file
@@ -1821,34 +1823,8 @@ class PlayerActivity :
       mediaIdentifier = getMediaIdentifier(intent, fileName)
     }
 
-    // Handle custom CineTV metadata
-    val customSourceType = intent.getStringExtra("cinetv_source_type")
-    val customPoster = intent.getStringExtra("cinetv_poster")
-    val customOverview = intent.getStringExtra("cinetv_overview")
-    val customYear = intent.getStringExtra("cinetv_year")
-    val customRating = intent.getStringExtra("cinetv_rating")
-    val customProvider = intent.getStringExtra("cinetv_provider")
-
-    val linkUrls = intent.getStringArrayExtra("cinetv_links_urls")
-    val linkNames = intent.getStringArrayExtra("cinetv_links_names")
-    val linkQualities = intent.getIntArrayExtra("cinetv_links_qualities")
-    val linkReferers = intent.getStringArrayExtra("cinetv_links_referers")
-
-    viewModel.setCustomMetadata(
-      posterUrl = customPoster,
-      sourceType = customSourceType,
-      overview = customOverview,
-      year = customYear,
-      rating = customRating,
-      provider = customProvider
-    )
-
-    viewModel.setAvailableStreamQualities(
-      urls = linkUrls,
-      names = linkNames,
-      qualities = linkQualities,
-      referers = linkReferers
-    )
+    // Handle custom CineTV / Max Stream metadata and qualities
+    extractAndApplyCustomStreamMetadata(intent)
 
     // Start media notification service only when going to background (like stock mpv-android)
     // startBackgroundPlayback() is now deferred to backgrounding lifecycle events
@@ -2023,11 +1999,12 @@ class PlayerActivity :
 
     applySubtitlePreferences()
 
-    // Don't force media-title for standalone m3u/m3u8 streams - let MPV provide it
-    // But if we are playing from an M3U playlist with custom titles, we MUST set it
+    // Force media title if custom/movie title is available, avoiding raw m3u8 URLs
     val isM3uPlaylist = viewModel.playlistManager.isM3uPlaylist
     val hasCustomTitle = !viewModel.playlistManager.getTitleAt(viewModel.playlistManager.currentIndex.value).isNullOrBlank()
-    if (!isCurrentStreamM3U() || isM3uPlaylist || hasCustomTitle) {
+    val hasExplicitTitle = intent.hasExtra("title") || intent.hasExtra("cinetv_title") || intent.hasExtra("filename")
+    val isGenericM3uName = fileName.endsWith(".m3u8") || fileName.endsWith(".m3u") || fileName == "index.m3u8" || fileName == "master.m3u8" || fileName.startsWith("http")
+    if (hasExplicitTitle || !isGenericM3uName || !isCurrentStreamM3U() || isM3uPlaylist || hasCustomTitle) {
       safeSetPropertyString("force-media-title", fileName)
       viewModel.setMediaTitle(fileName)
     } else {
@@ -2402,8 +2379,47 @@ class PlayerActivity :
    */
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
+    setIntent(intent)
+    extractAndApplyCustomStreamMetadata(intent)
     extractAndSetupStreamFailover(intent)
     intentHandler.handleNewIntent(intent)
+  }
+
+  internal fun extractAndApplyCustomStreamMetadata(intent: Intent) {
+    val customSourceType = intent.getStringExtra("cinetv_source_type")
+    val customPoster = intent.getStringExtra("cinetv_poster")
+    val customOverview = intent.getStringExtra("cinetv_overview")
+    val customYear = intent.getStringExtra("cinetv_year")
+    val customRating = intent.getStringExtra("cinetv_rating")
+    val customProvider = intent.getStringExtra("cinetv_provider")
+
+    val linkUrls = intent.getStringArrayExtra("cinetv_links_urls")
+    val linkNames = intent.getStringArrayExtra("cinetv_links_names")
+    val linkQualities = intent.getIntArrayExtra("cinetv_links_qualities")
+    val linkReferers = intent.getStringArrayExtra("cinetv_links_referers")
+
+    val customTitle = intent.getStringExtra("title") ?: intent.getStringExtra("cinetv_title") ?: intent.getStringExtra("filename")
+    if (!customTitle.isNullOrBlank() && !customTitle.startsWith("http") && !customTitle.endsWith(".m3u8") && customTitle != "index.m3u8") {
+      fileName = customTitle
+      viewModel.setMediaTitle(customTitle)
+      safeSetPropertyString("force-media-title", customTitle)
+    }
+
+    viewModel.setCustomMetadata(
+      posterUrl = customPoster,
+      sourceType = customSourceType,
+      overview = customOverview,
+      year = customYear,
+      rating = customRating,
+      provider = customProvider
+    )
+
+    viewModel.setAvailableStreamQualities(
+      urls = linkUrls,
+      names = linkNames,
+      qualities = linkQualities,
+      referers = linkReferers
+    )
   }
 
   // ==================== Picture-in-Picture Management ====================

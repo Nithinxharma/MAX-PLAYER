@@ -18,6 +18,7 @@ import `is`.xyz.mpv.Utils
 import java.io.File
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import com.lagradost.cloudstream3.utils.ExtractorLink
 
 /**
  * Central entry point for video playback operations.
@@ -66,6 +67,13 @@ object MediaUtils : KoinComponent {
     headers: Map<String, String>? = null,
     subtitlesJson: String? = null,
     episodeMetadataJson: String? = null,
+    title: String? = null,
+    posterUrl: String? = null,
+    overview: String? = null,
+    year: String? = null,
+    rating: Double? = null,
+    providerName: String? = null,
+    allLinks: List<ExtractorLink>? = null,
   ) {
     val intent = when (source) {
       is Video -> {
@@ -178,6 +186,42 @@ object MediaUtils : KoinComponent {
         }
       }
       intent.putExtra("headers", headerPairs.toTypedArray())
+    }
+
+    if (!title.isNullOrBlank()) {
+      intent.putExtra("title", title)
+      intent.putExtra("cinetv_title", title)
+      intent.putExtra("filename", title)
+    }
+    if (!posterUrl.isNullOrBlank()) {
+      intent.putExtra("cinetv_poster", posterUrl)
+    }
+    if (!overview.isNullOrBlank()) {
+      intent.putExtra("cinetv_overview", overview)
+    }
+    if (!year.isNullOrBlank()) {
+      intent.putExtra("cinetv_year", year)
+    }
+    if (rating != null && rating > 0) {
+      intent.putExtra("cinetv_rating", rating.toString())
+    }
+    if (!providerName.isNullOrBlank()) {
+      intent.putExtra("cinetv_provider", providerName)
+    }
+    if (launchSource != null) {
+      intent.putExtra("cinetv_source_type", launchSource)
+    }
+
+    if (!allLinks.isNullOrEmpty()) {
+      val sortedLinks = allLinks.sortedByDescending { it.quality }
+      intent.putExtra("cinetv_links_urls", sortedLinks.map { it.url }.toTypedArray())
+      intent.putExtra("cinetv_links_names", sortedLinks.map { l ->
+        val qual = if (l.quality > 0) "${l.quality}p" else "Auto"
+        val source = l.source.ifBlank { providerName ?: "Server" }
+        "$qual - $source"
+      }.toTypedArray())
+      intent.putExtra("cinetv_links_qualities", sortedLinks.map { it.quality }.toIntArray())
+      intent.putExtra("cinetv_links_referers", sortedLinks.map { it.referer }.toTypedArray())
     }
     
     // For playlist items, pass the title so it shows correctly in the player

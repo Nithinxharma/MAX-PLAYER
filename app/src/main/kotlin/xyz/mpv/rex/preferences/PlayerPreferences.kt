@@ -122,9 +122,6 @@ class PlayerPreferences(
   // Ambience Mode
   val isAmbientEnabled = preferenceStore.getBoolean("ambient_enabled", false)
 
-  // Auto Skip Intro & Credits
-  val autoSkipCredits = preferenceStore.getBoolean("auto_skip_credits", true)
-
   // External media controls
   val disableMediaButtons = preferenceStore.getBoolean("disable_media_buttons", false)
 }

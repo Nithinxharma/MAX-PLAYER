@@ -298,7 +298,9 @@ class PlayerPlaylistLoader(
     val isM3U = isUriM3U(uri)
     val isM3uPlaylist = activity.viewModel.playlistManager.isM3uPlaylist
     val hasCustomTitle = !activity.viewModel.playlistManager.getTitleAt(index).isNullOrBlank()
-    if (!isM3U || isM3uPlaylist || hasCustomTitle) {
+    val hasExplicitTitle = activity.intent.hasExtra("title") || activity.intent.hasExtra("cinetv_title") || activity.intent.hasExtra("filename")
+    val isGenericM3uName = activity.fileName.endsWith(".m3u8") || activity.fileName.endsWith(".m3u") || activity.fileName == "index.m3u8" || activity.fileName == "master.m3u8" || activity.fileName.startsWith("http")
+    if (hasExplicitTitle || !isGenericM3uName || !isM3U || isM3uPlaylist || hasCustomTitle) {
       activity.safeSetPropertyString("force-media-title", activity.fileName)
       activity.viewModel.setMediaTitle(activity.fileName)
     } else {
@@ -387,14 +389,23 @@ class PlayerPlaylistLoader(
       }
     }
 
-    // For m3u/m3u8 streams, use MPV's raw media-title directly
+    // 2. Check if intent or fileName has a clean custom title (not a url or generic m3u8)
+    val customIntentTitle = activity.intent.getStringExtra("title") ?: activity.intent.getStringExtra("cinetv_title")
+    if (!customIntentTitle.isNullOrBlank() && !customIntentTitle.startsWith("http") && !customIntentTitle.endsWith(".m3u8") && customIntentTitle != "index.m3u8") {
+      return customIntentTitle
+    }
+    if (!activity.fileName.isNullOrBlank() && !activity.fileName.startsWith("http") && !activity.fileName.endsWith(".m3u8") && activity.fileName != "index.m3u8") {
+      return activity.fileName
+    }
+
+    // 3. For m3u/m3u8 streams, only use MPV's raw media-title if it's not generic index.m3u8 or raw URL
     if (isCurrentStreamM3U()) {
       val rawTitle = MPVLib.getPropertyString("media-title")
-      if (!rawTitle.isNullOrBlank()) {
+      if (!rawTitle.isNullOrBlank() && !rawTitle.startsWith("http") && !rawTitle.endsWith(".m3u8") && rawTitle != "index.m3u8") {
         return rawTitle
       }
     }
-    return activity.fileName
+    return activity.fileName.takeIf { !it.startsWith("http") && !it.endsWith(".m3u8") && it != "index.m3u8" } ?: "Max Stream"
   }
 
   /**

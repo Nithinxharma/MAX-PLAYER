@@ -1,6 +1,5 @@
 package xyz.mpv.rex.ui.browser.cinehub
 
-import xyz.mpv.rex.cinehub.bridge.RexPlayerBridge
 import android.os.Environment
 import android.util.Log
 import android.widget.Toast
@@ -1128,50 +1127,19 @@ object CineHubScreen : Screen {
                 item = item,
                 scope = scope,
                 onLinksLoaded = { links, subs, epMetaJson ->
-                  if (links.isNotEmpty()) {
-                    val bestLink = links.maxByOrNull { it.quality } ?: links.first()
-                    val title = when (item) {
-                      is MovieItem -> item.title
-                      is TvShowItem -> item.title
-                      is ExtensionMediaDetails -> item.loadResponse.name
-                      is MovieLoadResponse -> item.name
-                      else -> "Media Stream"
+                  if (links.size == 1) {
+                    val link = links.first()
+                    val headersMap = buildMap {
+                      if (link.referer.isNotBlank()) put("Referer", link.referer)
+                      putAll(link.headers)
                     }
-                    val posterUrl = when (item) {
-                      is MovieItem -> item.posterPath
-                      is ExtensionMediaDetails -> item.loadResponse.posterUrl
-                      is MovieLoadResponse -> item.posterUrl
-                      else -> null
-                    }
-                    val overview = when (item) {
-                      is MovieItem -> item.plot
-                      is ExtensionMediaDetails -> item.loadResponse.plot
-                      is MovieLoadResponse -> item.plot
-                      else -> null
-                    }
-                    val year = when (item) {
-                      is MovieItem -> item.premiered.take(4)
-                      is ExtensionMediaDetails -> item.loadResponse.year?.toString()
-                      is MovieLoadResponse -> item.year?.toString()
-                      else -> null
-                    }
-                    val providerName = when (item) {
-                      is ExtensionMediaDetails -> item.providerName.ifBlank { item.loadResponse.apiName }
-                      is MovieLoadResponse -> item.apiName
-                      else -> "CineHub"
-                    }
-
-                    RexPlayerBridge.playStream(
-                      context = context,
-                      link = bestLink,
-                      title = title,
-                      posterUrl = posterUrl,
-                      overview = overview,
-                      year = year,
-                      rating = 8.0,
-                      providerName = providerName,
-                      allLinks = links
-                    )
+                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetaJson)
+                  } else if (links.size > 1) {
+                    pendingStreamLinks = links
+                    pendingSubtitles = subs
+                    pendingEpisodeMetadataJson = epMetaJson
+                    pendingStreamTitle = if (item is MovieItem) item.title else if (item is TvShowItem) item.title else ""
                   } else {
                     Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                   }
@@ -1183,50 +1151,19 @@ object CineHubScreen : Screen {
               loadMedia()
             },
             onLinksLoaded = { links, subs, epMetaJson ->
-              if (links.isNotEmpty()) {
-                val bestLink = links.maxByOrNull { it.quality } ?: links.first()
-                val title = when (item) {
-                  is MovieItem -> item.title
-                  is TvShowItem -> item.title
-                  is ExtensionMediaDetails -> item.loadResponse.name
-                  is MovieLoadResponse -> item.name
-                  else -> "Media Stream"
+              if (links.size == 1) {
+                val link = links.first()
+                val headersMap = buildMap {
+                  if (link.referer.isNotBlank()) put("Referer", link.referer)
+                  putAll(link.headers)
                 }
-                val posterUrl = when (item) {
-                  is MovieItem -> item.posterPath
-                  is ExtensionMediaDetails -> item.loadResponse.posterUrl
-                  is MovieLoadResponse -> item.posterUrl
-                  else -> null
-                }
-                val overview = when (item) {
-                  is MovieItem -> item.plot
-                  is ExtensionMediaDetails -> item.loadResponse.plot
-                  is MovieLoadResponse -> item.plot
-                  else -> null
-                }
-                val year = when (item) {
-                  is MovieItem -> item.premiered.take(4)
-                  is ExtensionMediaDetails -> item.loadResponse.year?.toString()
-                  is MovieLoadResponse -> item.year?.toString()
-                  else -> null
-                }
-                val providerName = when (item) {
-                  is ExtensionMediaDetails -> item.providerName.ifBlank { item.loadResponse.apiName }
-                  is MovieLoadResponse -> item.apiName
-                  else -> "CineHub"
-                }
-
-                RexPlayerBridge.playStream(
-                  context = context,
-                  link = bestLink,
-                  title = title,
-                  posterUrl = posterUrl,
-                  overview = overview,
-                  year = year,
-                  rating = 8.0,
-                  providerName = providerName,
-                  allLinks = links
-                )
+                val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetaJson)
+              } else if (links.size > 1) {
+                pendingStreamLinks = links
+                pendingSubtitles = subs
+                pendingEpisodeMetadataJson = epMetaJson
+                pendingStreamTitle = ""
               } else {
                 Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
               }
@@ -1242,52 +1179,18 @@ object CineHubScreen : Screen {
             episodeMetadataJson = pendingEpisodeMetadataJson,
             onDismiss = { pendingStreamLinks = emptyList() },
             onLinkSelected = { link ->
-              val title = pendingStreamTitle.ifBlank {
-                selectedDetailItem?.let { item ->
-                  when (item) {
-                    is MovieItem -> item.title
-                    is TvShowItem -> item.title
-                    is ExtensionMediaDetails -> item.loadResponse.name
-                    is MovieLoadResponse -> item.name
-                    else -> "Media Stream"
-                  }
-                } ?: "Media Stream"
+              val headersMap = buildMap {
+                if (link.referer.isNotBlank()) put("Referer", link.referer)
+                putAll(link.headers)
               }
-              val posterUrl = selectedDetailItem?.let { item ->
-                when (item) {
-                  is MovieItem -> item.posterPath
-                  is ExtensionMediaDetails -> item.loadResponse.posterUrl
-                  is MovieLoadResponse -> item.posterUrl
-                  else -> null
-                }
-              }
-              val overview = selectedDetailItem?.let { item ->
-                when (item) {
-                  is MovieItem -> item.plot
-                  is ExtensionMediaDetails -> item.loadResponse.plot
-                  is MovieLoadResponse -> item.plot
-                  else -> null
-                }
-              }
-              val year = selectedDetailItem?.let { item ->
-                when (item) {
-                  is MovieItem -> item.premiered.take(4)
-                  is ExtensionMediaDetails -> item.loadResponse.year?.toString()
-                  is MovieLoadResponse -> item.year?.toString()
-                  else -> null
-                }
-              }
-
-              RexPlayerBridge.playStream(
+              val subtitlesJson = if (pendingSubtitles.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(pendingSubtitles.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+              MediaUtils.playFile(
+                source = link.url,
                 context = context,
-                link = link,
-                title = title,
-                posterUrl = posterUrl,
-                overview = overview,
-                year = year,
-                rating = 8.0,
-                providerName = "CineHub",
-                allLinks = pendingStreamLinks
+                launchSource = "cinehub",
+                headers = headersMap,
+                subtitlesJson = subtitlesJson,
+                episodeMetadataJson = pendingEpisodeMetadataJson
               )
               pendingStreamLinks = emptyList()
             }
@@ -1430,20 +1333,15 @@ object CineHubScreen : Screen {
                 if (onLinksLoaded != null) {
                   onLinksLoaded(links, subs, null)
                 } else {
-                  if (links.isNotEmpty()) {
-                    val bestLink = links.maxByOrNull { it.quality } ?: links.first()
-                    RexPlayerBridge.playStream(
-                      context = context,
-                      link = bestLink,
-                      title = item.loadResponse.name,
-                      posterUrl = item.loadResponse.posterUrl,
-                      overview = item.loadResponse.plot,
-                      year = item.loadResponse.year?.toString(),
-                      rating = 8.0,
-                      providerName = item.providerName.ifBlank { item.loadResponse.apiName },
-                      allLinks = links
-                    )
-                  } else {
+                  if (links.size == 1) {
+                    val link = links.first()
+                    val headersMap = buildMap {
+                      if (link.referer.isNotBlank()) put("Referer", link.referer)
+                      putAll(link.headers)
+                    }
+                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                  } else if (links.isEmpty()) {
                     Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                   }
                 }
@@ -1467,20 +1365,15 @@ object CineHubScreen : Screen {
             if (onLinksLoaded != null) {
               onLinksLoaded(links, subs, null)
             } else {
-              if (links.isNotEmpty()) {
-                val bestLink = links.maxByOrNull { it.quality } ?: links.first()
-                RexPlayerBridge.playStream(
-                  context = context,
-                  link = bestLink,
-                  title = item.name,
-                  posterUrl = item.posterUrl,
-                  overview = item.plot,
-                  year = item.year?.toString(),
-                  rating = 8.0,
-                  providerName = item.apiName,
-                  allLinks = links
-                )
-              } else {
+              if (links.size == 1) {
+                val link = links.first()
+                val headersMap = buildMap {
+                  if (link.referer.isNotBlank()) put("Referer", link.referer)
+                  putAll(link.headers)
+                }
+                val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+              } else if (links.isEmpty()) {
                 Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
               }
             }
@@ -2668,21 +2561,16 @@ fun CineDetailBottomSheet(
                             if (onLinksLoaded != null) {
                               onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
                             } else {
-                              if (links.isNotEmpty()) {
-                                val bestLink = links.maxByOrNull { it.quality } ?: links.first()
-                                val displayTitle = "${loadResp.name} - ${ep.name ?: "Episode ${ep.episode ?: (idx + 1)}"}"
-                                RexPlayerBridge.playStream(
-                                  context = context,
-                                  link = bestLink,
-                                  title = displayTitle,
-                                  posterUrl = ep.posterUrl ?: loadResp.posterUrl,
-                                  overview = ep.description ?: loadResp.plot,
-                                  year = loadResp.year?.toString(),
-                                  rating = 8.0,
-                                  providerName = provName,
-                                  allLinks = links
-                                )
-                              } else {
+                              if (links.size == 1) {
+                                val link = links.first()
+                                val headersMap = buildMap {
+                                  if (link.referer.isNotBlank()) put("Referer", link.referer)
+                                  putAll(link.headers)
+                                }
+                                val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                                val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epJson)
+                              } else if (links.isEmpty()) {
                                 Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                               }
                             }
@@ -2763,21 +2651,16 @@ fun CineDetailBottomSheet(
                                 if (onLinksLoaded != null) {
                                   onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
                                 } else {
-                                  if (links.isNotEmpty()) {
-                                    val bestLink = links.maxByOrNull { it.quality } ?: links.first()
-                                    val displayTitle = "${loadResp.name} - ${ep.name ?: "Episode ${ep.episode ?: (idx + 1)}"}"
-                                    RexPlayerBridge.playStream(
-                                      context = context,
-                                      link = bestLink,
-                                      title = displayTitle,
-                                      posterUrl = ep.posterUrl ?: loadResp.posterUrl,
-                                      overview = ep.description ?: loadResp.plot,
-                                      year = loadResp.year?.toString(),
-                                      rating = 8.0,
-                                      providerName = provName,
-                                      allLinks = links
-                                    )
-                                  } else {
+                                  if (links.size == 1) {
+                                    val link = links.first()
+                                    val headersMap = buildMap {
+                                      if (link.referer.isNotBlank()) put("Referer", link.referer)
+                                      putAll(link.headers)
+                                    }
+                                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                                    val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epJson)
+                                  } else if (links.isEmpty()) {
                                     Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                                   }
                                 }
