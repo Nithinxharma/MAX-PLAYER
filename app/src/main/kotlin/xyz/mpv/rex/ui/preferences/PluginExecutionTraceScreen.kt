@@ -42,7 +42,8 @@ import xyz.mpv.rex.cinehub.extension.model.TraceStepStatus
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PluginExecutionTraceScreen(
-    onNavigateBack: () -> Unit,
+    onNavigateBack: () -> Unit = {},
+    showTopBar: Boolean = true,
     viewModel: PluginExecutionTraceViewModel = koinInject()
 ) {
     val context = LocalContext.current

@@ -118,20 +118,56 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> {
         val links = mutableListOf<CineHubStreamLink>()
-        api.loadLinks(data, false, subtitleCallback = {}) { extractor ->
+        runCatching {
+            api.loadLinks(data, false, subtitleCallback = {}) { extractor ->
+                links.add(
+                    CineHubStreamLink(
+                        name = extractor.name,
+                        url = extractor.url,
+                        quality = "${extractor.quality}p",
+                        isM3u8 = extractor.isM3u8,
+                        headers = buildMap {
+                            if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
+                            putAll(extractor.headers)
+                        }
+                    )
+                )
+            }
+        }
+
+        // Fallback 1: Attempt direct loadExtractor on data if links is empty and data is a valid URL
+        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
+            runCatching {
+                com.lagradost.cloudstream3.utils.loadExtractor(data, subtitleCallback = {}) { extractor ->
+                    links.add(
+                        CineHubStreamLink(
+                            name = extractor.name,
+                            url = extractor.url,
+                            quality = "${extractor.quality}p",
+                            isM3u8 = extractor.isM3u8,
+                            headers = buildMap {
+                                if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
+                                putAll(extractor.headers)
+                            }
+                        )
+                    )
+                }
+            }
+        }
+
+        // Fallback 2: If still empty and data is a direct HTTP(S) URL, wrap as real direct stream link
+        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
             links.add(
                 CineHubStreamLink(
-                    name = extractor.name,
-                    url = extractor.url,
-                    quality = "${extractor.quality}p",
-                    isM3u8 = extractor.isM3u8,
-                    headers = buildMap {
-                        if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
-                        putAll(extractor.headers)
-                    }
+                    name = api.name,
+                    url = data,
+                    quality = "Auto",
+                    isM3u8 = data.contains(".m3u8") || data.contains("m3u8"),
+                    headers = emptyMap()
                 )
             )
         }
+
         return links
     }
 

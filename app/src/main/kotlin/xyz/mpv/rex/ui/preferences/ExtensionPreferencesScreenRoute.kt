@@ -16,8 +16,8 @@ object ExtensionPreferencesScreenRoute : Screen {
             onNavigateToPresets = { backstack.add(RepositoryPresetsScreenRoute) },
             onNavigateToInstalled = { backstack.add(InstalledExtensionsScreenRoute) },
             onNavigateToTestCenter = { backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen) },
-            onNavigateToForceActivation = { backstack.add(ForcePluginActivationScreenRoute) },
-            onNavigateToExecutionTrace = { backstack.add(PluginExecutionTraceScreenRoute) }
+            onNavigateToForceActivation = { backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen) },
+            onNavigateToExecutionTrace = { backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen) }
         )
     }
 }

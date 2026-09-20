@@ -29,6 +29,14 @@ object AcraApplication {
 object APIHolder {
     init {
         Log.i("APIHolder", "INSTANCE_IDENTITY: APIHolder initialized. identityHashCode=${System.identityHashCode(this)}")
+        runCatching {
+            addExtractor(com.lagradost.cloudstream3.extractors.Filesim())
+            addExtractor(com.lagradost.cloudstream3.extractors.GMPlayer())
+            addExtractor(com.lagradost.cloudstream3.extractors.Jeniusplay())
+            addExtractor(com.lagradost.cloudstream3.extractors.PixelDrain())
+            addExtractor(com.lagradost.cloudstream3.extractors.StreamSB())
+            addExtractor(com.lagradost.cloudstream3.extractors.Voe())
+        }
     }
     val unixTimeMS: Long get() = System.currentTimeMillis()
     val unixTime: Long get() = unixTimeMS / 1000L

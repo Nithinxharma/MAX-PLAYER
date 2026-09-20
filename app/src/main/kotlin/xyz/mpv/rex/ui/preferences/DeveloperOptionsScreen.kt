@@ -81,7 +81,7 @@ object DeveloperOptionsScreen : Screen {
                                     )
                                 },
                                 onClick = {
-                                    backstack.add(PluginExecutionTraceScreenRoute)
+                                    backstack.add(CloudStreamTestCenterScreen)
                                 }
                             )
                         }
@@ -102,7 +102,7 @@ object DeveloperOptionsScreen : Screen {
                                     )
                                 },
                                 onClick = {
-                                    backstack.add(ForcePluginActivationScreenRoute)
+                                    backstack.add(CloudStreamTestCenterScreen)
                                 }
                             )
                         }

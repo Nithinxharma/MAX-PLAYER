@@ -46,8 +46,9 @@ import xyz.mpv.rex.cinehub.extension.model.RegisteredProviderSummary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForcePluginActivationScreen(
-    onNavigateBack: () -> Unit,
+    onNavigateBack: () -> Unit = {},
     onNavigateToTrace: () -> Unit = {},
+    showTopBar: Boolean = true,
     viewModel: ForcePluginActivationViewModel = koinInject()
 ) {
     val context = LocalContext.current
@@ -69,311 +70,228 @@ fun ForcePluginActivationScreen(
     val totalProvidersCount = rawPlugins.sumOf { it.registeredProviders.size }
     val totalExtractorsCount = rawPlugins.sumOf { it.registeredExtractors.size }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (showSearchBar) {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.onSearchQueryChanged(it) },
-                            placeholder = { Text("Search plugins, packages, providers...") },
-                            singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Column {
-                            Text("Force Plugin Activation", style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                "$activeCount Active • ${rawPlugins.size} Detected",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        showSearchBar = !showSearchBar
-                        if (!showSearchBar) viewModel.onSearchQueryChanged("")
-                    }) {
-                        Icon(
-                            if (showSearchBar) Icons.Default.Close else Icons.Default.Search,
-                            contentDescription = "Search"
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.refreshDetectedPlugins() },
-                        enabled = !isRefreshing && !isBulkOperating
-                    ) {
-                        if (isRefreshing) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                        }
-                    }
-                    var showMenu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Options")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("🔬 Plugin Execution Trace") },
-                            leadingIcon = { Icon(Icons.Outlined.Troubleshoot, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                onNavigateToTrace()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("⚡ Force Activate All") },
-                            leadingIcon = { Icon(Icons.Default.FlashOn, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                viewModel.forceActivateAll()
-                                Toast.makeText(context, "Activating all plugins...", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("🔄 Force Reload All") },
-                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                viewModel.forceReloadAll()
-                                Toast.makeText(context, "Reloading all plugins...", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("📋 View Live Logs") },
-                            leadingIcon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                showLogsBottomSheet = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("🗑 Clear Console Logs") },
-                            leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                viewModel.clearLogs()
-                            }
-                        )
-                    }
-                }
-            )
-        },
-        bottomBar = {
+    val content: @Composable (PaddingValues) -> Unit = { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Stats Header
             Surface(
-                tonalElevation = 3.dp,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FilledTonalButton(
-                            onClick = { viewModel.forceActivateAll() },
-                            enabled = !isBulkOperating && !isRefreshing,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.FlashOn, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Activate All", fontSize = 13.sp)
+                        Column {
+                            Text("ACTIVE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            Text("$activeCount / ${rawPlugins.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
-                        OutlinedButton(
-                            onClick = { viewModel.forceReloadAll() },
-                            enabled = !isBulkOperating && !isRefreshing,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Reload All", fontSize = 13.sp)
+                        Column {
+                            Text("PROVIDERS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            Text("$totalProvidersCount", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Column {
+                            Text("EXTRACTORS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            Text("$totalExtractorsCount", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
                         }
                     }
 
-                    TextButton(onClick = { showLogsBottomSheet = true }) {
-                        Icon(Icons.Outlined.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Logs (${runtimeLogs.size})", fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(onClick = { showLogsBottomSheet = true }) {
+                            Icon(Icons.Outlined.Terminal, contentDescription = "View Logs", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            // Summary Health Header
-            item {
-                SystemSummaryBanner(
-                    totalPlugins = rawPlugins.size,
-                    activePlugins = activeCount,
-                    installedCount = installedCount,
-                    totalProviders = totalProvidersCount,
-                    totalExtractors = totalExtractorsCount
-                )
+
+            // Quick Actions Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { viewModel.forceActivateAll() },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isBulkOperating && rawPlugins.isNotEmpty(),
+                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp)
+                ) {
+                    Icon(Icons.Default.FlashOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Activate All", fontSize = 13.sp)
+                }
+
+                OutlinedButton(
+                    onClick = { viewModel.forceReloadAll() },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isBulkOperating && rawPlugins.isNotEmpty(),
+                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp)
+                ) {
+                    Icon(Icons.Default.Autorenew, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Reload Runtime", fontSize = 13.sp)
+                }
             }
 
-            // Filter Tabs
-            item {
-                Row(
+            // Filter Chips Row
+            ScrollableTabRow(
+                selectedTabIndex = selectedFilter.ordinal,
+                edgePadding = 16.dp,
+                divider = {}
+            ) {
+                PluginFilterTab.values().forEach { tab ->
+                    Tab(
+                        selected = selectedFilter == tab,
+                        onClick = { viewModel.onFilterChanged(tab) },
+                        text = {
+                            val count = when (tab) {
+                                PluginFilterTab.ALL -> rawPlugins.size
+                                PluginFilterTab.ACTIVE -> activeCount
+                                PluginFilterTab.INACTIVE -> rawPlugins.size - activeCount
+                                PluginFilterTab.ERRORS -> rawPlugins.count {
+                                    it.state == PluginActivationState.ERROR || it.state == PluginActivationState.FILE_MISSING
+                                }
+                            }
+                            Text("${tab.label} ($count)", fontSize = 12.sp)
+                        }
+                    )
+                }
+            }
+
+            // Plugin List
+            if (filteredPlugins.isEmpty()) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    PluginFilterTab.values().forEach { tab ->
-                        FilterChip(
-                            selected = selectedFilter == tab,
-                            onClick = { viewModel.onFilterChanged(tab) },
-                            label = { Text(tab.label) },
-                            leadingIcon = if (selectedFilter == tab) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Outlined.ExtensionOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "No matching plugins detected",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.outline
                         )
                     }
                 }
-            }
-
-            if (filteredPlugins.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(48.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Outlined.ExtensionOff,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = if (searchQuery.isNotBlank()) "No plugins matching '$searchQuery'" else "No plugins detected",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Button(
-                                onClick = { viewModel.refreshDetectedPlugins() },
-                                modifier = Modifier.padding(top = 8.dp)
-                            ) {
-                                Text("Scan Storage & Database")
-                            }
-                        }
-                    }
-                }
             } else {
-                items(filteredPlugins, key = { it.pkgName }) { plugin ->
-                    PluginItemCard(
-                        plugin = plugin,
-                        onForceActivate = { viewModel.forceActivatePlugin(plugin.pkgName) },
-                        onForceDeactivate = { viewModel.forceDeactivatePlugin(plugin.pkgName) },
-                        onForceReload = { viewModel.forceReloadPlugin(plugin.pkgName) },
-                        onForceDexLoad = { viewModel.forceDexLoad(plugin.pkgName) },
-                        onRunTests = { viewModel.runBasicPluginTests(plugin.pkgName) }
-                    )
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredPlugins, key = { it.pkgName }) { plugin ->
+                        PluginItemCard(
+                            plugin = plugin,
+                            onForceActivate = { viewModel.forceActivatePlugin(plugin.pkgName) },
+                            onForceDeactivate = { viewModel.forceDeactivatePlugin(plugin.pkgName) },
+                            onForceReload = { viewModel.forceReloadPlugin(plugin.pkgName) },
+                            onForceDexLoad = { viewModel.forceDexLoad(plugin.pkgName) },
+                            onRunTests = { viewModel.runBasicPluginTests(plugin.pkgName) }
+                        )
+                    }
                 }
             }
         }
     }
 
-    if (showLogsBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showLogsBottomSheet = false }
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.85f)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Plugin Activation Console Logs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Row {
-                        IconButton(onClick = {
-                            clipboardManager.setText(AnnotatedString(runtimeLogs.joinToString("\n")))
-                            Toast.makeText(context, "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
-                        }) {
-                            Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy Logs")
-                        }
-                        IconButton(onClick = { viewModel.clearLogs() }) {
-                            Icon(Icons.Outlined.DeleteOutline, contentDescription = "Clear Logs")
-                        }
-                    }
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .padding(12.dp)
-                ) {
-                    SelectionContainer {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            if (runtimeLogs.isEmpty()) {
-                                item {
-                                    Text("No console logs available yet. Perform an action to see real-time output.", style = MaterialTheme.typography.bodySmall)
-                                }
-                            } else {
-                                items(runtimeLogs) { logLine ->
-                                    val color = when {
-                                        logLine.contains("FAILED") || logLine.contains("Error") || logLine.contains("❌") -> MaterialTheme.colorScheme.error
-                                        logLine.contains("✅") || logLine.contains("Passed") -> MaterialTheme.colorScheme.primary
-                                        logLine.contains("⚠️") -> Color(0xFFE65100)
-                                        else -> MaterialTheme.colorScheme.onSurface
-                                    }
-                                    Text(
-                                        text = logLine,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp,
-                                        lineHeight = 15.sp,
-                                        color = color
-                                    )
-                                }
+    if (showTopBar) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        if (showSearchBar) {
+                            TextField(
+                                value = searchQuery,
+                                onValueChange = { viewModel.onSearchQueryChanged(it) },
+                                placeholder = { Text("Search plugins, packages, providers...") },
+                                singleLine = true,
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    disabledContainerColor = Color.Transparent
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Column {
+                                Text("Force Plugin Activation", style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    "$activeCount Active • ${rawPlugins.size} Detected",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            showSearchBar = !showSearchBar
+                            if (!showSearchBar) viewModel.onSearchQueryChanged("")
+                        }) {
+                            Icon(
+                                if (showSearchBar) Icons.Default.Close else Icons.Default.Search,
+                                contentDescription = "Search"
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.refreshDetectedPlugins() },
+                            enabled = !isRefreshing && !isBulkOperating
+                        ) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            }
+                        }
+                        var showMenu by remember { mutableStateOf(false) }
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Options")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("🔬 Plugin Execution Trace") },
+                                leadingIcon = { Icon(Icons.Outlined.Troubleshoot, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    onNavigateToTrace()
+                                }
+                            )
+                        }
                     }
-                }
+                )
             }
+        ) { paddingValues ->
+            content(paddingValues)
         }
+    } else {
+        content(PaddingValues(0.dp))
     }
 }
 
