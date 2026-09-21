@@ -38,6 +38,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
@@ -61,6 +62,12 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.Hd
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.offset
@@ -256,6 +263,16 @@ fun PlayerControls(
   val abLoopB by viewModel.abLoopB.collectAsState()
   val isABLoopExpanded by viewModel.isABLoopExpanded.collectAsState()
   val isFrameNavigationExpanded by viewModel.isFrameNavigationExpanded.collectAsState()
+  val isQualityOnScreenExpanded by viewModel.isQualityOnScreenExpanded.collectAsState()
+  val isInfoOnScreenExpanded by viewModel.isInfoOnScreenExpanded.collectAsState()
+  val availableStreamQualities by viewModel.availableStreamQualities.collectAsState()
+  val currentQualityName by viewModel.currentQualityName.collectAsState()
+  val selectedQualityUrl by viewModel.selectedQualityUrl.collectAsState()
+  val customPoster by viewModel.customMediaPosterUrl.collectAsState()
+  val customOverview by viewModel.customMediaOverview.collectAsState()
+  val customYear by viewModel.customMediaYear.collectAsState()
+  val customRating by viewModel.customMediaRating.collectAsState()
+  val customProvider by viewModel.customMediaProvider.collectAsState()
   val isSnapshotLoading by viewModel.isSnapshotLoading.collectAsState()
 
   val isGestureSeeking by viewModel.isGestureSeeking.collectAsState()
@@ -410,6 +427,8 @@ fun PlayerControls(
         val customButtonsPortraitRef = createRef()
         val floatingABLoop = createRef()
         val floatingFrameNav = createRef()
+        val floatingQuality = createRef()
+        val floatingInfoCard = createRef()
 
         val bottomControlsBelowSeekbar by playerPreferences.bottomControlsBelowSeekbar.collectAsState()
 
@@ -1918,6 +1937,320 @@ fun PlayerControls(
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(16.dp),
                   )
+                }
+              }
+            }
+          }
+        }
+
+        // Apple-style On-Screen Quality Controls (Frame nav style)
+        AnimatedVisibility(
+          visible = isQualityOnScreenExpanded,
+          enter = fadeIn(tween(200)) + slideInHorizontally(initialOffsetX = { it }),
+          exit = fadeOut(tween(200)) + slideOutHorizontally(targetOffsetX = { it }),
+          modifier = Modifier
+            .constrainAs(floatingQuality) {
+              end.linkTo(parent.end, spacing.medium)
+              bottom.linkTo(
+                if (isPortrait) customButtonsPortraitRef.top else seekbar.top,
+                margin = spacing.medium
+              )
+            }
+        ) {
+          val context = LocalContext.current
+          Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+            modifier = Modifier.height(44.dp),
+          ) {
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.Hd,
+                contentDescription = "Quality",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                  .padding(start = 4.dp, end = 2.dp)
+                  .size(22.dp)
+              )
+
+              if (availableStreamQualities.isNotEmpty()) {
+                availableStreamQualities.forEach { qItem ->
+                  val label = if (qItem.quality > 0) "${qItem.quality}p" else qItem.name.substringBefore(" -")
+                  val isSelected = (selectedQualityUrl == qItem.url) || (currentQualityName.equals(label, ignoreCase = true))
+
+                  Surface(
+                    shape = CircleShape,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                      .height(34.dp)
+                      .clip(CircleShape)
+                      .clickable {
+                        viewModel.selectStreamQuality(context, qItem)
+                      }
+                  ) {
+                    Box(
+                      contentAlignment = Alignment.Center,
+                      modifier = Modifier.padding(horizontal = 10.dp)
+                    ) {
+                      Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                      )
+                    }
+                  }
+                }
+              } else {
+                listOf("Auto", "1080p", "720p", "480p").forEach { fallbackLabel ->
+                  val isSelected = currentQualityName.equals(fallbackLabel, ignoreCase = true) || (fallbackLabel == "Auto" && currentQualityName == "Auto")
+                  Surface(
+                    shape = CircleShape,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                      .height(34.dp)
+                      .clip(CircleShape)
+                      .clickable {
+                        val match = availableStreamQualities.firstOrNull { it.name.contains(fallbackLabel, ignoreCase = true) || "${it.quality}p" == fallbackLabel }
+                        if (match != null) {
+                          viewModel.selectStreamQuality(context, match)
+                        } else {
+                          android.widget.Toast.makeText(context, "Quality: $fallbackLabel", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                      }
+                  ) {
+                    Box(
+                      contentAlignment = Alignment.Center,
+                      modifier = Modifier.padding(horizontal = 10.dp)
+                    ) {
+                      Text(
+                        text = fallbackLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                      )
+                    }
+                  }
+                }
+              }
+
+              Surface(
+                shape = CircleShape,
+                color = Color.Transparent,
+                modifier = Modifier
+                  .size(34.dp)
+                  .clip(CircleShape)
+                  .clickable {
+                    viewModel.dismissQualityOnScreen()
+                    onOpenSheet(Sheets.Quality)
+                  }
+              ) {
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "All Qualities",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                  )
+                }
+              }
+
+              Surface(
+                shape = CircleShape,
+                color = Color.Transparent,
+                modifier = Modifier
+                  .size(34.dp)
+                  .clip(CircleShape)
+                  .clickable {
+                    viewModel.dismissQualityOnScreen()
+                  }
+              ) {
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(18.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        // Apple-style On-Screen Info Card (Frame nav style)
+        AnimatedVisibility(
+          visible = isInfoOnScreenExpanded,
+          enter = fadeIn(tween(250)) + slideInHorizontally(initialOffsetX = { -it }),
+          exit = fadeOut(tween(200)) + slideOutHorizontally(targetOffsetX = { -it }),
+          modifier = Modifier
+            .constrainAs(floatingInfoCard) {
+              start.linkTo(parent.start, spacing.medium)
+              bottom.linkTo(
+                if (isPortrait) customButtonsPortraitRef.top else seekbar.top,
+                margin = spacing.medium
+              )
+            }
+        ) {
+          val displayPoster = customPoster
+          val displayTitle = mediaTitle.ifBlank { "Now Playing" }
+          val displayOverview = customOverview ?: ""
+          val displayYear = customYear ?: ""
+          val displayRating = customRating ?: ""
+          val displayProvider = customProvider ?: "CineHub"
+
+          Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.90f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+            modifier = Modifier
+              .widthIn(max = if (isPortrait) 320.dp else 400.dp)
+              .padding(4.dp)
+          ) {
+            Row(
+              modifier = Modifier
+                .padding(10.dp)
+                .fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              if (!displayPoster.isNullOrBlank()) {
+                AsyncImage(
+                  model = displayPoster,
+                  contentDescription = displayTitle,
+                  contentScale = ContentScale.Crop,
+                  modifier = Modifier
+                    .size(width = 54.dp, height = 76.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+              }
+
+              Column(
+                modifier = Modifier.weight(1f)
+              ) {
+                Text(
+                  text = displayTitle,
+                  style = MaterialTheme.typography.titleSmall,
+                  fontWeight = FontWeight.Bold,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+                ) {
+                  if (displayYear.isNotBlank()) {
+                    Surface(
+                      shape = RoundedCornerShape(4.dp),
+                      color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                      modifier = Modifier.padding(0.dp)
+                    ) {
+                      Text(
+                        text = displayYear,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                      )
+                    }
+                  }
+
+                  if (displayRating.isNotBlank()) {
+                    Surface(
+                      shape = RoundedCornerShape(4.dp),
+                      color = Color(0xFFFFB800).copy(alpha = 0.2f),
+                    ) {
+                      Text(
+                        text = "★ $displayRating",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFC72C),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                      )
+                    }
+                  }
+
+                  if (displayProvider.isNotBlank()) {
+                    Surface(
+                      shape = RoundedCornerShape(4.dp),
+                      color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    ) {
+                      Text(
+                        text = displayProvider,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                      )
+                    }
+                  }
+                }
+
+                if (displayOverview.isNotBlank()) {
+                  Text(
+                    text = displayOverview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 14.sp
+                  )
+                }
+              }
+
+              Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(start = 6.dp)
+              ) {
+                Surface(
+                  shape = CircleShape,
+                  color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                  modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                      viewModel.dismissInfoOnScreen()
+                      onOpenSheet(Sheets.Metadata)
+                    }
+                ) {
+                  Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                      imageVector = Icons.Default.Info,
+                      contentDescription = "Full Info",
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(18.dp)
+                    )
+                  }
+                }
+
+                Surface(
+                  shape = CircleShape,
+                  color = Color.Transparent,
+                  modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                      viewModel.dismissInfoOnScreen()
+                    }
+                ) {
+                  Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                      imageVector = Icons.Default.Close,
+                      contentDescription = "Close",
+                      tint = MaterialTheme.colorScheme.onSurface,
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
                 }
               }
             }

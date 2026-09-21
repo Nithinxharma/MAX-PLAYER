@@ -1285,9 +1285,14 @@ fun RenderPlayerButton(
 
     PlayerButton.NONE -> { /* Do nothing */ }
     PlayerButton.QUALITY -> {
+      val isQualityExpanded by viewModel.isQualityOnScreenExpanded.collectAsState()
       ControlsButton(
         icon = androidx.compose.material.icons.Icons.Outlined.Hd,
         onClick = {
+          clickEvent()
+          viewModel.toggleQualityOnScreenExpanded()
+        },
+        onLongClick = {
           clickEvent()
           onOpenSheet(Sheets.Quality)
         }
@@ -1299,6 +1304,10 @@ fun RenderPlayerButton(
         DynamicMediaInfoRectangle(
           viewModel = viewModel,
           onClick = {
+            clickEvent()
+            viewModel.toggleInfoOnScreenExpanded()
+          },
+          onLongClick = {
             clickEvent()
             onOpenSheet(Sheets.Metadata)
           },
@@ -1372,10 +1381,12 @@ fun Surface(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DynamicMediaInfoRectangle(
   viewModel: PlayerViewModel,
   onClick: () -> Unit,
+  onLongClick: (() -> Unit)? = null,
   isMoreSheet: Boolean = false,
   modifier: Modifier = Modifier,
   buttonSize: Dp = 44.dp
@@ -1423,7 +1434,10 @@ fun DynamicMediaInfoRectangle(
       modifier = modifier
         .size(buttonSize)
         .clip(shape)
-        .clickable { onClick() }
+        .combinedClickable(
+          onClick = onClick,
+          onLongClick = onLongClick
+        )
     ) {
       Box(
         modifier = Modifier.fillMaxSize(),
@@ -1460,7 +1474,10 @@ fun DynamicMediaInfoRectangle(
         .width(posterWidth)
         .height(posterHeight)
         .clip(RoundedCornerShape(10.dp))
-        .clickable { onClick() }
+        .combinedClickable(
+          onClick = onClick,
+          onLongClick = onLongClick
+        )
     ) {
       Box(
         modifier = Modifier.fillMaxSize(),

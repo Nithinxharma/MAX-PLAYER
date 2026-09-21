@@ -1259,17 +1259,49 @@ object CineHubScreen : Screen {
             val provider = registry.getProvider(providerId)
             val streams = provider?.loadStreams(dataUrl) ?: emptyList()
             val stream = streams.firstOrNull()
+            val extractorLinks = streams.map { s ->
+              com.lagradost.cloudstream3.utils.ExtractorLink(
+                source = provider?.name ?: "Extension",
+                name = s.name.ifBlank { s.quality ?: "Auto" },
+                url = s.url,
+                referer = s.headers["Referer"] ?: "",
+                quality = com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
+                headers = s.headers
+              )
+            }
             withContext(Dispatchers.Main) {
               if (stream != null && stream.url.isNotBlank()) {
                 Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
-                MediaUtils.playFile(stream.url, context, "cinehub", stream.headers)
+                MediaUtils.playFile(
+                  source = stream.url,
+                  context = context,
+                  launchSource = "cinehub",
+                  headers = stream.headers,
+                  title = item.title,
+                  posterUrl = item.posterPath,
+                  overview = item.plot,
+                  year = item.premiered.take(4),
+                  rating = item.userRating.takeIf { it > 0.0 },
+                  providerName = provider?.name,
+                  allLinks = extractorLinks
+                )
               } else {
                 Toast.makeText(context, "No stream links found from extension", Toast.LENGTH_SHORT).show()
               }
             }
           }
         } else {
-          MediaUtils.playFile(item.videoFilePath, context, "cinehub")
+          MediaUtils.playFile(
+            source = item.videoFilePath,
+            context = context,
+            launchSource = "cinehub",
+            title = item.title,
+            posterUrl = item.posterPath,
+            overview = item.plot,
+            year = item.premiered.take(4),
+            rating = item.userRating.takeIf { it > 0.0 },
+            providerName = "Local Media"
+          )
         }
       }
       is TvShowItem -> {
@@ -1284,7 +1316,17 @@ object CineHubScreen : Screen {
             val playUri = firstEp.videoFilePath
             withContext(Dispatchers.Main) {
               Toast.makeText(context, "Playing ${item.title} - ${firstEp.title}", Toast.LENGTH_SHORT).show()
-              MediaUtils.playFile(playUri, context, "cinehub")
+              MediaUtils.playFile(
+                source = playUri,
+                context = context,
+                launchSource = "cinehub",
+                title = "${item.title} - ${firstEp.title}",
+                posterUrl = firstEp.stillPath ?: item.posterPath,
+                overview = firstEp.plot ?: item.plot,
+                year = item.premiered.take(4),
+                rating = item.userRating.takeIf { it > 0.0 },
+                providerName = "Local Media"
+              )
             }
           } else {
             withContext(Dispatchers.Main) {
@@ -1314,7 +1356,20 @@ object CineHubScreen : Screen {
                       putAll(link.headers)
                     }
                     val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                    MediaUtils.playFile(
+                      source = link.url,
+                      context = context,
+                      launchSource = "cinehub",
+                      headers = headersMap,
+                      subtitlesJson = subtitlesJson,
+                      title = item.loadResponse.name,
+                      posterUrl = item.loadResponse.posterUrl,
+                      overview = item.loadResponse.plot,
+                      year = item.loadResponse.year?.toString(),
+                      rating = item.loadResponse.score?.score?.toDouble(),
+                      providerName = item.providerName.ifBlank { item.loadResponse.apiName },
+                      allLinks = links
+                    )
                   } else if (links.isEmpty()) {
                     Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                   }
@@ -1346,7 +1401,20 @@ object CineHubScreen : Screen {
                   putAll(link.headers)
                 }
                 val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                MediaUtils.playFile(
+                  source = link.url,
+                  context = context,
+                  launchSource = "cinehub",
+                  headers = headersMap,
+                  subtitlesJson = subtitlesJson,
+                  title = item.name,
+                  posterUrl = item.posterUrl,
+                  overview = item.plot,
+                  year = item.year?.toString(),
+                  rating = item.score?.score?.toDouble(),
+                  providerName = item.apiName,
+                  allLinks = links
+                )
               } else if (links.isEmpty()) {
                 Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
               }
@@ -1864,12 +1932,34 @@ fun CineDetailView(
             val provider = registry.getProvider(providerId)
             val streams = provider?.loadStreams(dataUrl) ?: emptyList()
             val stream = streams.firstOrNull()
+            val extractorLinks = streams.map { s ->
+              com.lagradost.cloudstream3.utils.ExtractorLink(
+                source = provider?.name ?: "Extension",
+                name = s.name.ifBlank { s.quality ?: "Auto" },
+                url = s.url,
+                referer = s.headers["Referer"] ?: "",
+                quality = com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
+                headers = s.headers
+              )
+            }
             withContext(Dispatchers.Main) {
               isInstantPlayExtracting = false
               if (stream != null && stream.url.isNotBlank()) {
                 onDismiss()
                 Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
-                MediaUtils.playFile(stream.url, context, "cinehub", stream.headers)
+                MediaUtils.playFile(
+                  source = stream.url,
+                  context = context,
+                  launchSource = "cinehub",
+                  headers = stream.headers,
+                  title = title,
+                  posterUrl = posterPath,
+                  overview = plot,
+                  year = year,
+                  rating = rating.takeIf { it > 0.0 },
+                  providerName = provider?.name,
+                  allLinks = extractorLinks
+                )
               } else {
                 Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
               }
@@ -1877,7 +1967,17 @@ fun CineDetailView(
           }
         } else if (item.videoFilePath.isNotBlank()) {
           onDismiss()
-          MediaUtils.playFile(item.videoFilePath, context, "cinehub")
+          MediaUtils.playFile(
+            source = item.videoFilePath,
+            context = context,
+            launchSource = "cinehub",
+            title = title,
+            posterUrl = posterPath,
+            overview = plot,
+            year = year,
+            rating = rating.takeIf { it > 0.0 },
+            providerName = "Local Media"
+          )
         } else {
           onDismiss()
           onPlay()
@@ -1897,7 +1997,17 @@ fun CineDetailView(
             if (firstEp != null && firstEp.videoFilePath.isNotBlank()) {
               onDismiss()
               Toast.makeText(context, "Playing ${item.title} - ${firstEp.title}", Toast.LENGTH_SHORT).show()
-              MediaUtils.playFile(firstEp.videoFilePath, context, "cinehub")
+              MediaUtils.playFile(
+                source = firstEp.videoFilePath,
+                context = context,
+                launchSource = "cinehub",
+                title = "${item.title} - ${firstEp.title}",
+                posterUrl = firstEp.stillPath ?: posterPath,
+                overview = firstEp.plot ?: plot,
+                year = year,
+                rating = rating.takeIf { it > 0.0 },
+                providerName = "Local Media"
+              )
             } else {
               onDismiss()
               onPlay()
@@ -1927,7 +2037,20 @@ fun CineDetailView(
                     putAll(link.headers)
                   }
                   val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                  MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                  MediaUtils.playFile(
+                    source = link.url,
+                    context = context,
+                    launchSource = "cinehub",
+                    headers = headersMap,
+                    subtitlesJson = subtitlesJson,
+                    title = title,
+                    posterUrl = posterPath,
+                    overview = plot,
+                    year = year,
+                    rating = rating.takeIf { it > 0.0 },
+                    providerName = item.providerName.ifBlank { resp.apiName },
+                    allLinks = links
+                  )
                 }
               }
             )
@@ -1963,7 +2086,21 @@ fun CineDetailView(
                       putAll(link.headers)
                     }
                     val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetadataJson)
+                    MediaUtils.playFile(
+                      source = link.url,
+                      context = context,
+                      launchSource = "cinehub",
+                      headers = headersMap,
+                      subtitlesJson = subtitlesJson,
+                      episodeMetadataJson = epMetadataJson,
+                      title = "$title - S${firstEp.season ?: 1}E${firstEp.episode ?: 1} ${firstEp.name ?: "Episode 1"}",
+                      posterUrl = posterPath,
+                      overview = plot,
+                      year = year,
+                      rating = rating.takeIf { it > 0.0 },
+                      providerName = item.providerName.ifBlank { resp.apiName },
+                      allLinks = links
+                    )
                   }
                 }
               )
@@ -1993,7 +2130,20 @@ fun CineDetailView(
                 putAll(link.headers)
               }
               val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-              MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+              MediaUtils.playFile(
+                source = link.url,
+                context = context,
+                launchSource = "cinehub",
+                headers = headersMap,
+                subtitlesJson = subtitlesJson,
+                title = title,
+                posterUrl = posterPath,
+                overview = plot,
+                year = year,
+                rating = rating.takeIf { it > 0.0 },
+                providerName = item.apiName,
+                allLinks = links
+              )
             }
           }
         )

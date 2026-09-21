@@ -458,6 +458,39 @@ class PlayerViewModel(
   private val _currentQualityName = MutableStateFlow<String>("Auto")
   val currentQualityName: StateFlow<String> = _currentQualityName.asStateFlow()
 
+  private val _selectedQualityUrl = MutableStateFlow<String?>(null)
+  val selectedQualityUrl: StateFlow<String?> = _selectedQualityUrl.asStateFlow()
+
+  private val _isQualityOnScreenExpanded = MutableStateFlow(false)
+  val isQualityOnScreenExpanded: StateFlow<Boolean> = _isQualityOnScreenExpanded.asStateFlow()
+
+  fun toggleQualityOnScreenExpanded() {
+    _isQualityOnScreenExpanded.update { !it }
+    if (_isQualityOnScreenExpanded.value) {
+      _isInfoOnScreenExpanded.value = false
+      _isFrameNavigationExpanded.value = false
+    }
+  }
+
+  fun dismissQualityOnScreen() {
+    _isQualityOnScreenExpanded.value = false
+  }
+
+  private val _isInfoOnScreenExpanded = MutableStateFlow(false)
+  val isInfoOnScreenExpanded: StateFlow<Boolean> = _isInfoOnScreenExpanded.asStateFlow()
+
+  fun toggleInfoOnScreenExpanded() {
+    _isInfoOnScreenExpanded.update { !it }
+    if (_isInfoOnScreenExpanded.value) {
+      _isQualityOnScreenExpanded.value = false
+      _isFrameNavigationExpanded.value = false
+    }
+  }
+
+  fun dismissInfoOnScreen() {
+    _isInfoOnScreenExpanded.value = false
+  }
+
   fun setAvailableStreamQualities(
     urls: Array<String>?,
     names: Array<String>?,
@@ -467,6 +500,7 @@ class PlayerViewModel(
     if (urls == null || urls.isEmpty()) {
       _availableStreamQualities.value = emptyList()
       _currentQualityName.value = "Auto"
+      _selectedQualityUrl.value = null
       return
     }
     val list = mutableListOf<QualityStreamItem>()
@@ -481,12 +515,14 @@ class PlayerViewModel(
     val topItem = list.firstOrNull()
     if (topItem != null) {
       _currentQualityName.value = if (topItem.quality > 0) "${topItem.quality}p" else topItem.name.substringBefore(" -")
+      _selectedQualityUrl.value = topItem.url
     }
   }
 
   fun selectStreamQuality(context: android.content.Context, item: QualityStreamItem) {
     val qualLabel = if (item.quality > 0) "${item.quality}p" else item.name.substringBefore(" -")
     _currentQualityName.value = qualLabel
+    _selectedQualityUrl.value = item.url
     viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
       try {
         val currentPos = runCatching { `is`.xyz.mpv.MPVLib.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
@@ -498,15 +534,32 @@ class PlayerViewModel(
           }
         }
 
-        val loadOptions = buildList {
-          if (isPaused) add("pause=yes") else add("pause=no")
-          if (currentPos > 0.5) add("start=$currentPos")
-        }.joinToString(",")
+        val startOpt = if (currentPos > 0.5) "start=$currentPos" else null
+        val pauseOpt = if (isPaused) "pause=yes" else "pause=no"
+        val opts = listOfNotNull(pauseOpt, startOpt).joinToString(",")
 
-        if (loadOptions.isNotEmpty()) {
-          `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace", "-1", loadOptions)
-        } else {
-          `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace")
+        var success = false
+        if (opts.isNotEmpty()) {
+          success = runCatching {
+            `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace", "0", opts)
+            true
+          }.getOrDefault(false)
+        }
+
+        if (!success) {
+          success = runCatching {
+            `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace")
+            true
+          }.getOrDefault(false)
+        }
+
+        if (!success) {
+          runCatching { `is`.xyz.mpv.MPVLib.command("loadfile", item.url) }
+        }
+
+        if (currentPos > 0.5) {
+          kotlinx.coroutines.delay(150)
+          runCatching { `is`.xyz.mpv.MPVLib.setPropertyDouble("time-pos", currentPos) }
         }
 
         val currentTitle = _mediaTitle.value
