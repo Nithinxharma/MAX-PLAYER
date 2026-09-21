@@ -60,6 +60,9 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.HeadsetOff
 import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Memory
@@ -70,8 +73,13 @@ import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Surface as M3Surface
 import xyz.mpv.rex.ui.player.controls.components.glassSurface
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -725,11 +733,12 @@ fun RenderPlayerButton(
             }
           }
       } else {
-          ControlsButton(
-            Icons.Default.Audiotrack,
-            onClick = { onOpenSheet(Sheets.AudioTracks) },
-            onLongClick = { onOpenPanel(Panels.AudioDelay) },
-            modifier = Modifier.size(buttonSize),
+          ExpandingAudioButton(
+            viewModel = viewModel,
+            onOpenSheet = onOpenSheet,
+            onOpenPanel = onOpenPanel,
+            buttonSize = buttonSize,
+            modifier = Modifier
           )
       }
     }
@@ -764,11 +773,12 @@ fun RenderPlayerButton(
             }
           }
       } else {
-          ControlsButton(
-            Icons.Default.Subtitles,
-            onClick = { onOpenSheet(Sheets.SubtitleTracks) },
-            onLongClick = { onOpenPanel(Panels.SubtitleDelay) },
-            modifier = Modifier.size(buttonSize),
+          ExpandingSubtitleButton(
+            viewModel = viewModel,
+            onOpenSheet = onOpenSheet,
+            onOpenPanel = onOpenPanel,
+            buttonSize = buttonSize,
+            modifier = Modifier
           )
       }
     }
@@ -1285,18 +1295,42 @@ fun RenderPlayerButton(
 
     PlayerButton.NONE -> { /* Do nothing */ }
     PlayerButton.QUALITY -> {
-      val isQualityExpanded by viewModel.isQualityOnScreenExpanded.collectAsState()
-      ControlsButton(
-        icon = androidx.compose.material.icons.Icons.Outlined.Hd,
-        onClick = {
-          clickEvent()
-          viewModel.toggleQualityOnScreenExpanded()
-        },
-        onLongClick = {
-          clickEvent()
-          onOpenSheet(Sheets.Quality)
-        }
-      )
+      if (isMoreSheet) {
+          Surface(
+            shape = CircleShape,
+            color = surfaceColor,
+            contentColor = contentColor,
+            border = borderColor,
+            modifier = Modifier
+              .height(buttonSize)
+              .clip(CircleShape)
+              .clickable { onOpenSheet(Sheets.Quality) }
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller)
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.Hd,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+              )
+              Text(
+                text = "Quality",
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+              )
+            }
+          }
+      } else {
+          ExpandingQualityButton(
+            viewModel = viewModel,
+            onOpenSheet = onOpenSheet,
+            buttonSize = buttonSize,
+            modifier = Modifier
+          )
+      }
     }
     PlayerButton.METADATA -> {
       val isCineHubEnabled = org.koin.compose.koinInject<xyz.mpv.rex.preferences.BrowserPreferences>().enableCineHubIntegration.get()
@@ -1405,7 +1439,12 @@ fun DynamicMediaInfoRectangle(
 
   val customSourceType by viewModel.customMediaSourceType.collectAsState()
   val customPoster by viewModel.customMediaPosterUrl.collectAsState()
+  val customOverview by viewModel.customMediaOverview.collectAsState()
+  val customYear by viewModel.customMediaYear.collectAsState()
+  val customRating by viewModel.customMediaRating.collectAsState()
+  val customProvider by viewModel.customMediaProvider.collectAsState()
 
+  var isExpanded by remember { mutableStateOf(false) }
   var activeResolution by remember { mutableStateOf<ActiveMediaResolution?>(null) }
 
   LaunchedEffect(currentFilePath, mediaTitle, customPoster) {
@@ -1421,10 +1460,33 @@ fun DynamicMediaInfoRectangle(
     }
   }
 
-  val effectivePoster = customPoster ?: activeResolution?.posterUrl ?: localPosterSync
+  val effectivePoster: String? = customPoster ?: activeResolution?.posterUrl ?: localPosterSync
+  val effectiveTitle: String = mediaTitle.ifBlank {
+    when (val res = activeResolution) {
+      is ActiveMediaResolution.Movie -> res.movie.title
+      is ActiveMediaResolution.TvShow -> res.show.title
+      is ActiveMediaResolution.Normal -> res.title
+      null -> "Now Playing"
+    }
+  }
+  val effectiveOverview: String = customOverview ?: when (val res = activeResolution) {
+    is ActiveMediaResolution.Movie -> res.movie.plot
+    is ActiveMediaResolution.TvShow -> res.episodePlot.ifBlank { res.show.plot }
+    else -> ""
+  }
+  val effectiveYear: String = customYear ?: when (val res = activeResolution) {
+    is ActiveMediaResolution.Movie -> res.movie.premiered.take(4)
+    is ActiveMediaResolution.TvShow -> res.show.premiered.take(4)
+    else -> ""
+  }
+  val effectiveRating: String = customRating ?: when (val res = activeResolution) {
+    is ActiveMediaResolution.Movie -> res.movie.userRating.takeIf { it > 0 }?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: ""
+    is ActiveMediaResolution.TvShow -> res.show.userRating.takeIf { it > 0 }?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: ""
+    else -> ""
+  }
+  val effectiveProvider: String = customProvider ?: "CineHub"
 
   if (customSourceType == "cinetv") {
-    // Normal size Info Button for Live TV
     val shape = RoundedCornerShape(10.dp)
     Surface(
       shape = shape,
@@ -1461,54 +1523,873 @@ fun DynamicMediaInfoRectangle(
       }
     }
   } else {
-    // Prominently enlarged cinematic poster button (Poster ONLY) for movies and tv shows
     val posterHeight = buttonSize * 2.5f
     val posterWidth = posterHeight * (2f / 3f)
 
     Surface(
-      shape = RoundedCornerShape(10.dp),
-      color = Color.Black.copy(alpha = 0.75f),
-      border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.45f)),
-      shadowElevation = 6.dp,
+      shape = RoundedCornerShape(14.dp),
+      color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f) else Color.Black.copy(alpha = 0.75f),
+      border = BorderStroke(1.5.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.45f)),
+      shadowElevation = 8.dp,
       modifier = modifier
-        .width(posterWidth)
+        .animateContentSize(
+          animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.8f,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+          )
+        )
         .height(posterHeight)
-        .clip(RoundedCornerShape(10.dp))
+        .width(if (isExpanded) 330.dp else posterWidth)
+        .clip(RoundedCornerShape(14.dp))
         .combinedClickable(
-          onClick = onClick,
+          onClick = {
+            isExpanded = !isExpanded
+          },
           onLongClick = onLongClick
         )
     ) {
-      Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-      ) {
-        if (!effectivePoster.isNullOrBlank()) {
-          AsyncImage(
-            model = effectivePoster,
-            contentDescription = "Media Poster",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-          )
-        } else {
+      if (!isExpanded) {
+        Box(
+          modifier = Modifier.fillMaxSize(),
+          contentAlignment = Alignment.Center
+        ) {
+          if (!effectivePoster.isNullOrBlank()) {
+            AsyncImage(
+              model = effectivePoster,
+              contentDescription = "Media Poster",
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize()
+            )
+          } else {
+            Box(
+              modifier = Modifier
+                .fillMaxSize()
+                .background(
+                  Brush.verticalGradient(
+                    listOf(Color(0xFF2C3246), Color(0xFF141622))
+                  )
+                ),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = when (activeResolution) {
+                  is ActiveMediaResolution.TvShow -> Icons.Outlined.Tv
+                  else -> Icons.Outlined.Movie
+                },
+                contentDescription = "Media Poster",
+                tint = Color.White.copy(alpha = 0.90f),
+                modifier = Modifier.size(28.dp)
+              )
+            }
+          }
+        }
+      } else {
+        Row(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
           Box(
             modifier = Modifier
-              .fillMaxSize()
-              .background(
-                Brush.verticalGradient(
-                  listOf(Color(0xFF2C3246), Color(0xFF141622))
-                )
-              ),
+              .size(width = 54.dp, height = 82.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .background(Color(0xFF1E2130)),
             contentAlignment = Alignment.Center
           ) {
+            if (!effectivePoster.isNullOrBlank()) {
+              AsyncImage(
+                model = effectivePoster,
+                contentDescription = effectiveTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+              )
+            } else {
+              Icon(
+                imageVector = Icons.Outlined.Movie,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(24.dp)
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.width(10.dp))
+
+          Column(
+            modifier = Modifier
+              .weight(1f)
+              .fillMaxHeight(),
+            verticalArrangement = Arrangement.SpaceEvenly
+          ) {
+            Text(
+              text = effectiveTitle,
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              if (effectiveYear.isNotBlank()) {
+                Surface(
+                  shape = RoundedCornerShape(4.dp),
+                  color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                ) {
+                  Text(
+                    text = effectiveYear,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                  )
+                }
+              }
+
+              if (effectiveRating.isNotBlank()) {
+                Surface(
+                  shape = RoundedCornerShape(4.dp),
+                  color = Color(0xFFFFB800).copy(alpha = 0.2f),
+                ) {
+                  Text(
+                    text = "★ $effectiveRating",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFC72C),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                  )
+                }
+              }
+
+              if (effectiveProvider.isNotBlank()) {
+                Surface(
+                  shape = RoundedCornerShape(4.dp),
+                  color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                ) {
+                  Text(
+                    text = effectiveProvider,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                  )
+                }
+              }
+            }
+
+            if (effectiveOverview.isNotBlank()) {
+              Text(
+                text = effectiveOverview,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 11.sp,
+                lineHeight = 13.sp
+              )
+            }
+          }
+
+          Column(
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+              .fillMaxHeight()
+              .padding(start = 4.dp)
+          ) {
+            Surface(
+              shape = CircleShape,
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+              modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .clickable {
+                  onLongClick?.invoke()
+                }
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  imageVector = Icons.Default.Info,
+                  contentDescription = "Metadata Details",
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+            }
+
+            Surface(
+              shape = CircleShape,
+              color = Color.Transparent,
+              modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .clickable {
+                  isExpanded = false
+                }
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  imageVector = Icons.Default.Close,
+                  contentDescription = "Collapse",
+                  tint = MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingQualityButton(
+  viewModel: PlayerViewModel,
+  onOpenSheet: (Sheets) -> Unit,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val context = LocalContext.current
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+  val availableStreamQualities by viewModel.availableStreamQualities.collectAsState()
+  val selectedQualityUrl by viewModel.selectedQualityUrl.collectAsState()
+  val currentQualityName by viewModel.currentQualityName.collectAsState()
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.8f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Box(
+        modifier = Modifier
+          .size(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = {
+              clickEvent()
+              isExpanded = true
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenSheet(Sheets.Quality)
+            }
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = Icons.Outlined.Hd,
+          contentDescription = "Quality",
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp)
+        )
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(150.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
             Icon(
-              imageVector = when (activeResolution) {
-                is ActiveMediaResolution.TvShow -> Icons.Outlined.Tv
-                else -> Icons.Outlined.Movie
-              },
-              contentDescription = "Media Poster",
-              tint = Color.White.copy(alpha = 0.90f),
-              modifier = Modifier.size(28.dp)
+              imageVector = Icons.Outlined.Hd,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Quality",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        if (availableStreamQualities.isNotEmpty()) {
+          availableStreamQualities.forEach { qItem ->
+            val label = if (qItem.quality > 0) "${qItem.quality}p" else qItem.name.substringBefore(" -")
+            val isSelected = (selectedQualityUrl == qItem.url) || (currentQualityName.equals(label, ignoreCase = true))
+
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  viewModel.selectStreamQuality(context, qItem)
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = label,
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        } else {
+          listOf("Auto", "1080p", "720p", "480p").forEach { fallbackLabel ->
+            val isSelected = currentQualityName.equals(fallbackLabel, ignoreCase = true) || (fallbackLabel == "Auto" && currentQualityName == "Auto")
+
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  val match = availableStreamQualities.firstOrNull { it.name.contains(fallbackLabel, ignoreCase = true) || "${it.quality}p" == fallbackLabel }
+                  if (match != null) {
+                    viewModel.selectStreamQuality(context, match)
+                  } else {
+                    android.widget.Toast.makeText(context, "Quality: $fallbackLabel", android.widget.Toast.LENGTH_SHORT).show()
+                  }
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = fallbackLabel,
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .clickable {
+              isExpanded = false
+              onOpenSheet(Sheets.Quality)
+            }
+            .padding(horizontal = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Default.Tune,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+          )
+          Text(
+            text = "Full Settings",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingAudioButton(
+  viewModel: PlayerViewModel,
+  onOpenSheet: (Sheets) -> Unit,
+  onOpenPanel: (Panels) -> Unit,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+  val audioTracks by viewModel.audioTracks.collectAsState()
+  val currentAid by `is`.xyz.mpv.MPVLib.propInt["aid"].collectAsState()
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.8f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Box(
+        modifier = Modifier
+          .size(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = {
+              clickEvent()
+              isExpanded = true
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenPanel(Panels.AudioDelay)
+            }
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = Icons.Default.Audiotrack,
+          contentDescription = "Audio Tracks",
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp)
+        )
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(170.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Audiotrack,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Audio",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        if (audioTracks.isNotEmpty()) {
+          audioTracks.forEach { track ->
+            val isSelected = track.selected == true || (currentAid != null && currentAid == track.id)
+            val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Audio Track ${track.id}"
+
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  viewModel.selectAudioTrack(track.id, track.title, track.lang)
+                  `is`.xyz.mpv.MPVLib.setPropertyInt("aid", track.id)
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = label,
+                  style = MaterialTheme.typography.bodyMedium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                  modifier = Modifier.weight(1f, fill = false)
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        } else {
+          Text(
+            text = "Default Audio",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .clickable {
+                isExpanded = false
+                onOpenPanel(Panels.AudioDelay)
+              }
+              .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Speed,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(14.dp)
+            )
+            Text(
+              text = "Delay",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+
+          Row(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .clickable {
+                isExpanded = false
+                onOpenSheet(Sheets.AudioTracks)
+              }
+              .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Tune,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(14.dp)
+            )
+            Text(
+              text = "More",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingSubtitleButton(
+  viewModel: PlayerViewModel,
+  onOpenSheet: (Sheets) -> Unit,
+  onOpenPanel: (Panels) -> Unit,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+  val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+  val currentSid by `is`.xyz.mpv.MPVLib.propInt["sid"].collectAsState()
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.8f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Box(
+        modifier = Modifier
+          .size(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = {
+              clickEvent()
+              isExpanded = true
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenPanel(Panels.SubtitleDelay)
+            }
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = Icons.Default.Subtitles,
+          contentDescription = "Subtitle Tracks",
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp)
+        )
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(170.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Subtitles,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Subtitles",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        val isOff = currentSid == 0 || (subtitleTracks.none { it.selected == true } && (currentSid == null || currentSid == 0))
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = if (isOff) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+          contentColor = if (isOff) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable {
+              `is`.xyz.mpv.MPVLib.setPropertyInt("sid", 0)
+              viewModel.toggleSubtitle(0)
+              isExpanded = false
+            }
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = "Off",
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = if (isOff) FontWeight.Bold else FontWeight.Normal
+            )
+            if (isOff) {
+              Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+              )
+            }
+          }
+        }
+
+        if (subtitleTracks.isNotEmpty()) {
+          subtitleTracks.forEach { track ->
+            val isSelected = (track.selected == true || (currentSid != null && currentSid == track.id)) && !isOff
+            val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Sub ${track.id}"
+
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  viewModel.toggleSubtitle(track.id)
+                  `is`.xyz.mpv.MPVLib.setPropertyInt("sid", track.id)
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = label,
+                  style = MaterialTheme.typography.bodyMedium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                  modifier = Modifier.weight(1f, fill = false)
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .clickable {
+                isExpanded = false
+                onOpenPanel(Panels.SubtitleDelay)
+              }
+              .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Speed,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(14.dp)
+            )
+            Text(
+              text = "Delay",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          }
+
+          Row(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .clickable {
+                isExpanded = false
+                onOpenSheet(Sheets.SubtitleTracks)
+              }
+              .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Tune,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(14.dp)
+            )
+            Text(
+              text = "Search",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
             )
           }
         }
