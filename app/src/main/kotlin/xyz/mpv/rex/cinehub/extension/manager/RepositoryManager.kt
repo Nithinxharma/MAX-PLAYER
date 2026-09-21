@@ -438,6 +438,12 @@ class RepositoryManager(
             }
         }
 
+        val lang = obj.optStringOrNull("lang")
+            ?: obj.optStringOrNull("language")
+            ?: obj.optJSONArray("languages")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }.joinToString(", ")
+            }
+
         return AvailablePlugin(
             name = name,
             internalName = internalName,
@@ -449,7 +455,8 @@ class RepositoryManager(
             iconUrl = iconUrl,
             authors = authors,
             tvTypes = tvTypes,
-            repositoryUrl = repoUrl
+            repositoryUrl = repoUrl,
+            lang = lang
         )
     }
 

@@ -534,6 +534,19 @@ class PlayerViewModel(
           }
         }
 
+        if (item.quality > 0) {
+          val approxBitrate = when (item.quality) {
+            2160, 4320 -> 15_000_000
+            1440 -> 8_000_000
+            1080 -> 5_000_000
+            720 -> 2_500_000
+            480 -> 1_000_000
+            360 -> 500_000
+            else -> item.quality * 3000
+          }
+          runCatching { `is`.xyz.mpv.MPVLib.setPropertyInt("hls-bitrate", approxBitrate) }
+        }
+
         val startOpt = if (currentPos > 0.5) "start=$currentPos" else null
         val pauseOpt = if (isPaused) "pause=yes" else "pause=no"
         val opts = listOfNotNull(pauseOpt, startOpt).joinToString(",")
@@ -541,7 +554,7 @@ class PlayerViewModel(
         var success = false
         if (opts.isNotEmpty()) {
           success = runCatching {
-            `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace", opts)
+            `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace", "-1", opts)
             true
           }.getOrDefault(false)
         }
@@ -587,6 +600,21 @@ class PlayerViewModel(
         }
         runCatching { `is`.xyz.mpv.MPVLib.setPropertyString("ytdl-format", ytdlFormat) }
 
+        val targetHeight = qualityLabel.filter { it.isDigit() }.toIntOrNull() ?: 0
+        if (targetHeight > 0) {
+          val approxBitrate = when (targetHeight) {
+            2160 -> 15_000_000
+            1080 -> 5_000_000
+            720 -> 2_500_000
+            480 -> 1_000_000
+            360 -> 500_000
+            else -> targetHeight * 3000
+          }
+          runCatching { `is`.xyz.mpv.MPVLib.setPropertyInt("hls-bitrate", approxBitrate) }
+        } else {
+          runCatching { `is`.xyz.mpv.MPVLib.setPropertyString("hls-bitrate", "max") }
+        }
+
         val path = runCatching { `is`.xyz.mpv.MPVLib.getPropertyString("path") }.getOrNull() ?: ""
         if (path.startsWith("http://") || path.startsWith("https://")) {
           val currentPos = runCatching { `is`.xyz.mpv.MPVLib.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
@@ -595,7 +623,7 @@ class PlayerViewModel(
           val pauseOpt = if (isPaused) "pause=yes" else "pause=no"
           val opts = listOfNotNull(pauseOpt, startOpt).joinToString(",")
           if (opts.isNotEmpty()) {
-            `is`.xyz.mpv.MPVLib.command("loadfile", path, "replace", opts)
+            `is`.xyz.mpv.MPVLib.command("loadfile", path, "replace", "-1", opts)
           } else {
             `is`.xyz.mpv.MPVLib.command("loadfile", path, "replace")
           }

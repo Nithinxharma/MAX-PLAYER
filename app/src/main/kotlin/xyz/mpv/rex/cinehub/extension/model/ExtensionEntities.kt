@@ -22,7 +22,8 @@ data class InstalledExtension(
     val repositoryUrl: String? = null,
     val isEnabled: Boolean = true,
     val localFilePath: String? = null,
-    val classesFile: String? = null
+    val classesFile: String? = null,
+    val lang: String? = null
 )
 
 @Entity(tableName = "cinehub_library")
@@ -49,7 +50,8 @@ data class AvailablePlugin(
     val tvTypes: List<String> = emptyList(),
     val repositoryUrl: String = "",
     val isInstalled: Boolean = false,
-    val isEnabled: Boolean = false
+    val isEnabled: Boolean = false,
+    val lang: String? = null
 )
 
 data class PluginUpdateInfo(

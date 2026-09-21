@@ -17,8 +17,11 @@ import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
 import xyz.mpv.rex.cinehub.extension.api.CloudstreamMainApiAdapter
 import xyz.mpv.rex.cinehub.extension.api.MainApiProviderAdapter
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
+import xyz.mpv.rex.cinehub.extension.model.ExtensionFailureItem
+import xyz.mpv.rex.cinehub.extension.model.ExtensionTestBatchReport
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
+import xyz.mpv.rex.cinehub.extension.util.LanguageUtils
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.database.MpvExDatabase
 import java.io.File
@@ -1028,7 +1031,8 @@ class ExtensionManager(
                 repositoryUrl = plugin.repositoryUrl,
                 isEnabled = true,
                 localFilePath = localPath,
-                classesFile = if (discoveredClasses.isNotEmpty()) discoveredClasses.joinToString(", ") else null
+                classesFile = if (discoveredClasses.isNotEmpty()) discoveredClasses.joinToString(", ") else null,
+                lang = plugin.lang
             )
             db.extensionDao().insertExtension(installed)
 
@@ -1110,6 +1114,259 @@ class ExtensionManager(
             _isUpdating.value = false
         }
         count
+    }
+
+    suspend fun testAllInstalledExtensions(
+        onProgress: (current: Int, total: Int, currentName: String) -> Unit = { _, _, _ -> }
+    ): ExtensionTestBatchReport = withContext(Dispatchers.IO) {
+        val installedList = db.extensionDao().getAllInstalledExtensionsSync()
+        val total = installedList.size
+        val failures = mutableListOf<ExtensionFailureItem>()
+        var workingCount = 0
+
+        val repoMap = mutableMapOf<String, String>()
+        runCatching {
+            val cursor = db.openHelper.readableDatabase.query("SELECT url, name FROM extension_repositories")
+            cursor.use {
+                while (it.moveToNext()) {
+                    val u = it.getString(0)
+                    val n = it.getString(1)
+                    if (!u.isNullOrBlank()) {
+                        repoMap[u] = n ?: u
+                    }
+                }
+            }
+        }
+        for (preset in RepositoryManager.BUILT_IN_PRESETS) {
+            repoMap[preset.url] = preset.name
+        }
+
+        for (index in installedList.indices) {
+            val ext = installedList[index]
+            onProgress(index + 1, total, ext.name)
+
+            val repoName = if (!ext.repositoryUrl.isNullOrBlank()) {
+                repoMap[ext.repositoryUrl]
+                    ?: repoMap.entries.firstOrNull { ext.repositoryUrl!!.contains(it.key) || it.key.contains(ext.repositoryUrl!!) }?.value
+                    ?: ext.repositoryUrl!!
+            } else {
+                "Local / Sideloaded"
+            }
+
+            // Step 1: File existence & readability check
+            val file = findExtensionFile(ext.pkgName, ext.localFilePath)
+            if (file == null || !file.exists() || file.length() == 0L) {
+                failures.add(
+                    ExtensionFailureItem(
+                        extensionName = ext.name,
+                        packageName = ext.pkgName,
+                        providerName = "N/A (Package Missing)",
+                        repositoryName = repoName,
+                        repositoryUrl = ext.repositoryUrl,
+                        failureStage = "File Verification",
+                        failureReason = "Plugin package file (.cs3) missing or empty on device storage (Path: ${ext.localFilePath ?: "none"})"
+                    )
+                )
+                continue
+            }
+
+            // Step 2: Class discovery & DEX validation
+            val (manifestContent, manifestClasses) = inspectZipManifest(file)
+            val optDir = File(context.codeCacheDir, "opt_diag_${file.nameWithoutExtension}").apply { mkdirs() }
+            val dexClasses = extractClassesFromDex(file, optDir)
+            val candidateClasses = (manifestClasses + dexClasses).distinct()
+
+            if (candidateClasses.isEmpty()) {
+                failures.add(
+                    ExtensionFailureItem(
+                        extensionName = ext.name,
+                        packageName = ext.pkgName,
+                        providerName = "N/A (No Classes)",
+                        repositoryName = repoName,
+                        repositoryUrl = ext.repositoryUrl,
+                        failureStage = "Class Discovery",
+                        failureReason = "Archive does not contain a valid manifest or readable DEX class entries"
+                    )
+                )
+                continue
+            }
+
+            // Step 3: Registration in APIHolder
+            var providers = com.lagradost.cloudstream3.APIHolder.allProviders.filter { api ->
+                api.sourcePlugin == file.absolutePath ||
+                api.sourcePlugin?.contains(file.nameWithoutExtension) == true ||
+                ext.pkgName.contains(api.name, ignoreCase = true) ||
+                api.name.contains(ext.pkgName, ignoreCase = true)
+            }
+
+            if (providers.isEmpty()) {
+                loadExtensionFromDisk(ext)
+                providers = com.lagradost.cloudstream3.APIHolder.allProviders.filter { api ->
+                    api.sourcePlugin == file.absolutePath ||
+                    api.sourcePlugin?.contains(file.nameWithoutExtension) == true ||
+                    ext.pkgName.contains(api.name, ignoreCase = true) ||
+                    api.name.contains(ext.pkgName, ignoreCase = true)
+                }
+            }
+
+            if (providers.isEmpty()) {
+                failures.add(
+                    ExtensionFailureItem(
+                        extensionName = ext.name,
+                        packageName = ext.pkgName,
+                        providerName = "N/A (No Providers Registered)",
+                        repositoryName = repoName,
+                        repositoryUrl = ext.repositoryUrl,
+                        failureStage = "Provider Registration",
+                        failureReason = "Classes loaded into memory but 0 MainAPI provider instances were registered into APIHolder"
+                    )
+                )
+                continue
+            }
+
+            // Step 4: Functional Testing on each registered provider
+            var anyProviderWorking = false
+            for (api in providers) {
+                var isFailed = false
+                var reason: String? = null
+                var stage = "Network / Scraper"
+
+                val mainUrl = api.mainUrl
+                if (mainUrl.isBlank()) {
+                    isFailed = true
+                    reason = "Provider mainUrl is empty or unconfigured"
+                    stage = "Configuration"
+                } else {
+                    try {
+                        val req = Request.Builder()
+                            .url(mainUrl)
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8)")
+                            .build()
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.code == 403) {
+                                isFailed = true
+                                reason = "HTTP 403 Forbidden - Cloudflare anti-bot verification required ($mainUrl)"
+                                stage = "Cloudflare / Anti-Bot"
+                            } else if (resp.code == 404) {
+                                isFailed = true
+                                reason = "HTTP 404 Not Found - Website domain or endpoint dead ($mainUrl)"
+                                stage = "Defunct URL"
+                            } else if (resp.code >= 500) {
+                                isFailed = true
+                                reason = "HTTP ${resp.code} Server Error on $mainUrl"
+                                stage = "Server Error"
+                            }
+                        }
+                    } catch (netEx: Exception) {
+                        isFailed = true
+                        val msg = netEx.localizedMessage ?: netEx.javaClass.simpleName
+                        if (netEx is java.net.UnknownHostException || msg.contains("Unable to resolve host", ignoreCase = true)) {
+                            reason = "DNS Lookup Failed: Domain failed to resolve ($mainUrl)"
+                            stage = "DNS / Dead Host"
+                        } else if (netEx is java.net.SocketTimeoutException) {
+                            reason = "Network Timeout: Server took too long to respond ($mainUrl)"
+                            stage = "Network Timeout"
+                        } else {
+                            reason = "Network Connection Error: $msg"
+                            stage = "Network Error"
+                        }
+                    }
+                }
+
+                if (!isFailed) {
+                    try {
+                        val searchResult = kotlinx.coroutines.withTimeoutOrNull(10000L) {
+                            api.search("movie")
+                        }
+                        if (searchResult == null) {
+                            isFailed = true
+                            reason = "Search operation timed out after 10 seconds ($mainUrl)"
+                            stage = "Scraper Timeout"
+                        } else {
+                            anyProviderWorking = true
+                        }
+                    } catch (searchEx: Exception) {
+                        isFailed = true
+                        val errMessage = searchEx.localizedMessage ?: searchEx.javaClass.simpleName
+                        reason = "Scraper extraction failed: $errMessage"
+                        stage = "Scraper Exception"
+                    }
+                }
+
+                if (isFailed) {
+                    failures.add(
+                        ExtensionFailureItem(
+                            extensionName = ext.name,
+                            packageName = ext.pkgName,
+                            providerName = api.name,
+                            repositoryName = repoName,
+                            repositoryUrl = ext.repositoryUrl,
+                            failureStage = stage,
+                            failureReason = reason ?: "Unknown functional test error"
+                        )
+                    )
+                }
+            }
+
+            if (anyProviderWorking) {
+                workingCount++
+            }
+        }
+
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+        val formattedDate = sdf.format(java.util.Date())
+
+        val reportBuilder = StringBuilder()
+        reportBuilder.appendLine("================================================================================")
+        reportBuilder.appendLine("                  CINEMA / CLOUDSTREAM EXTENSION FAILURE REPORT                 ")
+        reportBuilder.appendLine("================================================================================")
+        reportBuilder.appendLine("Generated At        : $formattedDate")
+        reportBuilder.appendLine("Total Extensions    : $total")
+        reportBuilder.appendLine("Working (Omitted)   : $workingCount (Healthy extensions filtered out)")
+        reportBuilder.appendLine("Total Core Failures : ${failures.size}")
+        reportBuilder.appendLine("================================================================================\n")
+
+        if (failures.isEmpty()) {
+            reportBuilder.appendLine("STATUS: All installed extensions passed functional diagnostics.")
+            reportBuilder.appendLine("No failed extensions found.")
+        } else {
+            failures.forEachIndexed { i, fail ->
+                reportBuilder.appendLine("--------------------------------------------------------------------------------")
+                reportBuilder.appendLine("FAILURE #${i + 1}")
+                reportBuilder.appendLine("Extension Name  : ${fail.extensionName}")
+                reportBuilder.appendLine("Provider Name   : ${fail.providerName}")
+                reportBuilder.appendLine("Repository Name : ${fail.repositoryName}")
+                if (!fail.repositoryUrl.isNullOrBlank()) {
+                    reportBuilder.appendLine("Repository URL  : ${fail.repositoryUrl}")
+                }
+                reportBuilder.appendLine("Package ID      : ${fail.packageName}")
+                reportBuilder.appendLine("Failure Stage   : ${fail.failureStage}")
+                reportBuilder.appendLine("Why It Failed   : ${fail.failureReason}")
+                if (!fail.details.isNullOrBlank()) {
+                    reportBuilder.appendLine("Details         : ${fail.details}")
+                }
+                reportBuilder.appendLine("--------------------------------------------------------------------------------\n")
+            }
+        }
+        reportBuilder.appendLine("================================================================================")
+        reportBuilder.appendLine("End of Failure Report")
+        reportBuilder.appendLine("================================================================================")
+
+        val reportText = reportBuilder.toString()
+        val reportFile = File(context.filesDir, "extension_failures_report.txt")
+        runCatching {
+            reportFile.writeText(reportText)
+        }
+
+        ExtensionTestBatchReport(
+            totalTested = total,
+            totalWorkingCount = workingCount,
+            totalFailedCount = failures.size,
+            failures = failures,
+            reportText = reportText,
+            reportFilePath = reportFile.absolutePath,
+            timestamp = System.currentTimeMillis()
+        )
     }
 
     fun clearCache() {

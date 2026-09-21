@@ -377,59 +377,19 @@ fun RenderPlayerButton(
           }
         }
       } else {
-        @OptIn(ExperimentalFoundationApi::class)
-        Surface(
-          shape = CircleShape,
-          color = if (isSpeedNonOne) activeSurfaceColor else surfaceColor,
-          contentColor = if (isSpeedNonOne) activeContentColor else contentColor,
-          tonalElevation = 0.dp,
-          shadowElevation = 0.dp,
-          border = if (isSpeedNonOne) activeBorderColor else borderColor,
-          modifier = Modifier
-            .height(buttonSize)
-            .animateContentSize()
-            .clip(CircleShape)
-            .combinedClickable(
-              interactionSource = remember { MutableInteractionSource() },
-              indication = ripple(bounded = true),
-              onClick = {
-                clickEvent()
-                cycleSpeed()
-              },
-              onLongClick = {
-                clickEvent()
-                onOpenSheet(Sheets.PlaybackSpeed)
-              },
-            ),
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(
-              horizontal = MaterialTheme.spacing.smaller,
-              vertical = MaterialTheme.spacing.smaller,
-            ),
-          ) {
-            Icon(
-              imageVector = Icons.Default.Speed,
-              contentDescription = stringResource(R.string.playback_speed),
-              tint = if (isSpeedNonOne) activeContentColor else contentColor,
-              modifier = Modifier.size(24.dp),
-            )
-            AnimatedVisibility(
-              visible = showText,
-              enter = fadeIn() + expandHorizontally(),
-              exit = fadeOut() + shrinkHorizontally()
-            ) {
-              Text(
-                text = String.format("%.2fx", playbackSpeed),
-                maxLines = 1,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 4.dp),
-              )
-            }
-          }
-        }
+        ControlsButton(
+          icon = Icons.Default.Speed,
+          onClick = {
+            clickEvent()
+            cycleSpeed()
+          },
+          onLongClick = {
+            clickEvent()
+            onOpenSheet(Sheets.PlaybackSpeed)
+          },
+          color = if (isSpeedNonOne) MaterialTheme.colorScheme.primary else null,
+          modifier = Modifier.size(buttonSize),
+        )
       }
     }
 
@@ -477,42 +437,14 @@ fun RenderPlayerButton(
           }
         }
       } else {
-        Surface(
-          shape = CircleShape,
-          color = surfaceColor,
-          contentColor = contentColor,
-          tonalElevation = 0.dp,
-          shadowElevation = 0.dp,
-          border = borderColor,
-          modifier = Modifier
-            .height(buttonSize)
-            .clip(CircleShape)
-            .clickable(
-              interactionSource = remember { MutableInteractionSource() },
-              indication = ripple(bounded = true),
-              onClick = {
-                clickEvent()
-                onOpenSheet(Sheets.Decoders)
-              },
-            ),
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier =
-              Modifier
-                .padding(
-                  horizontal = MaterialTheme.spacing.small,
-                  vertical = MaterialTheme.spacing.smaller,
-                ),
-          ) {
-            Text(
-              text = decoder.title,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-              style = MaterialTheme.typography.bodyMedium,
-            )
-          }
-        }
+        ControlsButton(
+          icon = Icons.Outlined.Memory,
+          onClick = {
+            clickEvent()
+            onOpenSheet(Sheets.Decoders)
+          },
+          modifier = Modifier.size(buttonSize),
+        )
       }
     }
 
@@ -711,7 +643,7 @@ fun RenderPlayerButton(
 
     PlayerButton.VIDEO_ZOOM -> {
       val isZoomed = kotlin.math.abs(currentZoom) >= 0.005f
-      if (isZoomed || isMoreSheet) {
+      if (isMoreSheet) {
         @OptIn(ExperimentalFoundationApi::class)
         Surface(
           shape = CircleShape,
@@ -764,7 +696,11 @@ fun RenderPlayerButton(
             clickEvent()
             onOpenSheet(Sheets.VideoZoom)
           },
-          onLongClick = { viewModel.setVideoZoom(0f) },
+          onLongClick = {
+            clickEvent()
+            viewModel.setVideoZoom(0f)
+          },
+          color = if (isZoomed) MaterialTheme.colorScheme.primary else null,
           modifier = Modifier.size(buttonSize),
         )
       }
@@ -2237,7 +2173,10 @@ fun ExpandingAudioButton(
         ) {
           if (audioTracks.isNotEmpty()) {
             audioTracks.forEach { track ->
-              val isSelected = if (activeAid != null && activeAid > 0) track.id == activeAid else track.selected == true
+              val effectiveAid = activeAid?.takeIf { it > 0 }
+                ?: audioTracks.firstOrNull { it.selected == true }?.id
+                ?: runCatching { `is`.xyz.mpv.MPVLib.getPropertyInt("aid") }.getOrNull()?.takeIf { it > 0 }
+              val isSelected = (effectiveAid != null && track.id == effectiveAid)
               val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Audio Track ${track.id}"
 
               Surface(
@@ -2249,7 +2188,6 @@ fun ExpandingAudioButton(
                   .height(32.dp)
                   .clip(RoundedCornerShape(8.dp))
                   .clickable {
-                    `is`.xyz.mpv.MPVLib.setPropertyInt("aid", track.id)
                     viewModel.selectAudioTrack(track.id, track.title, track.lang)
                     isExpanded = false
                   }

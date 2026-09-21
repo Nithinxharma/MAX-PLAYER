@@ -67,7 +67,10 @@ fun AudioTracksSheet(
       )
     },
     track = {
-      val isSelected = if (activeAid != null && activeAid > 0) it.id == activeAid else it.isSelected
+      val effectiveAid = activeAid?.takeIf { it > 0 }
+        ?: tracks.firstOrNull { it.isSelected }?.id
+        ?: runCatching { MPVLib.getPropertyInt("aid") }.getOrNull()?.takeIf { it > 0 }
+      val isSelected = (effectiveAid != null && it.id == effectiveAid)
       AudioTrackCard(
         track = it,
         isSelected = isSelected,

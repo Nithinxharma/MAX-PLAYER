@@ -40,7 +40,7 @@ import xyz.mpv.rex.cinehub.extension.model.LibraryItem
     InstalledExtension::class,
     LibraryItem::class
   ],
-  version = 17,
+  version = 18,
   exportSchema = true,
 )
 @TypeConverters(NetworkProtocolConverter::class)
