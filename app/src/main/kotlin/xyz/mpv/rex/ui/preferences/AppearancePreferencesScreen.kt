@@ -196,6 +196,7 @@ object AppearancePreferencesScreen : Screen {
 
                     item {
                         val amoledMode by preferences.amoledMode.collectAsState()
+                        val enableModernGlassUI by preferences.enableModernGlassUI.collectAsState()
                         val useSystemFont by preferences.useSystemFont.collectAsState()
                         val matchPlayerControlsToTheme by preferences.matchPlayerControlsToTheme.collectAsState()
                         val hidePlayerButtonsBackground by preferences.hidePlayerButtonsBackground.collectAsState()
@@ -237,6 +238,23 @@ object AppearancePreferencesScreen : Screen {
                                         enabled = darkMode != DarkMode.Light,
                                     )
                                 }
+                            }
+
+                            GroupedPreferenceCard(
+                                position = GroupPosition.MIDDLE,
+                                highlightKey = R.string.pref_appearance_enable_modern_glass_ui_title,
+                            ) {
+                                SwitchPreference(
+                                    value = enableModernGlassUI,
+                                    onValueChange = { preferences.enableModernGlassUI.set(it) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_enable_modern_glass_ui_title)) },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_modern_glass_ui_summary),
+                                            color = MaterialTheme.colorScheme.outline,
+                                        )
+                                    },
+                                )
                             }
 
                             GroupedPreferenceCard(

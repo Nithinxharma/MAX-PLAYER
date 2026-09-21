@@ -209,7 +209,7 @@ fun InstalledExtensionsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Discover provider extensions from your repositories to expand CineHub sources.",
+                                text = "Discover provider extensions from your repositories to expand MaxStream sources.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -554,7 +554,7 @@ fun InstalledExtensionsScreen(
                         onClick = {
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, "CineHub Extension Failures Report")
+                                putExtra(Intent.EXTRA_SUBJECT, "MaxStream Extension Failures Report")
                                 putExtra(Intent.EXTRA_TEXT, report.reportText)
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Extension Failure Report"))

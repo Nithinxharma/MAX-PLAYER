@@ -127,9 +127,9 @@ object MediaLibraryPreferencesScreen : Screen {
           contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = navBarHeight + 16.dp),
         ) {
 
-          // CineHub Core Section
+          // MaxStream Core Section
           item {
-            PreferenceSectionHeader(title = "CineHub Integration")
+            PreferenceSectionHeader(title = "MaxStream Integration")
           }
           item {
             GroupedListColumn {

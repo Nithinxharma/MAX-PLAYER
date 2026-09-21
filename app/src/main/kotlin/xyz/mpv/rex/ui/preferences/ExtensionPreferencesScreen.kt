@@ -98,7 +98,7 @@ fun ExtensionPreferencesScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Extensions are provided by third parties. CineHub only provides the extension framework and does not control or verify the content, availability, or reliability of third-party sources.",
+                                text = "Extensions are provided by third parties. MaxStream only provides the extension framework and does not control or verify the content, availability, or reliability of third-party sources.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -151,7 +151,7 @@ class PluginExecutionTraceViewModel(
             TraceStepItem(12, "STEP 12: Execute plugin.load(context)", "Invoke lifecycle loader passing application Context"),
             TraceStepItem(13, "STEP 13: Track registerMainAPI()", "Verify provider registration invocations"),
             TraceStepItem(14, "STEP 14: Verify APIHolder count", "Validate presence in CloudStream APIHolder registry"),
-            TraceStepItem(15, "STEP 15: Verify ProviderRegistry count", "Validate presence in CineHub ProviderRegistry"),
+            TraceStepItem(15, "STEP 15: Verify ProviderRegistry count", "Validate presence in MaxStream ProviderRegistry"),
             TraceStepItem(16, "STEP 16: Run provider search test", "Execute live test query ('One Piece') on registered provider")
         )
     }
@@ -746,8 +746,8 @@ class PluginExecutionTraceViewModel(
                             }
                             val allRegistryProviders = registry.getAllProviders()
                             step.status = TraceStepStatus.PASSED
-                            step.resultSummary = "ProviderRegistry synchronized (${allRegistryProviders.size} providers available to CineHub)"
-                            step.detailedOutput = "Registered CineHub Providers:\n" + allRegistryProviders.joinToString("\n") { "  - ${it.name} (${it.id})" }
+                            step.resultSummary = "ProviderRegistry synchronized (${allRegistryProviders.size} providers available to MaxStream)"
+                            step.detailedOutput = "Registered MaxStream Providers:\n" + allRegistryProviders.joinToString("\n") { "  - ${it.name} (${it.id})" }
                             logTrace("STEP 15: PASS - ProviderRegistry count = ${allRegistryProviders.size}")
                         }
 

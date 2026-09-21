@@ -14,6 +14,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.History
@@ -312,6 +313,7 @@ object MainScreen : Screen {
 
     // Community Hub auto-popup: Phase 1 (initial 1 min test threshold) / Phase 2 (15 days after "Already joined")
     val appearancePreferences = koinInject<AppearancePreferences>()
+    val enableModernGlassUI by appearancePreferences.enableModernGlassUI.collectAsState()
     val isCommunityPromptPermanentlyDismissed by appearancePreferences.communityPromptDismissedPermanently.collectAsState()
     val firstOpenTimestamp by appearancePreferences.communityFirstAppOpenTimestamp.collectAsState()
     val alreadyJoinedTimestamp by appearancePreferences.communityAlreadyJoinedTimestamp.collectAsState()
@@ -387,21 +389,46 @@ object MainScreen : Screen {
               targetOffsetY = { fullHeight -> fullHeight }
             )
           ) {
-            FloatingBottomNav(
-              tabs = visibleTabs.map { NavTabItem(id = it.id, label = it.label, icon = it.icon) },
-              selectedTab = selectedTab,
-              onTabSelected = { index ->
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                if (selectedTab == index) {
-                  _scrollToTopRequest.tryEmit(visibleTabs[index].id)
-                } else {
-                  selectedTab = index
+            if (enableModernGlassUI) {
+              FloatingBottomNav(
+                tabs = visibleTabs.map { NavTabItem(id = it.id, label = it.label, icon = it.icon) },
+                selectedTab = selectedTab,
+                onTabSelected = { index ->
+                  haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                  if (selectedTab == index) {
+                    _scrollToTopRequest.tryEmit(visibleTabs[index].id)
+                  } else {
+                    selectedTab = index
+                  }
+                },
+                modifier = Modifier
+                  .navigationBarsPadding()
+                  .padding(bottom = 12.dp)
+              )
+            } else {
+              NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 3.dp,
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                visibleTabs.forEachIndexed { index, tab ->
+                  NavigationBarItem(
+                    selected = selectedTab == index,
+                    onClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                      if (selectedTab == index) {
+                        _scrollToTopRequest.tryEmit(visibleTabs[index].id)
+                      } else {
+                        selectedTab = index
+                      }
+                    },
+                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    label = { Text(tab.label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                    alwaysShowLabel = false
+                  )
                 }
-              },
-              modifier = Modifier
-                .navigationBarsPadding()
-                .padding(bottom = 12.dp)
-            )
+              }
+            }
           }
         }
     ) { paddingValues ->

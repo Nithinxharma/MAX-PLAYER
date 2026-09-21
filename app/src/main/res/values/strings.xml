@@ -36,6 +36,9 @@
     <string name="pref_appearance_tab_cinetv_summary">Live TV channels &amp; IPTV</string>
     <string name="pref_cinehub_title">MaxStream</string>
     <string name="pref_cinehub_summary">Media library engine, metadata scraper &amp; extensions</string>
+    <string name="pref_appearance_enable_modern_glass_ui_title">Enable Modern Glass UI</string>
+    <string name="pref_appearance_enable_modern_glass_ui_summary">Use the new Material 3 glassmorphism interface</string>
+    <string name="maxstream_tagline">WATCH • EXPLORE • ENJOY</string>
     <string name="pref_appearance_summary">Dark mode, Material You</string>
     <string name="pref_appearance_category_theme">Theme</string>
     <string name="pref_appearance_darkmode_system">System</string>

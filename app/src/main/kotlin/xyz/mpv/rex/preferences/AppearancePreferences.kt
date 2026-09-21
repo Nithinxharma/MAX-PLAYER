@@ -26,6 +26,7 @@ class AppearancePreferences(
   val onboardingCompleted = preferenceStore.getBoolean("onboarding_completed", false)
   val materialYou = preferenceStore.getBoolean("material_you", true)
   val amoledMode = preferenceStore.getBoolean("amoled_mode", false)
+  val enableModernGlassUI = preferenceStore.getBoolean("enable_modern_glass_ui", true)
   val matchPlayerControlsToTheme = preferenceStore.getBoolean("match_player_controls_to_theme", false)
   val useSystemFont = preferenceStore.getBoolean("use_system_font", false)
   val unlimitedNameLines = preferenceStore.getBoolean("unlimited_name_lines", false)
