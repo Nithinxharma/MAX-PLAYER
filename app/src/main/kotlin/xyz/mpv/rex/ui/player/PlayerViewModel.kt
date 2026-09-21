@@ -541,7 +541,7 @@ class PlayerViewModel(
         var success = false
         if (opts.isNotEmpty()) {
           success = runCatching {
-            `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace", "0", opts)
+            `is`.xyz.mpv.MPVLib.command("loadfile", item.url, "replace", opts)
             true
           }.getOrDefault(false)
         }
@@ -558,7 +558,7 @@ class PlayerViewModel(
         }
 
         if (currentPos > 0.5) {
-          kotlinx.coroutines.delay(150)
+          kotlinx.coroutines.delay(200)
           runCatching { `is`.xyz.mpv.MPVLib.setPropertyDouble("time-pos", currentPos) }
         }
 
@@ -567,10 +567,45 @@ class PlayerViewModel(
           runCatching { `is`.xyz.mpv.MPVLib.setPropertyString("force-media-title", currentTitle) }
         }
 
-        android.widget.Toast.makeText(context, "Switched to $qualLabel", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(context, "Quality: $qualLabel", android.widget.Toast.LENGTH_SHORT).show()
       } catch (_: Exception) {
         runCatching { `is`.xyz.mpv.MPVLib.command("loadfile", item.url) }
       }
+    }
+  }
+
+  fun selectQualityFormat(context: android.content.Context, qualityLabel: String) {
+    _currentQualityName.value = qualityLabel
+    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+      try {
+        val ytdlFormat = when (qualityLabel) {
+          "1080p" -> "bestvideo[height<=?1080]+bestaudio/best[height<=?1080]"
+          "720p" -> "bestvideo[height<=?720]+bestaudio/best[height<=?720]"
+          "480p" -> "bestvideo[height<=?480]+bestaudio/best[height<=?480]"
+          "360p" -> "bestvideo[height<=?360]+bestaudio/best[height<=?360]"
+          else -> "bestvideo+bestaudio/best"
+        }
+        runCatching { `is`.xyz.mpv.MPVLib.setPropertyString("ytdl-format", ytdlFormat) }
+
+        val path = runCatching { `is`.xyz.mpv.MPVLib.getPropertyString("path") }.getOrNull() ?: ""
+        if (path.startsWith("http://") || path.startsWith("https://")) {
+          val currentPos = runCatching { `is`.xyz.mpv.MPVLib.getPropertyDouble("time-pos") }.getOrNull() ?: 0.0
+          val isPaused = runCatching { `is`.xyz.mpv.MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: false
+          val startOpt = if (currentPos > 0.5) "start=$currentPos" else null
+          val pauseOpt = if (isPaused) "pause=yes" else "pause=no"
+          val opts = listOfNotNull(pauseOpt, startOpt).joinToString(",")
+          if (opts.isNotEmpty()) {
+            `is`.xyz.mpv.MPVLib.command("loadfile", path, "replace", opts)
+          } else {
+            `is`.xyz.mpv.MPVLib.command("loadfile", path, "replace")
+          }
+          if (currentPos > 0.5) {
+            kotlinx.coroutines.delay(200)
+            runCatching { `is`.xyz.mpv.MPVLib.setPropertyDouble("time-pos", currentPos) }
+          }
+        }
+        android.widget.Toast.makeText(context, "Quality: $qualityLabel", android.widget.Toast.LENGTH_SHORT).show()
+      } catch (_: Exception) {}
     }
   }
 

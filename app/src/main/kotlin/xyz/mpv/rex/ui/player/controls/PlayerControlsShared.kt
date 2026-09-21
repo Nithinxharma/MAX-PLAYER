@@ -376,14 +376,6 @@ fun RenderPlayerButton(
             }
           }
         }
-      } else if (enableExpandingControls) {
-        ExpandingSpeedButton(
-          playbackSpeed = playbackSpeed,
-          onOpenSheet = onOpenSheet,
-          onOpenPanel = onOpenPanel,
-          buttonSize = buttonSize,
-          modifier = Modifier
-        )
       } else {
         @OptIn(ExperimentalFoundationApi::class)
         Surface(
@@ -484,13 +476,6 @@ fun RenderPlayerButton(
             )
           }
         }
-      } else if (enableExpandingControls) {
-        ExpandingDecoderButton(
-          decoder = decoder,
-          onOpenSheet = onOpenSheet,
-          buttonSize = buttonSize,
-          modifier = Modifier
-        )
       } else {
         Surface(
           shape = CircleShape,
@@ -703,14 +688,6 @@ fun RenderPlayerButton(
               )
             }
           }
-      } else if (enableExpandingControls) {
-          ExpandingAspectButton(
-            aspect = aspect,
-            viewModel = viewModel,
-            onOpenSheet = onOpenSheet,
-            buttonSize = buttonSize,
-            modifier = Modifier
-          )
       } else {
           ControlsButton(
             icon =
@@ -1011,12 +988,6 @@ fun RenderPlayerButton(
               )
             }
           }
-      } else if (enableExpandingControls) {
-          ExpandingRepeatButton(
-            viewModel = viewModel,
-            buttonSize = buttonSize,
-            modifier = Modifier
-          )
       } else {
           ControlsButton(
             icon = icon,
@@ -1959,10 +1930,10 @@ fun ExpandingQualityButton(
   val currentQualityName by viewModel.currentQualityName.collectAsState()
 
   Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    shape = if (isExpanded) RoundedCornerShape(16.dp) else CircleShape,
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
     border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    shadowElevation = if (isExpanded) 8.dp else 0.dp,
     modifier = modifier
       .animateContentSize(
         animationSpec = androidx.compose.animation.core.spring(
@@ -1975,7 +1946,7 @@ fun ExpandingQualityButton(
       Box(
         modifier = Modifier
           .size(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
+          .clip(CircleShape)
           .combinedClickable(
             onClick = {
               clickEvent()
@@ -2085,8 +2056,8 @@ fun ExpandingQualityButton(
               }
             }
           } else {
-            listOf("Auto", "1080p", "720p", "480p").forEach { fallbackLabel ->
-              val isSelected = currentQualityName.equals(fallbackLabel, ignoreCase = true) || (fallbackLabel == "Auto" && currentQualityName == "Auto")
+            listOf("Auto", "1080p", "720p", "480p", "360p").forEach { fallbackLabel ->
+              val isSelected = currentQualityName.equals(fallbackLabel, ignoreCase = true) || (fallbackLabel == "Auto" && (currentQualityName.isBlank() || currentQualityName == "Auto"))
 
               Surface(
                 shape = RoundedCornerShape(8.dp),
@@ -2101,7 +2072,7 @@ fun ExpandingQualityButton(
                     if (match != null) {
                       viewModel.selectStreamQuality(context, match)
                     } else {
-                      android.widget.Toast.makeText(context, "Quality: $fallbackLabel", android.widget.Toast.LENGTH_SHORT).show()
+                      viewModel.selectQualityFormat(context, fallbackLabel)
                     }
                     isExpanded = false
                   }
@@ -2177,12 +2148,13 @@ fun ExpandingAudioButton(
   var isExpanded by remember { mutableStateOf(false) }
   val audioTracks by viewModel.audioTracks.collectAsState()
   val currentAid by `is`.xyz.mpv.MPVLib.propInt["aid"].collectAsState()
+  val activeAid = currentAid
 
   Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    shape = if (isExpanded) RoundedCornerShape(16.dp) else CircleShape,
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
     border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    shadowElevation = if (isExpanded) 8.dp else 0.dp,
     modifier = modifier
       .animateContentSize(
         animationSpec = androidx.compose.animation.core.spring(
@@ -2195,7 +2167,7 @@ fun ExpandingAudioButton(
       Box(
         modifier = Modifier
           .size(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
+          .clip(CircleShape)
           .combinedClickable(
             onClick = {
               clickEvent()
@@ -2265,7 +2237,7 @@ fun ExpandingAudioButton(
         ) {
           if (audioTracks.isNotEmpty()) {
             audioTracks.forEach { track ->
-              val isSelected = track.selected == true || (currentAid != null && currentAid == track.id)
+              val isSelected = if (activeAid != null && activeAid > 0) track.id == activeAid else track.selected == true
               val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Audio Track ${track.id}"
 
               Surface(
@@ -2277,8 +2249,8 @@ fun ExpandingAudioButton(
                   .height(32.dp)
                   .clip(RoundedCornerShape(8.dp))
                   .clickable {
-                    viewModel.selectAudioTrack(track.id, track.title, track.lang)
                     `is`.xyz.mpv.MPVLib.setPropertyInt("aid", track.id)
+                    viewModel.selectAudioTrack(track.id, track.title, track.lang)
                     isExpanded = false
                   }
               ) {
@@ -2391,12 +2363,13 @@ fun ExpandingSubtitleButton(
   var isExpanded by remember { mutableStateOf(false) }
   val subtitleTracks by viewModel.subtitleTracks.collectAsState()
   val currentSid by `is`.xyz.mpv.MPVLib.propInt["sid"].collectAsState()
+  val activeSid = currentSid
 
   Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    shape = if (isExpanded) RoundedCornerShape(16.dp) else CircleShape,
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
     border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    shadowElevation = if (isExpanded) 8.dp else 0.dp,
     modifier = modifier
       .animateContentSize(
         animationSpec = androidx.compose.animation.core.spring(
@@ -2409,7 +2382,7 @@ fun ExpandingSubtitleButton(
       Box(
         modifier = Modifier
           .size(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
+          .clip(CircleShape)
           .combinedClickable(
             onClick = {
               clickEvent()
@@ -2477,7 +2450,7 @@ fun ExpandingSubtitleButton(
             .verticalScroll(rememberScrollState()),
           verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-          val isOff = currentSid == 0 || (subtitleTracks.none { it.selected == true } && (currentSid == null || currentSid == 0))
+          val isOff = activeSid == 0 || (activeSid == null && subtitleTracks.none { it.selected == true })
           Surface(
             shape = RoundedCornerShape(8.dp),
             color = if (isOff) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
@@ -2517,7 +2490,7 @@ fun ExpandingSubtitleButton(
 
           if (subtitleTracks.isNotEmpty()) {
             subtitleTracks.forEach { track ->
-              val isSelected = (track.selected == true || (currentSid != null && currentSid == track.id)) && !isOff
+              val isSelected = !isOff && (if (activeSid != null && activeSid > 0) track.id == activeSid else track.selected == true)
               val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Sub ${track.id}"
 
               Surface(
@@ -2529,8 +2502,8 @@ fun ExpandingSubtitleButton(
                   .height(32.dp)
                   .clip(RoundedCornerShape(8.dp))
                   .clickable {
-                    viewModel.toggleSubtitle(track.id)
                     `is`.xyz.mpv.MPVLib.setPropertyInt("sid", track.id)
+                    viewModel.toggleSubtitle(track.id)
                     isExpanded = false
                   }
               ) {
@@ -2636,10 +2609,10 @@ fun ExpandingChaptersButton(
   var isExpanded by remember { mutableStateOf(false) }
 
   Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    shape = if (isExpanded) RoundedCornerShape(16.dp) else CircleShape,
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
     border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    shadowElevation = if (isExpanded) 8.dp else 0.dp,
     modifier = modifier
       .animateContentSize(
         animationSpec = androidx.compose.animation.core.spring(
@@ -2652,7 +2625,7 @@ fun ExpandingChaptersButton(
       Box(
         modifier = Modifier
           .size(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
+          .clip(CircleShape)
           .combinedClickable(
             onClick = {
               clickEvent()
@@ -2789,637 +2762,6 @@ fun ExpandingChaptersButton(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
-        }
-      }
-    }
-  }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun ExpandingSpeedButton(
-  playbackSpeed: Float,
-  onOpenSheet: (Sheets) -> Unit,
-  onOpenPanel: (Panels) -> Unit,
-  modifier: Modifier = Modifier,
-  buttonSize: Dp = 44.dp
-) {
-  val clickEvent = LocalPlayerButtonsClickEvent.current
-  var isExpanded by remember { mutableStateOf(false) }
-  val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
-  val isSpeedNonOne = kotlin.math.abs(playbackSpeed - 1f) > 0.01f
-
-  Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else if (isSpeedNonOne) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
-    border = BorderStroke(1.dp, if (isExpanded || isSpeedNonOne) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
-    modifier = modifier
-      .animateContentSize(
-        animationSpec = androidx.compose.animation.core.spring(
-          dampingRatio = 0.82f,
-          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-        )
-      )
-  ) {
-    if (!isExpanded) {
-      Row(
-        modifier = Modifier
-          .height(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
-          .combinedClickable(
-            onClick = {
-              clickEvent()
-              isExpanded = true
-            },
-            onLongClick = {
-              clickEvent()
-              onOpenSheet(Sheets.PlaybackSpeed)
-            }
-          )
-          .padding(horizontal = if (isSpeedNonOne) 10.dp else 0.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-      ) {
-        Icon(
-          imageVector = Icons.Default.Speed,
-          contentDescription = "Playback Speed",
-          tint = if (isSpeedNonOne) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp)
-        )
-        if (isSpeedNonOne) {
-          Text(
-            text = String.format("%.2fx", playbackSpeed),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 4.dp)
-          )
-        }
-      }
-    } else {
-      Column(
-        modifier = Modifier
-          .width(150.dp)
-          .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Default.Speed,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(18.dp)
-            )
-            Text(
-              text = "Speed",
-              style = MaterialTheme.typography.titleSmall,
-              fontWeight = FontWeight.Bold
-            )
-          }
-          Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = "Close",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-              .size(18.dp)
-              .clip(CircleShape)
-              .clickable { isExpanded = false }
-          )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 200.dp)
-            .verticalScroll(rememberScrollState()),
-          verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-          speeds.forEach { speed ->
-            val isSelected = kotlin.math.abs(playbackSpeed - speed) < 0.01f
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  `is`.xyz.mpv.MPVLib.setPropertyFloat("speed", speed)
-                  isExpanded = false
-                }
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text(
-                  text = "${speed}x",
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                  )
-                }
-              }
-            }
-          }
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .height(28.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .clickable {
-              isExpanded = false
-              onOpenSheet(Sheets.PlaybackSpeed)
-            }
-            .padding(horizontal = 6.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-          Icon(
-            imageVector = Icons.Default.Tune,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp)
-          )
-          Text(
-            text = "Custom Slider",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
-      }
-    }
-  }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun ExpandingDecoderButton(
-  decoder: xyz.mpv.rex.ui.player.Decoder,
-  onOpenSheet: (Sheets) -> Unit,
-  modifier: Modifier = Modifier,
-  buttonSize: Dp = 44.dp
-) {
-  val clickEvent = LocalPlayerButtonsClickEvent.current
-  var isExpanded by remember { mutableStateOf(false) }
-  val decoders = listOf(
-    xyz.mpv.rex.ui.player.Decoder.HWPlus,
-    xyz.mpv.rex.ui.player.Decoder.HW,
-    xyz.mpv.rex.ui.player.Decoder.SW
-  )
-
-  Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
-    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
-    modifier = modifier
-      .animateContentSize(
-        animationSpec = androidx.compose.animation.core.spring(
-          dampingRatio = 0.82f,
-          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-        )
-      )
-  ) {
-    if (!isExpanded) {
-      Row(
-        modifier = Modifier
-          .height(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
-          .combinedClickable(
-            onClick = {
-              clickEvent()
-              isExpanded = true
-            },
-            onLongClick = {
-              clickEvent()
-              onOpenSheet(Sheets.Decoders)
-            }
-          )
-          .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-      ) {
-        Icon(
-          imageVector = Icons.Outlined.Memory,
-          contentDescription = "Decoder",
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(20.dp)
-        )
-        Text(
-          text = decoder.title,
-          style = MaterialTheme.typography.labelMedium,
-          fontWeight = FontWeight.Bold,
-          modifier = Modifier.padding(start = 4.dp)
-        )
-      }
-    } else {
-      Column(
-        modifier = Modifier
-          .width(150.dp)
-          .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Outlined.Memory,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(18.dp)
-            )
-            Text(
-              text = "Decoder",
-              style = MaterialTheme.typography.titleSmall,
-              fontWeight = FontWeight.Bold
-            )
-          }
-          Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = "Close",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-              .size(18.dp)
-              .clip(CircleShape)
-              .clickable { isExpanded = false }
-          )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 200.dp)
-            .verticalScroll(rememberScrollState()),
-          verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-          decoders.forEach { dItem ->
-            val isSelected = decoder == dItem
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  `is`.xyz.mpv.MPVLib.setPropertyString("hwdec", dItem.value)
-                  isExpanded = false
-                }
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text(
-                  text = dItem.title,
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                  )
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun ExpandingAspectButton(
-  aspect: VideoAspect,
-  viewModel: PlayerViewModel,
-  onOpenSheet: (Sheets) -> Unit,
-  modifier: Modifier = Modifier,
-  buttonSize: Dp = 44.dp
-) {
-  val clickEvent = LocalPlayerButtonsClickEvent.current
-  var isExpanded by remember { mutableStateOf(false) }
-  val aspects = listOf(
-    VideoAspect.Fit,
-    VideoAspect.Stretch,
-    VideoAspect.Crop
-  )
-
-  Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
-    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
-    modifier = modifier
-      .animateContentSize(
-        animationSpec = androidx.compose.animation.core.spring(
-          dampingRatio = 0.82f,
-          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-        )
-      )
-  ) {
-    if (!isExpanded) {
-      Box(
-        modifier = Modifier
-          .size(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
-          .combinedClickable(
-            onClick = {
-              clickEvent()
-              isExpanded = true
-            },
-            onLongClick = {
-              clickEvent()
-              onOpenSheet(Sheets.AspectRatios)
-            }
-          ),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = when (aspect) {
-            VideoAspect.Fit -> Icons.Default.AspectRatio
-            VideoAspect.Stretch -> Icons.Default.ZoomOutMap
-            VideoAspect.Crop -> Icons.Default.FitScreen
-          },
-          contentDescription = "Aspect Ratio",
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp)
-        )
-      }
-    } else {
-      Column(
-        modifier = Modifier
-          .width(150.dp)
-          .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Default.AspectRatio,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(18.dp)
-            )
-            Text(
-              text = "Aspect",
-              style = MaterialTheme.typography.titleSmall,
-              fontWeight = FontWeight.Bold
-            )
-          }
-          Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = "Close",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-              .size(18.dp)
-              .clip(CircleShape)
-              .clickable { isExpanded = false }
-          )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 200.dp)
-            .verticalScroll(rememberScrollState()),
-          verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-          aspects.forEach { aItem ->
-            val isSelected = aspect == aItem
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  viewModel.changeVideoAspect(aItem)
-                  isExpanded = false
-                }
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text(
-                  text = aItem.name,
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                  )
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun ExpandingRepeatButton(
-  viewModel: PlayerViewModel,
-  modifier: Modifier = Modifier,
-  buttonSize: Dp = 44.dp
-) {
-  val clickEvent = LocalPlayerButtonsClickEvent.current
-  var isExpanded by remember { mutableStateOf(false) }
-  val repeatMode by viewModel.repeatMode.collectAsState()
-  val repeatModes = listOf(
-    xyz.mpv.rex.ui.player.RepeatMode.OFF to "Off",
-    xyz.mpv.rex.ui.player.RepeatMode.ONE to "Repeat One",
-    xyz.mpv.rex.ui.player.RepeatMode.ALL to "Repeat All"
-  )
-  val isActive = repeatMode != xyz.mpv.rex.ui.player.RepeatMode.OFF
-
-  Surface(
-    shape = RoundedCornerShape(16.dp),
-    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
-    border = BorderStroke(1.dp, if (isExpanded || isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    shadowElevation = if (isExpanded) 8.dp else 4.dp,
-    modifier = modifier
-      .animateContentSize(
-        animationSpec = androidx.compose.animation.core.spring(
-          dampingRatio = 0.82f,
-          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-        )
-      )
-  ) {
-    if (!isExpanded) {
-      Box(
-        modifier = Modifier
-          .size(buttonSize)
-          .clip(RoundedCornerShape(16.dp))
-          .clickable {
-            clickEvent()
-            isExpanded = true
-          },
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = when (repeatMode) {
-            xyz.mpv.rex.ui.player.RepeatMode.OFF -> Icons.Default.Repeat
-            xyz.mpv.rex.ui.player.RepeatMode.ONE -> Icons.Default.RepeatOne
-            xyz.mpv.rex.ui.player.RepeatMode.ALL -> Icons.Default.RepeatOn
-          },
-          contentDescription = "Repeat Mode",
-          tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp)
-        )
-      }
-    } else {
-      Column(
-        modifier = Modifier
-          .width(150.dp)
-          .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Default.Repeat,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.primary,
-              modifier = Modifier.size(18.dp)
-            )
-            Text(
-              text = "Repeat",
-              style = MaterialTheme.typography.titleSmall,
-              fontWeight = FontWeight.Bold
-            )
-          }
-          Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = "Close",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-              .size(18.dp)
-              .clip(CircleShape)
-              .clickable { isExpanded = false }
-          )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-        Column(
-          modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 200.dp)
-            .verticalScroll(rememberScrollState()),
-          verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-          repeatModes.forEach { (mode, label) ->
-            val isSelected = repeatMode == mode
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  if (repeatMode != mode) {
-                    viewModel.cycleRepeatMode()
-                  }
-                  isExpanded = false
-                }
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text(
-                  text = label,
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                  )
-                }
-              }
-            }
-          }
         }
       }
     }

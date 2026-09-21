@@ -18,9 +18,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -48,6 +49,8 @@ fun AudioTracksSheet(
 ) {
   val audioPreferences = koinInject<AudioPreferences>()
   val audioChannels by audioPreferences.audioChannels.collectAsState()
+  val currentAid by MPVLib.propInt["aid"].collectAsState()
+  val activeAid = currentAid
 
   GenericTracksSheet(
     tracks,
@@ -64,9 +67,10 @@ fun AudioTracksSheet(
       )
     },
     track = {
+      val isSelected = if (activeAid != null && activeAid > 0) it.id == activeAid else it.isSelected
       AudioTrackCard(
         track = it,
-        isSelected = it.isSelected,
+        isSelected = isSelected,
         onClick = { onSelect(it) },
       )
     },
