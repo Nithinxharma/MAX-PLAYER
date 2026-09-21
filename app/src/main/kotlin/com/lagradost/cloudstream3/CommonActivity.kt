@@ -5,6 +5,9 @@ import android.os.Looper
 import android.widget.Toast
 
 object CommonActivity {
+    val activity: android.app.Activity?
+        get() = runCatching { xyz.mpv.rex.App.currentActivity }.getOrNull()
+
     fun showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
         Handler(Looper.getMainLooper()).post {
             try {

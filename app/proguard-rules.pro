@@ -66,21 +66,67 @@
 -keepattributes Exceptions
 
 # Keep CloudStream extension SDK & plugins framework for dynamic DEX loading
--keep class com.lagradost.cloudstream3.** {
+-keep class com.lagradost.cloudstream3.** { *; }
+-keep interface com.lagradost.cloudstream3.** { *; }
+-keepclassmembers class com.lagradost.cloudstream3.** { *; }
+
+-keep class com.lagradost.nicehttp.** { *; }
+-keep interface com.lagradost.nicehttp.** { *; }
+-keepclassmembers class com.lagradost.nicehttp.** { *; }
+
+# Keep AndroidX Fragment, DialogFragment, Activity, and Lifecycle for dynamic plugin UI and Donation dialogs
+-keep class androidx.fragment.app.** {
     <init>(...);
     <fields>;
     <methods>;
 }
--keep interface com.lagradost.cloudstream3.** { *; }
--keepclassmembers class com.lagradost.cloudstream3.** {
+-keep interface androidx.fragment.app.** { *; }
+-keepclassmembers class androidx.fragment.app.** {
     <init>(...);
     <fields>;
     <methods>;
 }
 
--keep class com.lagradost.nicehttp.** { *; }
--keep interface com.lagradost.nicehttp.** { *; }
--keepclassmembers class com.lagradost.nicehttp.** { *; }
+-keep class androidx.appcompat.app.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
+-keep interface androidx.appcompat.app.** { *; }
+-keepclassmembers class androidx.appcompat.app.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
+
+-keep class androidx.activity.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
+-keep interface androidx.activity.** { *; }
+-keepclassmembers class androidx.activity.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
+
+-keep class androidx.lifecycle.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
+-keep interface androidx.lifecycle.** { *; }
+-keepclassmembers class androidx.lifecycle.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
+
+# Keep dynamic third-party plugin packages (such as cncverse donation modules)
+-keep class com.cncverse.** { *; }
+-keep interface com.cncverse.** { *; }
+-keepclassmembers class com.cncverse.** { *; }
 
 # Keep kotlinx.coroutines for dynamic DEX plugin execution
 -keep class kotlinx.coroutines.** {

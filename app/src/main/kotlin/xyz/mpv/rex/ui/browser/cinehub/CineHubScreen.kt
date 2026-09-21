@@ -1799,6 +1799,11 @@ fun CineDetailView(
   val inLibrary = libraryEntry != null
   var showLibraryMenu by remember { mutableStateOf(false) }
 
+  // TMDB Metadata Enrichment States
+  var tmdbEnrichedMovie by remember(item) { mutableStateOf<MovieItem?>(null) }
+  var tmdbEnrichedTvShow by remember(item) { mutableStateOf<TvShowItem?>(null) }
+  var isTmdbEnriching by remember(item) { mutableStateOf(false) }
+
   var detailPendingLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
   var detailPendingSubs by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
   var detailPendingEpJson by remember { mutableStateOf<String?>(null) }
@@ -1809,7 +1814,7 @@ fun CineDetailView(
   var detailPendingRating by remember { mutableStateOf<Double?>(null) }
   var detailPendingProvider by remember { mutableStateOf<String?>(null) }
 
-  val title = when (item) {
+  val rawTitle = when (item) {
     is MovieItem -> item.title
     is TvShowItem -> item.title
     is ExtensionMediaDetails -> item.loadResponse.name
@@ -1819,7 +1824,7 @@ fun CineDetailView(
     is CineHubMediaDetails -> item.title
     else -> ""
   }
-  val plot = when (item) {
+  val rawPlot = when (item) {
     is MovieItem -> item.plot
     is TvShowItem -> item.plot
     is ExtensionMediaDetails -> item.loadResponse.plot ?: ""
@@ -1827,7 +1832,7 @@ fun CineDetailView(
     is CineHubMediaDetails -> item.overview ?: ""
     else -> ""
   }
-  val posterPath = when (item) {
+  val rawPosterPath = when (item) {
     is MovieItem -> item.posterPath
     is TvShowItem -> item.posterPath
     is ExtensionMediaDetails -> item.loadResponse.posterUrl
@@ -1837,7 +1842,7 @@ fun CineDetailView(
     is CineHubMediaDetails -> item.posterUrl
     else -> null
   }
-  val backdropPath = when (item) {
+  val rawBackdropPath = when (item) {
     is MovieItem -> item.backdropPath ?: item.posterPath
     is TvShowItem -> item.backdropPath ?: item.posterPath
     is ExtensionMediaDetails -> item.loadResponse.backgroundPosterUrl ?: item.loadResponse.posterUrl
@@ -1846,7 +1851,7 @@ fun CineDetailView(
     is SearchResponse -> item.posterUrl
     else -> null
   }
-  val rating = when (item) {
+  val rawRating = when (item) {
     is MovieItem -> item.userRating
     is TvShowItem -> item.userRating
     is ExtensionMediaDetails -> item.loadResponse.score?.score ?: 0.0
@@ -1854,7 +1859,7 @@ fun CineDetailView(
     is SearchResponse -> item.score?.score ?: 0.0
     else -> 0.0
   }
-  val year = when (item) {
+  val rawYear = when (item) {
     is MovieItem -> item.premiered.take(4)
     is TvShowItem -> item.premiered.take(4)
     is ExtensionMediaDetails -> item.loadResponse.year?.toString() ?: ""
@@ -1862,7 +1867,7 @@ fun CineDetailView(
     is CineHubMediaDetails -> item.year?.toString() ?: ""
     else -> ""
   }
-  val genre = when (item) {
+  val rawGenre = when (item) {
     is MovieItem -> item.genre
     is TvShowItem -> item.genre
     is ExtensionMediaDetails -> item.loadResponse.tags?.firstOrNull() ?: item.loadResponse.type.name
@@ -1872,6 +1877,49 @@ fun CineDetailView(
     is CineHubMediaDetails -> item.type.name
     else -> ""
   }
+
+  // Effect to automatically match provider or local items with TMDB data
+  LaunchedEffect(item) {
+    if (rawTitle.isNotBlank()) {
+      isTmdbEnriching = true
+      withContext(Dispatchers.IO) {
+        val tmdbIdDigit = when {
+          item is MovieItem && item.tmdbId.isNotBlank() && item.tmdbId.all { it.isDigit() } -> item.tmdbId
+          item is TvShowItem && item.tmdbId.isNotBlank() && item.tmdbId.all { it.isDigit() } -> item.tmdbId
+          tmdbId.isNotBlank() && tmdbId.all { it.isDigit() } -> tmdbId
+          else -> null
+        }
+        if (isMovie) {
+          val enriched = CineOnlineScraper.getOrFetchMovie(context, rawTitle, tmdbIdDigit)
+          if (enriched != null) {
+            withContext(Dispatchers.Main) {
+              tmdbEnrichedMovie = enriched
+            }
+          }
+        } else {
+          val enriched = CineOnlineScraper.getOrFetchTvShow(context, rawTitle, tmdbIdDigit)
+          if (enriched != null) {
+            withContext(Dispatchers.Main) {
+              tmdbEnrichedTvShow = enriched
+            }
+          }
+        }
+      }
+      isTmdbEnriching = false
+    }
+  }
+
+  // Resolved metadata prioritizing TMDB matched data
+  val title = tmdbEnrichedMovie?.title ?: tmdbEnrichedTvShow?.title ?: rawTitle
+  val plot = tmdbEnrichedMovie?.plot?.takeIf { it.isNotBlank() && it != "No description." && it != "No description available." && it != "Local Media File." }
+    ?: tmdbEnrichedTvShow?.plot?.takeIf { it.isNotBlank() && it != "No description." && it != "No description available." && it != "Local Media File." }
+    ?: rawPlot
+  val posterPath = tmdbEnrichedMovie?.posterPath ?: tmdbEnrichedTvShow?.posterPath ?: rawPosterPath
+  val backdropPath = tmdbEnrichedMovie?.backdropPath ?: tmdbEnrichedTvShow?.backdropPath ?: rawBackdropPath
+  val rating = (tmdbEnrichedMovie?.userRating?.takeIf { it > 0.0 } ?: tmdbEnrichedTvShow?.userRating?.takeIf { it > 0.0 } ?: rawRating)
+  val year = (tmdbEnrichedMovie?.premiered?.take(4)?.takeIf { it.isNotBlank() && it != "2026" } ?: tmdbEnrichedTvShow?.premiered?.take(4)?.takeIf { it.isNotBlank() && it != "2026" } ?: rawYear)
+  val genre = (tmdbEnrichedMovie?.genre?.takeIf { it.isNotBlank() } ?: tmdbEnrichedTvShow?.genre?.takeIf { it.isNotBlank() } ?: rawGenre)
+  val actorsList = (tmdbEnrichedMovie?.actors?.takeIf { it.isNotEmpty() } ?: (item as? MovieItem)?.actors?.takeIf { it.isNotEmpty() } ?: tmdbEnrichedTvShow?.actors?.takeIf { it.isNotEmpty() } ?: (item as? TvShowItem)?.actors?.takeIf { it.isNotEmpty() }).orEmpty()
 
   var isInstantPlayExtracting by remember { mutableStateOf(false) }
 
@@ -2193,6 +2241,21 @@ fun CineDetailView(
               horizontalArrangement = Arrangement.spacedBy(8.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
+              if (tmdbEnrichedMovie != null || tmdbEnrichedTvShow != null) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = Color(0xFF01B4E4).copy(alpha = 0.2f)
+                ) {
+                  Text(
+                    text = "TMDB",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF01B4E4),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                  )
+                }
+              }
+
               if (year.isNotBlank()) {
                 Surface(
                   shape = RoundedCornerShape(8.dp),
@@ -2258,6 +2321,57 @@ fun CineDetailView(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 12.dp, bottom = 16.dp),
           )
+        }
+
+        if (actorsList.isNotEmpty()) {
+          Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            Text(
+              text = "Top Cast",
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold,
+              modifier = Modifier.padding(bottom = 8.dp)
+            )
+            LazyRow(
+              horizontalArrangement = Arrangement.spacedBy(10.dp),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              items(actorsList) { actor ->
+                Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  modifier = Modifier.width(72.dp)
+                ) {
+                  AsyncImage(
+                    model = actor.thumbUrl ?: "https://ui-avatars.com/api/?name=${actor.name}&background=random",
+                    contentDescription = actor.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                      .size(56.dp)
+                      .clip(CircleShape)
+                      .background(MaterialTheme.colorScheme.surfaceVariant)
+                  )
+                  Spacer(modifier = Modifier.height(4.dp))
+                  Text(
+                    text = actor.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                  )
+                  if (actor.character.isNotBlank()) {
+                    Text(
+                      text = actor.character,
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.outline,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                      textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                  }
+                }
+              }
+            }
+          }
         }
 
         // Library Actions

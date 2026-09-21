@@ -176,6 +176,7 @@ dependencies {
   debugImplementation(libs.androidx.ui.tooling)
   implementation(libs.bundles.compose.navigation3)
   implementation(libs.androidx.appcompat)
+  implementation("androidx.fragment:fragment-ktx:1.8.6")
   implementation(libs.androidx.compose.constraintlayout)
   implementation("androidx.preference:preference-ktx:1.2.1")
   implementation("androidx.constraintlayout:constraintlayout:2.2.0")
