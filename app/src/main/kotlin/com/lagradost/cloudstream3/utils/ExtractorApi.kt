@@ -98,6 +98,7 @@ suspend fun loadExtractor(
     val cleanUrl = url.trim()
     val cleanNoProtocol = cleanUrl.removePrefix("https://").removePrefix("http://").removePrefix("//").trimEnd('/')
     val extractors = APIHolder.extractorApis.toList().reversed()
+    var extracted = false
     for (extractor in extractors) {
         val mainUrl = extractor.mainUrl
         val isMatch = if (mainUrl.isBlank()) false else {
@@ -111,13 +112,26 @@ suspend fun loadExtractor(
         if (isMatch) {
             try {
                 extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
-                return true
+                extracted = true
             } catch (t: Throwable) {
                 Log.w("ExtractorApi", "Extractor ${extractor.name} failed for $cleanUrl", t)
             }
         }
     }
-    return false
+
+    // Fallback: If no matched extractor produced links, attempt extractors whose mainUrl is blank/generic
+    if (!extracted) {
+        for (extractor in extractors) {
+            if (extractor.mainUrl.isBlank()) {
+                try {
+                    extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
+                    extracted = true
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    return extracted
 }
 
 suspend fun loadExtractor(

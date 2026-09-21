@@ -143,6 +143,7 @@ object CloudstreamHttp {
 
     val client: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(defaultCookieJar)
+        .addInterceptor(com.lagradost.cloudstream3.network.CloudflareKiller())
         .addInterceptor { chain ->
             val req = chain.request()
             val builder = req.newBuilder()
