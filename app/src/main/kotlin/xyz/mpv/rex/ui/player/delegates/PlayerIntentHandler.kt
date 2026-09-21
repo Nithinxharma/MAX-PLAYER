@@ -335,6 +335,15 @@ class PlayerIntentHandler(
    * to avoid orientation jumps on activity launch or intent update.
    */
   fun applyInitialOrientationFromIntent(targetIntent: Intent) {
+    // 0. Check for explicit preferred orientation (e.g. landscape for episodes, portrait for movies)
+    val preferredOrientation = targetIntent.getIntExtra("preferred_orientation", ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+    if (preferredOrientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
+      activity.requestedOrientation = preferredOrientation
+      activity.isOrientationRestored = true
+      Log.d(TAG, "applyInitialOrientationFromIntent - Using explicit preferred orientation: $preferredOrientation")
+      return
+    }
+
     val orient = activity.playerPreferences.orientation.get()
     if (orient != PlayerOrientation.Video && orient != PlayerOrientation.Smart) {
       activity.setOrientation()

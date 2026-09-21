@@ -74,6 +74,7 @@ object MediaUtils : KoinComponent {
     rating: Double? = null,
     providerName: String? = null,
     allLinks: List<ExtractorLink>? = null,
+    preferredOrientation: Int? = null,
   ) {
     val intent = when (source) {
       is Video -> {
@@ -222,6 +223,17 @@ object MediaUtils : KoinComponent {
       intent.putExtra("cinetv_links_referers", sortedLinks.map { it.referer }.toTypedArray())
     }
     
+    // Set orientation preference (Landscape for TV episodes, Portrait for movies)
+    val finalOrientation = when {
+      preferredOrientation != null -> preferredOrientation
+      !episodeMetadataJson.isNullOrBlank() || launchSource == "cinehub_episode" || launchSource == "tv_series" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+      launchSource == "cinehub_movie" || (!title.isNullOrBlank() && !overview.isNullOrBlank() && episodeMetadataJson.isNullOrBlank()) -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+      else -> null
+    }
+    if (finalOrientation != null) {
+      intent.putExtra("preferred_orientation", finalOrientation)
+    }
+
     // For playlist items, pass the title so it shows correctly in the player
     if (source is Video && launchSource != null && (launchSource.contains("playlist") || launchSource == "m3u_playlist" || launchSource == "media_library_list")) {
       intent.putExtra("title", source.displayName)

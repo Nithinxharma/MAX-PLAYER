@@ -27,6 +27,14 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -606,109 +614,6 @@ object CineHubScreen : Screen {
                   .padding(horizontal = 16.dp, vertical = 8.dp)
                   .testTag("cinehub_search_input"),
               )
-            }
-
-            // Diagnostic Panel
-            item {
-              Card(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(horizontal = 16.dp, vertical = 4.dp)
-                  .testTag("cinehub_provider_diagnostic_panel"),
-                colors = CardDefaults.cardColors(
-                  containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-              ) {
-                Column(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
-                ) {
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                  ) {
-                    Text(
-                      text = "CloudStream Provider Diagnostics",
-                      style = MaterialTheme.typography.labelLarge,
-                      fontWeight = FontWeight.Bold,
-                      color = MaterialTheme.colorScheme.primary
-                    )
-                    TextButton(
-                      onClick = { showDiagnostics = !showDiagnostics }
-                    ) {
-                      Text(if (showDiagnostics) "Hide" else "Show Details")
-                    }
-                  }
-
-                  val installedCount = installedExtensionsList.size
-                  val enabledCount = installedExtensionsList.count { it.isEnabled }
-                  val loadedPluginsCount = extensionManager.loadedPluginCount
-                  val apiHolderCount = com.lagradost.cloudstream3.APIHolder.allProviders.size
-                  val registeredCount = registeredProvidersList.size
-                  val activeCount = activeProvidersList.size
-                  val enabledCountRegistry = providerRegistry.getEnabledProviders().size
-
-                  Text(
-                    text = "Installed: $installedCount | Enabled: $enabledCount | Active: $activeCount | Loaded: $loadedPluginsCount",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                  )
-
-                  if (showDiagnostics) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                      text = "Installed Extensions ($installedCount): ${installedExtensionsList.map { it.name.ifBlank { it.pkgName } }.joinToString().ifEmpty { "None" }}",
-                      style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                      text = "Enabled Extensions ($enabledCount): ${installedExtensionsList.filter { it.isEnabled }.map { it.name.ifBlank { it.pkgName } }.joinToString().ifEmpty { "None" }}",
-                      style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                      text = "Loaded Plugins ($loadedPluginsCount)",
-                      style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                      text = "APIHolder Count ($apiHolderCount): ${com.lagradost.cloudstream3.APIHolder.allProviders.map { it.name }.joinToString().ifEmpty { "None" }}",
-                      style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                      text = "Registered Providers ($registeredCount): ${registeredProvidersList.map { it.name }.joinToString().ifEmpty { "None" }}",
-                      style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                      text = "Active Providers ($activeCount): ${activeProvidersList.map { it.name }.joinToString().ifEmpty { "None" }}",
-                      style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                      text = "Enabled Providers ($enabledCountRegistry): ${providerRegistry.getEnabledProviders().map { it.name }.joinToString().ifEmpty { "None" }}",
-                      style = MaterialTheme.typography.bodySmall
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                      onClick = {
-                        scope.launch(Dispatchers.IO) {
-                          Log.i("CineHubScreen", "RELOAD_ACTION: Reload Providers clicked in UI. ExtensionManager@${System.identityHashCode(extensionManager)}, ProviderRegistry@${System.identityHashCode(providerRegistry)}, APIHolder@${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
-                          Log.i("CineHubScreen", "RELOAD_ACTION: Before load: APIHolder.allProviders.size=${com.lagradost.cloudstream3.APIHolder.allProviders.size}, ProviderRegistry.registeredProviders.size=${providerRegistry.registeredProviders.value.size}, ProviderRegistry.activeProviders.size=${providerRegistry.activeProviders.value.size}")
-                          extensionManager.loadInstalledExtensions()
-                          Log.i("CineHubScreen", "RELOAD_ACTION: After load: APIHolder.allProviders.size=${com.lagradost.cloudstream3.APIHolder.allProviders.size}, ProviderRegistry.registeredProviders.size=${providerRegistry.registeredProviders.value.size}, ProviderRegistry.activeProviders.size=${providerRegistry.activeProviders.value.size}")
-                          withContext(Dispatchers.Main) {
-                            loadMedia()
-                          }
-                        }
-                      },
-                      modifier = Modifier.align(Alignment.End)
-                    ) {
-                      Text("Reload Providers")
-                    }
-                  }
-                }
-              }
             }
 
             // If Search is Active, display Search Results
@@ -1734,16 +1639,24 @@ private fun ExtensionSearchResultRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        SuggestionChip(
-          onClick = {},
-          label = { Text(item.providerName, style = MaterialTheme.typography.labelSmall) },
-          modifier = Modifier.height(24.dp)
-        )
+        Surface(
+          shape = RoundedCornerShape(4.dp),
+          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+          border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+        ) {
+          Text(
+            text = "HD",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+          )
+        }
         if (item.year != null) {
           Text(
             text = item.year.toString(),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
         if (item.rating != null && item.rating > 0.0) {
@@ -2078,10 +1991,17 @@ fun CineDetailView(
   }
 
   val scrollState = rememberScrollState()
+  var dragOffsetY by remember { mutableStateOf(0f) }
+  val animatedOffsetY by animateFloatAsState(
+    targetValue = dragOffsetY,
+    animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
+    label = "dragToMinimize"
+  )
 
   Box(
     modifier = Modifier
       .fillMaxSize()
+      .offset { IntOffset(0, animatedOffsetY.roundToInt()) }
       .background(MaterialTheme.colorScheme.background)
   ) {
     Column(
@@ -3246,28 +3166,73 @@ fun CineDetailView(
       )
     }
 
-    // Pinned floating top glass bar with back button
+    // Pinned floating top glass bar with YouTube-like Minimize button & swipe-down pill handle
     Row(
       modifier = Modifier
         .fillMaxWidth()
         .statusBarsPadding()
         .padding(horizontal = 16.dp, vertical = 8.dp),
-      verticalAlignment = Alignment.CenterVertically
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.SpaceBetween
     ) {
+      // YouTube-like Minimize button
       IconButton(
         onClick = onDismiss,
         modifier = Modifier.intelligentGlassEffect(
           shape = CircleShape,
-          backgroundColor = Color(0x77000000),
+          backgroundColor = Color(0x99101218),
           borderColor = Color.White.copy(alpha = 0.25f)
         )
       ) {
         Icon(
-          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-          contentDescription = "Back",
-          tint = Color.White
+          imageVector = Icons.Rounded.KeyboardArrowDown,
+          contentDescription = "Minimize",
+          tint = Color.White,
+          modifier = Modifier.size(28.dp)
         )
       }
+
+      // YouTube-like Swipe-to-Minimize Pill Handle with drag gestures
+      Box(
+        modifier = Modifier
+          .pointerInput(Unit) {
+            detectVerticalDragGestures(
+              onVerticalDrag = { _, dragAmount ->
+                if (dragAmount > 0 || dragOffsetY > 0) {
+                  dragOffsetY = (dragOffsetY + dragAmount).coerceAtLeast(0f)
+                }
+              },
+              onDragEnd = {
+                if (dragOffsetY > 160f) {
+                  onDismiss()
+                } else {
+                  dragOffsetY = 0f
+                }
+              },
+              onDragCancel = {
+                dragOffsetY = 0f
+              }
+            )
+          }
+          .intelligentGlassEffect(
+            shape = RoundedCornerShape(16.dp),
+            backgroundColor = Color(0x99101218),
+            borderColor = Color.White.copy(alpha = 0.20f)
+          )
+          .padding(horizontal = 16.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Box(
+          modifier = Modifier
+            .width(36.dp)
+            .height(4.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.7f))
+        )
+      }
+
+      // Spacer to balance layout
+      Spacer(modifier = Modifier.size(40.dp))
     }
   }
 }
