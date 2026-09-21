@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -420,13 +421,79 @@ object CineHubScreen : Screen {
         ?: localMovies.firstOrNull()
     }
 
+    // OpenTune 3D CoverFlow Hero Movies (from Trending/Popular/Featured rows + local movies)
+    val heroMovies = remember(localMovies, providerHomeRows) {
+      val result = mutableListOf<CarouselMovie>()
+
+      // 1. Trending/Popular/Featured rows from CloudStream extensions
+      val candidateRows = providerHomeRows.filter { row ->
+        row.title.contains("trend", ignoreCase = true) ||
+        row.title.contains("popular", ignoreCase = true) ||
+        row.title.contains("featured", ignoreCase = true) ||
+        row.title.contains("top", ignoreCase = true) ||
+        row.title.contains("latest", ignoreCase = true) ||
+        row.title.contains("movie", ignoreCase = true)
+      }.ifEmpty { providerHomeRows }
+
+      for (row in candidateRows) {
+        for (item in row.items) {
+          if (!item.posterUrl.isNullOrBlank()) {
+            val subtitle = listOfNotNull(
+              item.year?.toString(),
+              item.providerName.takeIf { it.isNotBlank() }
+            ).joinToString(" • ").ifBlank { "Trending Now" }
+            result.add(
+              CarouselMovie(
+                id = item.id,
+                title = item.title,
+                subtitle = subtitle,
+                posterUrl = item.posterUrl,
+                backdropUrl = item.posterUrl,
+                rating = item.rating,
+                originalItem = item
+              )
+            )
+          }
+        }
+      }
+
+      // 2. Local movies scanned from local storage / SMB
+      for (movie in localMovies) {
+        if (!movie.posterPath.isNullOrBlank() || !movie.backdropPath.isNullOrBlank()) {
+          val subtitle = listOfNotNull(
+            movie.premiered.takeIf { it.isNotBlank() },
+            movie.genre.takeIf { it.isNotBlank() }
+          ).joinToString(" • ").ifBlank { "Featured Movie" }
+          result.add(
+            CarouselMovie(
+              id = movie.videoFilePath,
+              title = movie.title,
+              subtitle = subtitle,
+              posterUrl = movie.posterPath ?: movie.backdropPath,
+              backdropUrl = movie.backdropPath ?: movie.posterPath,
+              rating = movie.userRating.takeIf { it > 0.0 },
+              originalItem = movie
+            )
+          )
+        }
+      }
+
+      val distinct = result.distinctBy { it.title.lowercase().trim() }
+      if (distinct.isNotEmpty()) {
+        distinct.take(10)
+      } else {
+        defaultCuratedHeroMovies
+      }
+    }
+
     Scaffold(
       floatingActionButton = {
         val enabledCount = activeProvidersList.filter { providerRegistry.isProviderEnabled(it.id) }.size
         ExtendedFloatingActionButton(
           onClick = { showProviderSelector = true },
-          icon = { Icon(Icons.Outlined.Tune, contentDescription = "Providers") },
+          icon = { Icon(Icons.Rounded.Tune, contentDescription = "Providers") },
           text = { Text("Providers ($enabledCount)") },
+          shape = CircleShape,
           containerColor = MaterialTheme.colorScheme.primaryContainer,
           contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
           elevation = FloatingActionButtonDefaults.elevation(8.dp),
@@ -453,6 +520,30 @@ object CineHubScreen : Screen {
             }
           },
           actions = {
+            val enabledCount = activeProvidersList.filter { providerRegistry.isProviderEnabled(it.id) }.size
+            IconButton(
+              onClick = { showProviderSelector = true },
+              modifier = Modifier.testTag("cinehub_providers_toolbar_button"),
+            ) {
+              BadgedBox(
+                badge = {
+                  if (enabledCount > 0) {
+                    Badge(
+                      containerColor = MaterialTheme.colorScheme.primary,
+                      contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                      Text("$enabledCount")
+                    }
+                  }
+                }
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Tune,
+                  contentDescription = "Providers ($enabledCount)",
+                  tint = MaterialTheme.colorScheme.primary
+                )
+              }
+            }
             IconButton(
               onClick = {
                 showScraperSheet = true
@@ -778,17 +869,49 @@ object CineHubScreen : Screen {
                 }
               }
 
-              // Featured Hero Banner (if available and tab == 0 or 1)
-              if ((selectedTab == 0 || selectedTab == 1) && featuredMovie != null) {
+              // OpenTune 3D CoverFlow Hero Movie Carousel
+              if ((selectedTab == 0 || selectedTab == 1) && heroMovies.isNotEmpty()) {
                 item {
-                  FeaturedHeroCard(
-                    movie = featuredMovie,
-                    onPlayClick = {
-                      playMediaItem(context, featuredMovie, scope)
+                  HeroMovieCarousel(
+                    movies = heroMovies,
+                    onMovieClick = { carouselMovie ->
+                      val original = carouselMovie.originalItem
+                      if (original is MovieItem) {
+                        selectedDetailItem = original
+                      } else if (original is CineHubSearchItem) {
+                        loadExtensionItemDetails(
+                          providerId = original.providerId,
+                          providerName = original.providerName,
+                          url = original.url,
+                          scope = scope,
+                          fallbackTitle = original.title,
+                          fallbackPoster = original.posterUrl,
+                          fallbackYear = original.year,
+                          fallbackType = if (original.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
+                        ) { details ->
+                          selectedDetailItem = details
+                        }
+                      }
                     },
-                    onDetailClick = {
-                      selectedDetailItem = featuredMovie
-                    },
+                    onPlayClick = { carouselMovie ->
+                      val original = carouselMovie.originalItem
+                      if (original is MovieItem) {
+                        playMediaItem(context, original, scope)
+                      } else if (original is CineHubSearchItem) {
+                        loadExtensionItemDetails(
+                          providerId = original.providerId,
+                          providerName = original.providerName,
+                          url = original.url,
+                          scope = scope,
+                          fallbackTitle = original.title,
+                          fallbackPoster = original.posterUrl,
+                          fallbackYear = original.year,
+                          fallbackType = if (original.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
+                        ) { details ->
+                          playMediaItem(context, details, scope)
+                        }
+                      }
+                    }
                   )
                 }
               }
@@ -3354,3 +3477,74 @@ fun ProviderSelectorSheet(
         }
     }
 }
+
+private fun createCuratedMovie(
+  title: String,
+  genre: String,
+  year: String,
+  posterUrl: String,
+  backdropUrl: String,
+  rating: Double
+): MovieItem {
+  return MovieItem(
+    videoFilePath = posterUrl,
+    title = title,
+    originalTitle = title,
+    userRating = rating,
+    plot = "$title ($year)",
+    mpaa = "PG-13",
+    genre = genre,
+    director = "",
+    premiered = year,
+    posterPath = posterUrl,
+    backdropPath = backdropUrl
+  )
+}
+
+private val defaultCuratedHeroMovies = listOf(
+  CarouselMovie(
+    id = "curated_1",
+    title = "Dune: Part Two",
+    subtitle = "Sci-Fi • Adventure • 2024",
+    posterUrl = "https://image.tmdb.org/t/p/w780/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+    backdropUrl = "https://image.tmdb.org/t/p/w1280/xOMo8BRK7PfcJv9JCnx7s520b4.jpg",
+    rating = 8.6,
+    originalItem = createCuratedMovie("Dune: Part Two", "Sci-Fi, Adventure", "2024", "https://image.tmdb.org/t/p/w780/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg", "https://image.tmdb.org/t/p/w1280/xOMo8BRK7PfcJv9JCnx7s520b4.jpg", 8.6)
+  ),
+  CarouselMovie(
+    id = "curated_2",
+    title = "Oppenheimer",
+    subtitle = "Biography • Drama • 2023",
+    posterUrl = "https://image.tmdb.org/t/p/w780/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+    backdropUrl = "https://image.tmdb.org/t/p/w1280/rLb2cwF3Pazuxaj0sRXQ037tGI1.jpg",
+    rating = 8.9,
+    originalItem = createCuratedMovie("Oppenheimer", "Biography, Drama", "2023", "https://image.tmdb.org/t/p/w780/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg", "https://image.tmdb.org/t/p/w1280/rLb2cwF3Pazuxaj0sRXQ037tGI1.jpg", 8.9)
+  ),
+  CarouselMovie(
+    id = "curated_3",
+    title = "Interstellar",
+    subtitle = "Sci-Fi • Drama • 2014",
+    posterUrl = "https://image.tmdb.org/t/p/w780/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+    backdropUrl = "https://image.tmdb.org/t/p/w1280/xJHokMbljvjADYdit5fK5VQsXEG.jpg",
+    rating = 8.7,
+    originalItem = createCuratedMovie("Interstellar", "Sci-Fi, Drama", "2014", "https://image.tmdb.org/t/p/w780/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg", "https://image.tmdb.org/t/p/w1280/xJHokMbljvjADYdit5fK5VQsXEG.jpg", 8.7)
+  ),
+  CarouselMovie(
+    id = "curated_4",
+    title = "Across the Spider-Verse",
+    subtitle = "Animation • Action • 2023",
+    posterUrl = "https://image.tmdb.org/t/p/w780/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+    backdropUrl = "https://image.tmdb.org/t/p/w1280/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
+    rating = 8.8,
+    originalItem = createCuratedMovie("Across the Spider-Verse", "Animation, Action", "2023", "https://image.tmdb.org/t/p/w780/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg", "https://image.tmdb.org/t/p/w1280/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg", 8.8)
+  ),
+  CarouselMovie(
+    id = "curated_5",
+    title = "Deadpool & Wolverine",
+    subtitle = "Action • Comedy • 2024",
+    posterUrl = "https://image.tmdb.org/t/p/w780/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
+    backdropUrl = "https://image.tmdb.org/t/p/w1280/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
+    rating = 8.0,
+    originalItem = createCuratedMovie("Deadpool & Wolverine", "Action, Comedy", "2024", "https://image.tmdb.org/t/p/w780/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg", "https://image.tmdb.org/t/p/w1280/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg", 8.0)
+  )
+)

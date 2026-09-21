@@ -15,14 +15,19 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.outlined.VideoLibrary
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.SmartDisplay
-import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.SlowMotionVideo
+import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.spring
+import xyz.mpv.rex.ui.browser.components.FloatingBottomNav
+import xyz.mpv.rex.ui.browser.components.NavTabItem
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -199,7 +204,7 @@ object MainScreen : Screen {
     ) {
       buildList {
         add(
-          VisibleTab("home", homeLabel, Icons.Filled.Home) {
+          VisibleTab("home", homeLabel, Icons.Rounded.Home) {
             android.util.Log.d("TRANSITION_TRACE", "Before FolderListScreen.Content()")
             FolderListScreen.Content()
             androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -209,21 +214,21 @@ object MainScreen : Screen {
         )
         if (isShortsEnabled) {
           add(
-            VisibleTab("shorts", shortsLabel, Icons.Outlined.VideoLibrary) {
+            VisibleTab("shorts", shortsLabel, Icons.Rounded.SlowMotionVideo) {
               ShortsScreen().Content()
             }
           )
         }
         if (isCineHubTabVisible) {
           add(
-            VisibleTab("cinehub", cineHubLabel, Icons.Filled.Movie) {
+            VisibleTab("cinehub", cineHubLabel, Icons.Rounded.Movie) {
               CineHubScreen.Content()
             }
           )
         }
         if (enableTabCineTv) {
           add(
-            VisibleTab("cinetv", cineTvLabel, Icons.Filled.Tv) {
+            VisibleTab("cinetv", cineTvLabel, Icons.Rounded.Tv) {
               xyz.mpv.rex.cinetv.ui.LiveTvTabScreen(
                 searchQuery = "",
                 onPlayRequested = { streamUrl, title, meta ->
@@ -247,21 +252,21 @@ object MainScreen : Screen {
         }
         if (enableTabRecents) {
           add(
-            VisibleTab("recents", recentsLabel, Icons.Filled.History) {
+            VisibleTab("recents", recentsLabel, Icons.Rounded.History) {
               RecentlyPlayedScreen.Content()
             }
           )
         }
         if (enableTabPlaylists) {
           add(
-            VisibleTab("playlists", playlistsLabel, Icons.AutoMirrored.Filled.PlaylistPlay) {
+            VisibleTab("playlists", playlistsLabel, Icons.AutoMirrored.Rounded.PlaylistPlay) {
               PlaylistScreen.Content()
             }
           )
         }
         if (enableTabNetwork) {
           add(
-            VisibleTab("network", networkLabel, Icons.Filled.Language) {
+            VisibleTab("network", networkLabel, Icons.Rounded.Language) {
               NetworkStreamingScreen.Content()
             }
           )
@@ -368,60 +373,35 @@ object MainScreen : Screen {
         AnimatedVisibility(
             visible = !hideNavigationBar && !isShortsTabActive && visibleTabs.size > 1,
             enter = slideInVertically(
-              animationSpec = tween(durationMillis = 300),
+              animationSpec = SpringSpec(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessMediumLow
+              ),
               initialOffsetY = { fullHeight -> fullHeight }
             ),
             exit = slideOutVertically(
-              animationSpec = tween(durationMillis = 300),
+              animationSpec = SpringSpec(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+              ),
               targetOffsetY = { fullHeight -> fullHeight }
             )
           ) {
-            NavigationBar(
+            FloatingBottomNav(
+              tabs = visibleTabs.map { NavTabItem(id = it.id, label = it.label, icon = it.icon) },
+              selectedTab = selectedTab,
+              onTabSelected = { index ->
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                if (selectedTab == index) {
+                  _scrollToTopRequest.tryEmit(visibleTabs[index].id)
+                } else {
+                  selectedTab = index
+                }
+              },
               modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .intelligentGlassEffect(
-                  shape = RoundedCornerShape(24.dp),
-                  backgroundColor = if (isShortsTabActive) Color(0x33000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-                  borderColor = Color.White.copy(alpha = 0.12f)
-                ),
-              containerColor = Color.Transparent,
-              contentColor = if (isShortsTabActive) Color.White else MaterialTheme.colorScheme.onSurface,
-            ) {
-              val itemColors = if (isShortsTabActive) {
-                NavigationBarItemDefaults.colors(
-                  selectedIconColor = Color.White,
-                  selectedTextColor = Color.White,
-                  unselectedIconColor = Color.White.copy(alpha = 0.7f),
-                  unselectedTextColor = Color.White.copy(alpha = 0.7f),
-                  indicatorColor = Color.White.copy(alpha = 0.2f),
-                )
-              } else {
-                NavigationBarItemDefaults.colors(
-                  selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                  selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                  indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                  unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                  unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
-
-              visibleTabs.forEachIndexed { index, tab ->
-                NavigationBarItem(
-                  icon = { Icon(tab.icon, contentDescription = tab.label) },
-                  label = { Text(tab.label) },
-                  selected = selectedTab == index,
-                  onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (selectedTab == index) {
-                      _scrollToTopRequest.tryEmit(tab.id)
-                    } else {
-                      selectedTab = index
-                    }
-                  },
-                  colors = itemColors,
-                )
-              }
-            }
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp)
+            )
           }
         }
     ) { paddingValues ->
