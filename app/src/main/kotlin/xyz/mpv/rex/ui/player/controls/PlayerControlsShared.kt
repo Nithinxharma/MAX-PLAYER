@@ -19,6 +19,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.graphics.Brush
 import xyz.mpv.rex.cinehub.data.NfoScanner
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -144,6 +147,7 @@ fun RenderPlayerButton(
 ) {
   val appearancePreferences = org.koin.compose.koinInject<xyz.mpv.rex.preferences.AppearancePreferences>()
   val matchTheme by appearancePreferences.matchPlayerControlsToTheme.collectAsState()
+  val enableExpandingControls by appearancePreferences.enableExpandingOnScreenControls.collectAsState()
   
   val surfaceColor = when {
     hideBackground -> Color.Transparent
@@ -291,6 +295,14 @@ fun RenderPlayerButton(
               )
             }
           }
+        } else if (enableExpandingControls) {
+          ExpandingChaptersButton(
+            chapters = chapters,
+            currentChapter = currentChapter,
+            onOpenSheet = onOpenSheet,
+            buttonSize = buttonSize,
+            modifier = Modifier
+          )
         } else {
           ControlsButton(
             Icons.Default.Bookmarks,
@@ -310,103 +322,211 @@ fun RenderPlayerButton(
 
       val showText = isSpeedNonOne || isMoreSheet
 
-      @OptIn(ExperimentalFoundationApi::class)
-      Surface(
-        shape = CircleShape,
-        color = if (isSpeedNonOne) activeSurfaceColor else surfaceColor,
-        contentColor = if (isSpeedNonOne) activeContentColor else contentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = if (isSpeedNonOne) activeBorderColor else borderColor,
-        modifier = Modifier
-          .height(buttonSize)
-          .animateContentSize()
-          .clip(CircleShape)
-          .combinedClickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = ripple(bounded = true),
-            onClick = {
-              clickEvent()
-              cycleSpeed()
-            },
-            onLongClick = {
-              clickEvent()
-              onOpenSheet(Sheets.PlaybackSpeed)
-            },
-          ),
-      ) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.Center,
-          modifier = Modifier.padding(
-            horizontal = MaterialTheme.spacing.smaller,
-            vertical = MaterialTheme.spacing.smaller,
-          ),
+      if (isMoreSheet) {
+        @OptIn(ExperimentalFoundationApi::class)
+        Surface(
+          shape = CircleShape,
+          color = if (isSpeedNonOne) activeSurfaceColor else surfaceColor,
+          contentColor = if (isSpeedNonOne) activeContentColor else contentColor,
+          tonalElevation = 0.dp,
+          shadowElevation = 0.dp,
+          border = if (isSpeedNonOne) activeBorderColor else borderColor,
+          modifier = Modifier
+            .height(buttonSize)
+            .animateContentSize()
+            .clip(CircleShape)
+            .combinedClickable(
+              interactionSource = remember { MutableInteractionSource() },
+              indication = ripple(bounded = true),
+              onClick = {
+                clickEvent()
+                cycleSpeed()
+              },
+              onLongClick = {
+                clickEvent()
+                onOpenSheet(Sheets.PlaybackSpeed)
+              },
+            ),
         ) {
-          Icon(
-            imageVector = Icons.Default.Speed,
-            contentDescription = stringResource(R.string.playback_speed),
-            tint = if (isSpeedNonOne) activeContentColor else contentColor,
-            modifier = Modifier.size(24.dp),
-          )
-          AnimatedVisibility(
-            visible = showText,
-            enter = fadeIn() + expandHorizontally(),
-            exit = fadeOut() + shrinkHorizontally()
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(
+              horizontal = MaterialTheme.spacing.smaller,
+              vertical = MaterialTheme.spacing.smaller,
+            ),
           ) {
-            Text(
-              text = String.format("%.2fx", playbackSpeed),
-              maxLines = 1,
-              style = MaterialTheme.typography.bodyMedium,
-              modifier = Modifier.padding(start = 4.dp),
+            Icon(
+              imageVector = Icons.Default.Speed,
+              contentDescription = stringResource(R.string.playback_speed),
+              tint = if (isSpeedNonOne) activeContentColor else contentColor,
+              modifier = Modifier.size(24.dp),
             )
+            AnimatedVisibility(
+              visible = showText,
+              enter = fadeIn() + expandHorizontally(),
+              exit = fadeOut() + shrinkHorizontally()
+            ) {
+              Text(
+                text = String.format("%.2fx", playbackSpeed),
+                maxLines = 1,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 4.dp),
+              )
+            }
+          }
+        }
+      } else if (enableExpandingControls) {
+        ExpandingSpeedButton(
+          playbackSpeed = playbackSpeed,
+          onOpenSheet = onOpenSheet,
+          onOpenPanel = onOpenPanel,
+          buttonSize = buttonSize,
+          modifier = Modifier
+        )
+      } else {
+        @OptIn(ExperimentalFoundationApi::class)
+        Surface(
+          shape = CircleShape,
+          color = if (isSpeedNonOne) activeSurfaceColor else surfaceColor,
+          contentColor = if (isSpeedNonOne) activeContentColor else contentColor,
+          tonalElevation = 0.dp,
+          shadowElevation = 0.dp,
+          border = if (isSpeedNonOne) activeBorderColor else borderColor,
+          modifier = Modifier
+            .height(buttonSize)
+            .animateContentSize()
+            .clip(CircleShape)
+            .combinedClickable(
+              interactionSource = remember { MutableInteractionSource() },
+              indication = ripple(bounded = true),
+              onClick = {
+                clickEvent()
+                cycleSpeed()
+              },
+              onLongClick = {
+                clickEvent()
+                onOpenSheet(Sheets.PlaybackSpeed)
+              },
+            ),
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(
+              horizontal = MaterialTheme.spacing.smaller,
+              vertical = MaterialTheme.spacing.smaller,
+            ),
+          ) {
+            Icon(
+              imageVector = Icons.Default.Speed,
+              contentDescription = stringResource(R.string.playback_speed),
+              tint = if (isSpeedNonOne) activeContentColor else contentColor,
+              modifier = Modifier.size(24.dp),
+            )
+            AnimatedVisibility(
+              visible = showText,
+              enter = fadeIn() + expandHorizontally(),
+              exit = fadeOut() + shrinkHorizontally()
+            ) {
+              Text(
+                text = String.format("%.2fx", playbackSpeed),
+                maxLines = 1,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 4.dp),
+              )
+            }
           }
         }
       }
     }
 
     PlayerButton.DECODER -> {
-      Surface(
-        shape = CircleShape,
-        color = surfaceColor,
-        contentColor = contentColor,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = borderColor,
-        modifier = Modifier
-          .height(buttonSize)
-          .clip(CircleShape)
-          .clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = ripple(bounded = true),
-            onClick = {
-              clickEvent()
-              onOpenSheet(Sheets.Decoders)
-            },
-          ),
-      ) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          modifier =
-            Modifier
-              .padding(
-                horizontal = MaterialTheme.spacing.small,
-                vertical = MaterialTheme.spacing.smaller,
-              ),
+      if (isMoreSheet) {
+        Surface(
+          shape = CircleShape,
+          color = surfaceColor,
+          contentColor = contentColor,
+          tonalElevation = 0.dp,
+          shadowElevation = 0.dp,
+          border = borderColor,
+          modifier = Modifier
+            .height(buttonSize)
+            .clip(CircleShape)
+            .clickable(
+              interactionSource = remember { MutableInteractionSource() },
+              indication = ripple(bounded = true),
+              onClick = {
+                clickEvent()
+                onOpenSheet(Sheets.Decoders)
+              },
+            ),
         ) {
-          if (isMoreSheet) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+              Modifier
+                .padding(
+                  horizontal = MaterialTheme.spacing.small,
+                  vertical = MaterialTheme.spacing.smaller,
+                ),
+          ) {
             Icon(
               imageVector = Icons.Outlined.Memory,
               contentDescription = null,
               modifier = Modifier.size(24.dp).padding(end = 6.dp)
             )
+            Text(
+              text = decoder.title,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              style = MaterialTheme.typography.bodyMedium,
+            )
           }
-          Text(
-            text = decoder.title,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-          )
+        }
+      } else if (enableExpandingControls) {
+        ExpandingDecoderButton(
+          decoder = decoder,
+          onOpenSheet = onOpenSheet,
+          buttonSize = buttonSize,
+          modifier = Modifier
+        )
+      } else {
+        Surface(
+          shape = CircleShape,
+          color = surfaceColor,
+          contentColor = contentColor,
+          tonalElevation = 0.dp,
+          shadowElevation = 0.dp,
+          border = borderColor,
+          modifier = Modifier
+            .height(buttonSize)
+            .clip(CircleShape)
+            .clickable(
+              interactionSource = remember { MutableInteractionSource() },
+              indication = ripple(bounded = true),
+              onClick = {
+                clickEvent()
+                onOpenSheet(Sheets.Decoders)
+              },
+            ),
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+              Modifier
+                .padding(
+                  horizontal = MaterialTheme.spacing.small,
+                  vertical = MaterialTheme.spacing.smaller,
+                ),
+          ) {
+            Text(
+              text = decoder.title,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              style = MaterialTheme.typography.bodyMedium,
+            )
+          }
         }
       }
     }
@@ -583,6 +703,14 @@ fun RenderPlayerButton(
               )
             }
           }
+      } else if (enableExpandingControls) {
+          ExpandingAspectButton(
+            aspect = aspect,
+            viewModel = viewModel,
+            onOpenSheet = onOpenSheet,
+            buttonSize = buttonSize,
+            modifier = Modifier
+          )
       } else {
           ControlsButton(
             icon =
@@ -732,13 +860,20 @@ fun RenderPlayerButton(
               )
             }
           }
-      } else {
+      } else if (enableExpandingControls) {
           ExpandingAudioButton(
             viewModel = viewModel,
             onOpenSheet = onOpenSheet,
             onOpenPanel = onOpenPanel,
             buttonSize = buttonSize,
             modifier = Modifier
+          )
+      } else {
+          ControlsButton(
+            Icons.Default.Audiotrack,
+            onClick = { onOpenSheet(Sheets.AudioTracks) },
+            onLongClick = { onOpenPanel(Panels.AudioDelay) },
+            modifier = Modifier.size(buttonSize),
           )
       }
     }
@@ -772,13 +907,20 @@ fun RenderPlayerButton(
               )
             }
           }
-      } else {
+      } else if (enableExpandingControls) {
           ExpandingSubtitleButton(
             viewModel = viewModel,
             onOpenSheet = onOpenSheet,
             onOpenPanel = onOpenPanel,
             buttonSize = buttonSize,
             modifier = Modifier
+          )
+      } else {
+          ControlsButton(
+            Icons.Default.Subtitles,
+            onClick = { onOpenSheet(Sheets.SubtitleTracks) },
+            onLongClick = { onOpenPanel(Panels.SubtitleDelay) },
+            modifier = Modifier.size(buttonSize),
           )
       }
     }
@@ -798,6 +940,14 @@ fun RenderPlayerButton(
 
     PlayerButton.CURRENT_CHAPTER -> {
       if (isPortrait || isMoreSheet) {
+      } else if (enableExpandingControls && chapters.isNotEmpty()) {
+        ExpandingChaptersButton(
+          chapters = chapters,
+          currentChapter = currentChapter,
+          onOpenSheet = onOpenSheet,
+          buttonSize = buttonSize,
+          modifier = Modifier
+        )
       } else {
         AnimatedVisibility(
           chapters.getOrNull(currentChapter ?: 0) != null,
@@ -861,6 +1011,12 @@ fun RenderPlayerButton(
               )
             }
           }
+      } else if (enableExpandingControls) {
+          ExpandingRepeatButton(
+            viewModel = viewModel,
+            buttonSize = buttonSize,
+            modifier = Modifier
+          )
       } else {
           ControlsButton(
             icon = icon,
@@ -1323,31 +1479,73 @@ fun RenderPlayerButton(
               )
             }
           }
-      } else {
+      } else if (enableExpandingControls) {
           ExpandingQualityButton(
             viewModel = viewModel,
             onOpenSheet = onOpenSheet,
             buttonSize = buttonSize,
             modifier = Modifier
           )
+      } else {
+          ControlsButton(
+            Icons.Outlined.Hd,
+            onClick = { onOpenSheet(Sheets.Quality) },
+            modifier = Modifier.size(buttonSize),
+          )
       }
     }
     PlayerButton.METADATA -> {
       val isCineHubEnabled = org.koin.compose.koinInject<xyz.mpv.rex.preferences.BrowserPreferences>().enableCineHubIntegration.get()
       if (isCineHubEnabled) {
-        DynamicMediaInfoRectangle(
-          viewModel = viewModel,
-          onClick = {
-            clickEvent()
-            viewModel.toggleInfoOnScreenExpanded()
-          },
-          onLongClick = {
-            clickEvent()
-            onOpenSheet(Sheets.Metadata)
-          },
-          isMoreSheet = isMoreSheet,
-          buttonSize = buttonSize
-        )
+        if (enableExpandingControls && !isMoreSheet) {
+          DynamicMediaInfoRectangle(
+            viewModel = viewModel,
+            onClick = {
+              clickEvent()
+              viewModel.toggleInfoOnScreenExpanded()
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenSheet(Sheets.Metadata)
+            },
+            isMoreSheet = isMoreSheet,
+            buttonSize = buttonSize
+          )
+        } else if (isMoreSheet) {
+          Surface(
+            shape = CircleShape,
+            color = surfaceColor,
+            contentColor = contentColor,
+            border = borderColor,
+            modifier = Modifier
+              .height(buttonSize)
+              .clip(CircleShape)
+              .clickable { onOpenSheet(Sheets.Metadata) }
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller)
+            ) {
+              Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+              )
+              Text(
+                text = stringResource(R.string.metadata),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+              )
+            }
+          }
+        } else {
+          ControlsButton(
+            Icons.Default.Info,
+            onClick = { onOpenSheet(Sheets.Metadata) },
+            modifier = Modifier.size(buttonSize),
+          )
+        }
       }
     }
   }
@@ -1768,7 +1966,7 @@ fun ExpandingQualityButton(
     modifier = modifier
       .animateContentSize(
         animationSpec = androidx.compose.animation.core.spring(
-          dampingRatio = 0.8f,
+          dampingRatio = 0.82f,
           stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
         )
       )
@@ -1800,7 +1998,7 @@ fun ExpandingQualityButton(
     } else {
       Column(
         modifier = Modifier
-          .width(150.dp)
+          .width(160.dp)
           .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
       ) {
@@ -1831,94 +2029,103 @@ fun ExpandingQualityButton(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
               .size(18.dp)
+              .clip(CircleShape)
               .clickable { isExpanded = false }
           )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        if (availableStreamQualities.isNotEmpty()) {
-          availableStreamQualities.forEach { qItem ->
-            val label = if (qItem.quality > 0) "${qItem.quality}p" else qItem.name.substringBefore(" -")
-            val isSelected = (selectedQualityUrl == qItem.url) || (currentQualityName.equals(label, ignoreCase = true))
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          if (availableStreamQualities.isNotEmpty()) {
+            availableStreamQualities.forEach { qItem ->
+              val label = if (qItem.quality > 0) "${qItem.quality}p" else qItem.name.substringBefore(" -")
+              val isSelected = (selectedQualityUrl == qItem.url) || (currentQualityName.equals(label, ignoreCase = true))
 
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  viewModel.selectStreamQuality(context, qItem)
-                  isExpanded = false
-                }
-            ) {
-              Row(
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                  .fillMaxWidth()
+                  .height(32.dp)
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable {
+                    viewModel.selectStreamQuality(context, qItem)
+                    isExpanded = false
+                  }
               ) {
-                Text(
-                  text = label,
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
+                Row(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                   )
+                  if (isSelected) {
+                    Icon(
+                      imageVector = Icons.Default.Check,
+                      contentDescription = "Selected",
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
                 }
               }
             }
-          }
-        } else {
-          listOf("Auto", "1080p", "720p", "480p").forEach { fallbackLabel ->
-            val isSelected = currentQualityName.equals(fallbackLabel, ignoreCase = true) || (fallbackLabel == "Auto" && currentQualityName == "Auto")
+          } else {
+            listOf("Auto", "1080p", "720p", "480p").forEach { fallbackLabel ->
+              val isSelected = currentQualityName.equals(fallbackLabel, ignoreCase = true) || (fallbackLabel == "Auto" && currentQualityName == "Auto")
 
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  val match = availableStreamQualities.firstOrNull { it.name.contains(fallbackLabel, ignoreCase = true) || "${it.quality}p" == fallbackLabel }
-                  if (match != null) {
-                    viewModel.selectStreamQuality(context, match)
-                  } else {
-                    android.widget.Toast.makeText(context, "Quality: $fallbackLabel", android.widget.Toast.LENGTH_SHORT).show()
-                  }
-                  isExpanded = false
-                }
-            ) {
-              Row(
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                  .fillMaxWidth()
+                  .height(32.dp)
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable {
+                    val match = availableStreamQualities.firstOrNull { it.name.contains(fallbackLabel, ignoreCase = true) || "${it.quality}p" == fallbackLabel }
+                    if (match != null) {
+                      viewModel.selectStreamQuality(context, match)
+                    } else {
+                      android.widget.Toast.makeText(context, "Quality: $fallbackLabel", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    isExpanded = false
+                  }
               ) {
-                Text(
-                  text = fallbackLabel,
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
+                Row(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = fallbackLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                   )
+                  if (isSelected) {
+                    Icon(
+                      imageVector = Icons.Default.Check,
+                      contentDescription = "Selected",
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
                 }
               }
             }
@@ -1979,7 +2186,7 @@ fun ExpandingAudioButton(
     modifier = modifier
       .animateContentSize(
         animationSpec = androidx.compose.animation.core.spring(
-          dampingRatio = 0.8f,
+          dampingRatio = 0.82f,
           stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
         )
       )
@@ -2011,7 +2218,7 @@ fun ExpandingAudioButton(
     } else {
       Column(
         modifier = Modifier
-          .width(170.dp)
+          .width(180.dp)
           .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
       ) {
@@ -2042,64 +2249,73 @@ fun ExpandingAudioButton(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
               .size(18.dp)
+              .clip(CircleShape)
               .clickable { isExpanded = false }
           )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        if (audioTracks.isNotEmpty()) {
-          audioTracks.forEach { track ->
-            val isSelected = track.selected == true || (currentAid != null && currentAid == track.id)
-            val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Audio Track ${track.id}"
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          if (audioTracks.isNotEmpty()) {
+            audioTracks.forEach { track ->
+              val isSelected = track.selected == true || (currentAid != null && currentAid == track.id)
+              val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Audio Track ${track.id}"
 
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  viewModel.selectAudioTrack(track.id, track.title, track.lang)
-                  `is`.xyz.mpv.MPVLib.setPropertyInt("aid", track.id)
-                  isExpanded = false
-                }
-            ) {
-              Row(
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                  .fillMaxWidth()
+                  .height(32.dp)
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable {
+                    viewModel.selectAudioTrack(track.id, track.title, track.lang)
+                    `is`.xyz.mpv.MPVLib.setPropertyInt("aid", track.id)
+                    isExpanded = false
+                  }
               ) {
-                Text(
-                  text = label,
-                  style = MaterialTheme.typography.bodyMedium,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                  modifier = Modifier.weight(1f, fill = false)
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
+                Row(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.weight(1f, fill = false)
                   )
+                  if (isSelected) {
+                    Icon(
+                      imageVector = Icons.Default.Check,
+                      contentDescription = "Selected",
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
                 }
               }
             }
+          } else {
+            Text(
+              text = "Default Audio",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
           }
-        } else {
-          Text(
-            text = "Default Audio",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-          )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
@@ -2184,7 +2400,7 @@ fun ExpandingSubtitleButton(
     modifier = modifier
       .animateContentSize(
         animationSpec = androidx.compose.animation.core.spring(
-          dampingRatio = 0.8f,
+          dampingRatio = 0.82f,
           stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
         )
       )
@@ -2216,7 +2432,7 @@ fun ExpandingSubtitleButton(
     } else {
       Column(
         modifier = Modifier
-          .width(170.dp)
+          .width(180.dp)
           .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
       ) {
@@ -2247,91 +2463,100 @@ fun ExpandingSubtitleButton(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
               .size(18.dp)
+              .clip(CircleShape)
               .clickable { isExpanded = false }
           )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        val isOff = currentSid == 0 || (subtitleTracks.none { it.selected == true } && (currentSid == null || currentSid == 0))
-        Surface(
-          shape = RoundedCornerShape(8.dp),
-          color = if (isOff) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-          contentColor = if (isOff) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        Column(
           modifier = Modifier
             .fillMaxWidth()
-            .height(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable {
-              `is`.xyz.mpv.MPVLib.setPropertyInt("sid", 0)
-              viewModel.toggleSubtitle(0)
-              isExpanded = false
-            }
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-          Row(
+          val isOff = currentSid == 0 || (subtitleTracks.none { it.selected == true } && (currentSid == null || currentSid == 0))
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = if (isOff) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            contentColor = if (isOff) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
-              .fillMaxSize()
-              .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+              .fillMaxWidth()
+              .height(32.dp)
+              .clip(RoundedCornerShape(8.dp))
+              .clickable {
+                `is`.xyz.mpv.MPVLib.setPropertyInt("sid", 0)
+                viewModel.toggleSubtitle(0)
+                isExpanded = false
+              }
           ) {
-            Text(
-              text = "Off",
-              style = MaterialTheme.typography.bodyMedium,
-              fontWeight = if (isOff) FontWeight.Bold else FontWeight.Normal
-            )
-            if (isOff) {
-              Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Selected",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
+            Row(
+              modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Text(
+                text = "Off",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isOff) FontWeight.Bold else FontWeight.Normal
               )
+              if (isOff) {
+                Icon(
+                  imageVector = Icons.Default.Check,
+                  contentDescription = "Selected",
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(16.dp)
+                )
+              }
             }
           }
-        }
 
-        if (subtitleTracks.isNotEmpty()) {
-          subtitleTracks.forEach { track ->
-            val isSelected = (track.selected == true || (currentSid != null && currentSid == track.id)) && !isOff
-            val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Sub ${track.id}"
+          if (subtitleTracks.isNotEmpty()) {
+            subtitleTracks.forEach { track ->
+              val isSelected = (track.selected == true || (currentSid != null && currentSid == track.id)) && !isOff
+              val label = track.title?.takeIf { it.isNotBlank() } ?: track.lang?.uppercase() ?: "Sub ${track.id}"
 
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable {
-                  viewModel.toggleSubtitle(track.id)
-                  `is`.xyz.mpv.MPVLib.setPropertyInt("sid", track.id)
-                  isExpanded = false
-                }
-            ) {
-              Row(
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
-                  .fillMaxSize()
-                  .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                  .fillMaxWidth()
+                  .height(32.dp)
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable {
+                    viewModel.toggleSubtitle(track.id)
+                    `is`.xyz.mpv.MPVLib.setPropertyInt("sid", track.id)
+                    isExpanded = false
+                  }
               ) {
-                Text(
-                  text = label,
-                  style = MaterialTheme.typography.bodyMedium,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                  modifier = Modifier.weight(1f, fill = false)
-                )
-                if (isSelected) {
-                  Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
+                Row(
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.weight(1f, fill = false)
                   )
+                  if (isSelected) {
+                    Icon(
+                      imageVector = Icons.Default.Check,
+                      contentDescription = "Selected",
+                      tint = MaterialTheme.colorScheme.primary,
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
                 }
               }
             }
@@ -2391,6 +2616,809 @@ fun ExpandingSubtitleButton(
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+          }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingChaptersButton(
+  chapters: List<dev.vivvvek.seeker.Segment>,
+  currentChapter: Int?,
+  onOpenSheet: (Sheets) -> Unit,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.82f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Box(
+        modifier = Modifier
+          .size(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = {
+              clickEvent()
+              isExpanded = true
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenSheet(Sheets.Chapters)
+            }
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = Icons.Default.Bookmarks,
+          contentDescription = "Chapters",
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp)
+        )
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(200.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Bookmarks,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Chapters",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clip(CircleShape)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          chapters.forEachIndexed { index, chapter ->
+            val isSelected = currentChapter == index
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  `is`.xyz.mpv.MPVLib.setPropertyInt("chapter", index)
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = chapter.name.ifBlank { "Chapter ${index + 1}" },
+                  style = MaterialTheme.typography.bodyMedium,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                  modifier = Modifier.weight(1f, fill = false)
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .clickable {
+              isExpanded = false
+              onOpenSheet(Sheets.Chapters)
+            }
+            .padding(horizontal = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Default.Tune,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+          )
+          Text(
+            text = "All Chapters",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingSpeedButton(
+  playbackSpeed: Float,
+  onOpenSheet: (Sheets) -> Unit,
+  onOpenPanel: (Panels) -> Unit,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+  val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+  val isSpeedNonOne = kotlin.math.abs(playbackSpeed - 1f) > 0.01f
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else if (isSpeedNonOne) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded || isSpeedNonOne) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.82f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Row(
+        modifier = Modifier
+          .height(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = {
+              clickEvent()
+              isExpanded = true
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenSheet(Sheets.PlaybackSpeed)
+            }
+          )
+          .padding(horizontal = if (isSpeedNonOne) 10.dp else 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+      ) {
+        Icon(
+          imageVector = Icons.Default.Speed,
+          contentDescription = "Playback Speed",
+          tint = if (isSpeedNonOne) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp)
+        )
+        if (isSpeedNonOne) {
+          Text(
+            text = String.format("%.2fx", playbackSpeed),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp)
+          )
+        }
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(150.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Speed,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Speed",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clip(CircleShape)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          speeds.forEach { speed ->
+            val isSelected = kotlin.math.abs(playbackSpeed - speed) < 0.01f
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  `is`.xyz.mpv.MPVLib.setPropertyFloat("speed", speed)
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = "${speed}x",
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .clickable {
+              isExpanded = false
+              onOpenSheet(Sheets.PlaybackSpeed)
+            }
+            .padding(horizontal = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Default.Tune,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+          )
+          Text(
+            text = "Custom Slider",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingDecoderButton(
+  decoder: xyz.mpv.rex.ui.player.Decoder,
+  onOpenSheet: (Sheets) -> Unit,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+  val decoders = listOf(
+    xyz.mpv.rex.ui.player.Decoder.HWPlus,
+    xyz.mpv.rex.ui.player.Decoder.HW,
+    xyz.mpv.rex.ui.player.Decoder.SW
+  )
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.82f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Row(
+        modifier = Modifier
+          .height(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = {
+              clickEvent()
+              isExpanded = true
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenSheet(Sheets.Decoders)
+            }
+          )
+          .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+      ) {
+        Icon(
+          imageVector = Icons.Outlined.Memory,
+          contentDescription = "Decoder",
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(20.dp)
+        )
+        Text(
+          text = decoder.title,
+          style = MaterialTheme.typography.labelMedium,
+          fontWeight = FontWeight.Bold,
+          modifier = Modifier.padding(start = 4.dp)
+        )
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(150.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Outlined.Memory,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Decoder",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clip(CircleShape)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          decoders.forEach { dItem ->
+            val isSelected = decoder == dItem
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  `is`.xyz.mpv.MPVLib.setPropertyString("hwdec", dItem.value)
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = dItem.title,
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingAspectButton(
+  aspect: VideoAspect,
+  viewModel: PlayerViewModel,
+  onOpenSheet: (Sheets) -> Unit,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+  val aspects = listOf(
+    VideoAspect.Fit,
+    VideoAspect.Stretch,
+    VideoAspect.Crop
+  )
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.82f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Box(
+        modifier = Modifier
+          .size(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = {
+              clickEvent()
+              isExpanded = true
+            },
+            onLongClick = {
+              clickEvent()
+              onOpenSheet(Sheets.AspectRatios)
+            }
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = when (aspect) {
+            VideoAspect.Fit -> Icons.Default.AspectRatio
+            VideoAspect.Stretch -> Icons.Default.ZoomOutMap
+            VideoAspect.Crop -> Icons.Default.FitScreen
+          },
+          contentDescription = "Aspect Ratio",
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp)
+        )
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(150.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.AspectRatio,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Aspect",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clip(CircleShape)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          aspects.forEach { aItem ->
+            val isSelected = aspect == aItem
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  viewModel.changeVideoAspect(aItem)
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = aItem.name,
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ExpandingRepeatButton(
+  viewModel: PlayerViewModel,
+  modifier: Modifier = Modifier,
+  buttonSize: Dp = 44.dp
+) {
+  val clickEvent = LocalPlayerButtonsClickEvent.current
+  var isExpanded by remember { mutableStateOf(false) }
+  val repeatMode by viewModel.repeatMode.collectAsState()
+  val repeatModes = listOf(
+    xyz.mpv.rex.ui.player.RepeatMode.OFF to "Off",
+    xyz.mpv.rex.ui.player.RepeatMode.ONE to "Repeat One",
+    xyz.mpv.rex.ui.player.RepeatMode.ALL to "Repeat All"
+  )
+  val isActive = repeatMode != xyz.mpv.rex.ui.player.RepeatMode.OFF
+
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (isExpanded) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f) else if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
+    border = BorderStroke(1.dp, if (isExpanded || isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+    shadowElevation = if (isExpanded) 8.dp else 4.dp,
+    modifier = modifier
+      .animateContentSize(
+        animationSpec = androidx.compose.animation.core.spring(
+          dampingRatio = 0.82f,
+          stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+        )
+      )
+  ) {
+    if (!isExpanded) {
+      Box(
+        modifier = Modifier
+          .size(buttonSize)
+          .clip(RoundedCornerShape(16.dp))
+          .clickable {
+            clickEvent()
+            isExpanded = true
+          },
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = when (repeatMode) {
+            xyz.mpv.rex.ui.player.RepeatMode.OFF -> Icons.Default.Repeat
+            xyz.mpv.rex.ui.player.RepeatMode.ONE -> Icons.Default.RepeatOne
+            xyz.mpv.rex.ui.player.RepeatMode.ALL -> Icons.Default.RepeatOn
+          },
+          contentDescription = "Repeat Mode",
+          tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp)
+        )
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .width(150.dp)
+          .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Repeat,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(18.dp)
+            )
+            Text(
+              text = "Repeat",
+              style = MaterialTheme.typography.titleSmall,
+              fontWeight = FontWeight.Bold
+            )
+          }
+          Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Close",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+              .size(18.dp)
+              .clip(CircleShape)
+              .clickable { isExpanded = false }
+          )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 200.dp)
+            .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+          repeatModes.forEach { (mode, label) ->
+            val isSelected = repeatMode == mode
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+              contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                  if (repeatMode != mode) {
+                    viewModel.cycleRepeatMode()
+                  }
+                  isExpanded = false
+                }
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = label,
+                  style = MaterialTheme.typography.bodyMedium,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+                if (isSelected) {
+                  Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                  )
+                }
+              }
+            }
           }
         }
       }

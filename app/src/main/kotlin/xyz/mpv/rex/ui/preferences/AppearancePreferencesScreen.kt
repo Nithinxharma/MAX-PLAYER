@@ -201,6 +201,7 @@ object AppearancePreferencesScreen : Screen {
                         val hidePlayerButtonsBackground by preferences.hidePlayerButtonsBackground.collectAsState()
                         val enableGlassPlayerControls by preferences.enableGlassPlayerControls.collectAsState()
                         val enableGlassSeekbarBackground by preferences.enableGlassSeekbarBackground.collectAsState()
+                        val enableExpandingOnScreenControls by preferences.enableExpandingOnScreenControls.collectAsState()
                         val playerAlwaysDarkMode by preferences.playerAlwaysDarkMode.collectAsState()
 
                         GroupedListColumn {
@@ -301,6 +302,18 @@ object AppearancePreferencesScreen : Screen {
                                     enabled = enableGlassPlayerControls,
                                     title = { Text(text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_title)) },
                                     summary = { Text(text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_summary)) },
+                                )
+                            }
+
+                            GroupedPreferenceCard(
+                                position = GroupPosition.MIDDLE,
+                                highlightKey = R.string.pref_appearance_expanding_on_screen_controls_title,
+                            ) {
+                                SwitchPreference(
+                                    value = enableExpandingOnScreenControls,
+                                    onValueChange = { preferences.enableExpandingOnScreenControls.set(it) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_expanding_on_screen_controls_title)) },
+                                    summary = { Text(text = stringResource(id = R.string.pref_appearance_expanding_on_screen_controls_summary)) },
                                 )
                             }
 

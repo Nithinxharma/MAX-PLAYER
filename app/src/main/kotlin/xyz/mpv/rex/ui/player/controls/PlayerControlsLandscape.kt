@@ -160,7 +160,7 @@ fun TopRightPlayerControlsLandscape(
   activity: PlayerActivity,
 ) {
   Row(
-    verticalAlignment = Alignment.CenterVertically,
+    verticalAlignment = Alignment.Top,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
     buttons.forEach { button ->
