@@ -62,29 +62,6 @@ object CineDetailScreen : Screen {
             backstack.removeLastOrNull()
           }
         )
-
-        // Floating Glass Back Button
-        IconButton(
-          onClick = {
-            CineDetailStateHolder.clear()
-            backstack.removeLastOrNull()
-          },
-          modifier = Modifier
-            .statusBarsPadding()
-            .padding(top = 8.dp, start = 12.dp)
-            .size(42.dp)
-            .intelligentGlassEffect(
-              shape = CircleShape,
-              backgroundColor = Color.Black.copy(alpha = 0.55f),
-              borderColor = Color.White.copy(alpha = 0.25f)
-            )
-        ) {
-          Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "Back",
-            tint = Color.White
-          )
-        }
       }
     }
   }

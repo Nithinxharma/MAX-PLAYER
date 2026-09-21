@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -487,19 +488,6 @@ object CineHubScreen : Screen {
     }
 
     Scaffold(
-      floatingActionButton = {
-        val enabledCount = activeProvidersList.filter { providerRegistry.isProviderEnabled(it.id) }.size
-        ExtendedFloatingActionButton(
-          onClick = { showProviderSelector = true },
-          icon = { Icon(Icons.Rounded.Tune, contentDescription = "Providers") },
-          text = { Text("Providers ($enabledCount)") },
-          shape = CircleShape,
-          containerColor = MaterialTheme.colorScheme.primaryContainer,
-          contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-          elevation = FloatingActionButtonDefaults.elevation(8.dp),
-          modifier = Modifier.padding(bottom = navBarHeight)
-        )
-      },
       topBar = {
         TopAppBar(
           title = {
@@ -520,55 +508,6 @@ object CineHubScreen : Screen {
             }
           },
           actions = {
-            val enabledCount = activeProvidersList.filter { providerRegistry.isProviderEnabled(it.id) }.size
-            IconButton(
-              onClick = { showProviderSelector = true },
-              modifier = Modifier.testTag("cinehub_providers_toolbar_button"),
-            ) {
-              BadgedBox(
-                badge = {
-                  if (enabledCount > 0) {
-                    Badge(
-                      containerColor = MaterialTheme.colorScheme.primary,
-                      contentColor = MaterialTheme.colorScheme.onPrimary
-                    ) {
-                      Text("$enabledCount")
-                    }
-                  }
-                }
-              ) {
-                Icon(
-                  imageVector = Icons.Rounded.Tune,
-                  contentDescription = "Providers ($enabledCount)",
-                  tint = MaterialTheme.colorScheme.primary
-                )
-              }
-            }
-            IconButton(
-              onClick = {
-                showScraperSheet = true
-              },
-              modifier = Modifier.testTag("cinehub_kodi_scraper_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Outlined.CloudDownload,
-                contentDescription = "Kodi Media Scraper",
-                tint = MaterialTheme.colorScheme.primary,
-              )
-            }
-            IconButton(
-              onClick = {
-                isRefreshing = true
-                loadMedia()
-                Toast.makeText(context, "Refreshing library…", Toast.LENGTH_SHORT).show()
-              },
-              modifier = Modifier.testTag("cinehub_refresh_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "Refresh",
-              )
-            }
             IconButton(
               onClick = {
                 backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
@@ -1934,6 +1873,162 @@ fun CineDetailView(
     else -> ""
   }
 
+  var isInstantPlayExtracting by remember { mutableStateOf(false) }
+
+  val onInstantPlayClick: () -> Unit = {
+    when (item) {
+      is MovieItem -> {
+        if (item.videoFilePath.startsWith("ext_stream:")) {
+          val raw = item.videoFilePath.removePrefix("ext_stream:")
+          val providerId = raw.substringBefore("::")
+          val dataUrl = raw.substringAfter("::")
+          isInstantPlayExtracting = true
+          scope.launch(Dispatchers.IO) {
+            val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
+            val provider = registry.getProvider(providerId)
+            val streams = provider?.loadStreams(dataUrl) ?: emptyList()
+            val stream = streams.firstOrNull()
+            withContext(Dispatchers.Main) {
+              isInstantPlayExtracting = false
+              if (stream != null && stream.url.isNotBlank()) {
+                onDismiss()
+                Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
+                MediaUtils.playFile(stream.url, context, "cinehub", stream.headers)
+              } else {
+                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+              }
+            }
+          }
+        } else if (item.videoFilePath.isNotBlank()) {
+          onDismiss()
+          MediaUtils.playFile(item.videoFilePath, context, "cinehub")
+        } else {
+          onDismiss()
+          onPlay()
+        }
+      }
+      is TvShowItem -> {
+        isInstantPlayExtracting = true
+        scope.launch(Dispatchers.IO) {
+          val episodes = if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
+            NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+          } else {
+            CineOnlineScraper.fetchTvShowEpisodes(context, item.tmdbId.ifBlank { item.title }, 1, item.title)
+          }
+          val firstEp = episodes.firstOrNull()
+          withContext(Dispatchers.Main) {
+            isInstantPlayExtracting = false
+            if (firstEp != null && firstEp.videoFilePath.isNotBlank()) {
+              onDismiss()
+              Toast.makeText(context, "Playing ${item.title} - ${firstEp.title}", Toast.LENGTH_SHORT).show()
+              MediaUtils.playFile(firstEp.videoFilePath, context, "cinehub")
+            } else {
+              onDismiss()
+              onPlay()
+            }
+          }
+        }
+      }
+      is ExtensionMediaDetails -> {
+        when (val resp = item.loadResponse) {
+          is MovieLoadResponse -> {
+            isInstantPlayExtracting = true
+            extractAndPlayMovie(
+              context = context,
+              providerName = item.providerName.ifBlank { resp.apiName },
+              dataUrl = resp.dataUrl.ifBlank { resp.url },
+              movieTitle = resp.name,
+              scope = scope,
+              onDismiss = onDismiss,
+              onLinksLoaded = { links, subs ->
+                isInstantPlayExtracting = false
+                if (onLinksLoaded != null) {
+                  onLinksLoaded(links, subs, null)
+                } else if (links.isNotEmpty()) {
+                  val link = links.first()
+                  val headersMap = buildMap {
+                    if (link.referer.isNotBlank()) put("Referer", link.referer)
+                    putAll(link.headers)
+                  }
+                  val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                  MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+                }
+              }
+            )
+          }
+          is TvSeriesLoadResponse -> {
+            val firstEp = resp.episodes.firstOrNull()
+            if (firstEp != null) {
+              isInstantPlayExtracting = true
+              extractAndPlayEpisode(
+                context = context,
+                providerName = item.providerName.ifBlank { resp.apiName },
+                data = firstEp.data,
+                episodeTitle = firstEp.name,
+                seriesTitle = resp.name,
+                scope = scope,
+                onDismiss = onDismiss,
+                onLinksLoaded = { links, subs ->
+                  isInstantPlayExtracting = false
+                  val epMetadataJson = kotlinx.serialization.json.Json.encodeToString(
+                    mapOf(
+                      "seriesTitle" to resp.name,
+                      "episodeTitle" to (firstEp.name ?: "Episode 1"),
+                      "season" to (firstEp.season ?: 1).toString(),
+                      "episode" to (firstEp.episode ?: 1).toString()
+                    )
+                  )
+                  if (onLinksLoaded != null) {
+                    onLinksLoaded(links, subs, epMetadataJson)
+                  } else if (links.isNotEmpty()) {
+                    val link = links.first()
+                    val headersMap = buildMap {
+                      if (link.referer.isNotBlank()) put("Referer", link.referer)
+                      putAll(link.headers)
+                    }
+                    val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                    MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, epMetadataJson)
+                  }
+                }
+              )
+            } else {
+              Toast.makeText(context, "No episodes available", Toast.LENGTH_SHORT).show()
+            }
+          }
+        }
+      }
+      is MovieLoadResponse -> {
+        isInstantPlayExtracting = true
+        extractAndPlayMovie(
+          context = context,
+          providerName = item.apiName,
+          dataUrl = item.dataUrl.ifBlank { item.url },
+          movieTitle = item.name,
+          scope = scope,
+          onDismiss = onDismiss,
+          onLinksLoaded = { links, subs ->
+            isInstantPlayExtracting = false
+            if (onLinksLoaded != null) {
+              onLinksLoaded(links, subs, null)
+            } else if (links.isNotEmpty()) {
+              val link = links.first()
+              val headersMap = buildMap {
+                if (link.referer.isNotBlank()) put("Referer", link.referer)
+                putAll(link.headers)
+              }
+              val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+              MediaUtils.playFile(link.url, context, "cinehub", headersMap, subtitlesJson, null)
+            }
+          }
+        )
+      }
+      else -> {
+        onDismiss()
+        onPlay()
+      }
+    }
+  }
+
   val scrollState = rememberScrollState()
 
   Box(
@@ -1947,30 +2042,113 @@ fun CineDetailView(
         .verticalScroll(scrollState)
         .padding(bottom = 56.dp),
     ) {
-      if (!backdropPath.isNullOrBlank()) {
-        Box(
-          modifier = Modifier
-            .fillMaxWidth()
-            .height(210.dp),
-        ) {
+      // YouTube-like 16:9 Instant Play Video Banner Header
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .aspectRatio(16f / 9f)
+          .background(Color.Black)
+          .clickable { onInstantPlayClick() }
+          .testTag("youtube_instant_play_banner"),
+        contentAlignment = Alignment.Center
+      ) {
+        val heroImg = backdropPath ?: posterPath
+        if (!heroImg.isNullOrBlank()) {
           AsyncImage(
-            model = backdropPath,
+            model = heroImg,
             contentDescription = title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
           )
-          Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .background(
-                Brush.verticalGradient(
-                  colors = listOf(
-                    Color.Transparent,
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                    MaterialTheme.colorScheme.surface
-                  )
+        }
+
+        // Multi-stop cinematic gradient scrim
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                colors = listOf(
+                  Color.Black.copy(alpha = 0.50f),
+                  Color.Transparent,
+                  Color.Black.copy(alpha = 0.80f)
                 )
               )
+            )
+        )
+
+        // YouTube-style glowing circular Instant Play Button
+        Surface(
+          shape = CircleShape,
+          color = if (isInstantPlayExtracting) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+          shadowElevation = 10.dp,
+          border = BorderStroke(2.dp, Color.White.copy(alpha = 0.45f)),
+          modifier = Modifier
+            .size(62.dp)
+            .clickable { onInstantPlayClick() }
+        ) {
+          Box(contentAlignment = Alignment.Center) {
+            if (isInstantPlayExtracting) {
+              CircularProgressIndicator(
+                modifier = Modifier.size(28.dp),
+                strokeWidth = 3.dp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+              )
+            } else {
+              Icon(
+                imageVector = Icons.Rounded.PlayArrow,
+                contentDescription = "Instant Play",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(36.dp)
+              )
+            }
+          }
+        }
+
+        // Top right quality badge
+        Surface(
+          shape = RoundedCornerShape(6.dp),
+          color = Color.Black.copy(alpha = 0.65f),
+          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+          modifier = Modifier
+            .align(Alignment.TopEnd)
+            .statusBarsPadding()
+            .padding(top = 12.dp, end = 16.dp)
+        ) {
+          Text(
+            text = "1080p HD",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+          )
+        }
+
+        // Bottom instant play pill banner
+        Row(
+          modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(14.dp)
+            .intelligentGlassEffect(
+              shape = RoundedCornerShape(8.dp),
+              backgroundColor = Color.Black.copy(alpha = 0.65f),
+              borderColor = Color.White.copy(alpha = 0.20f)
+            )
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(8.dp)
+              .clip(CircleShape)
+              .background(if (isInstantPlayExtracting) Color(0xFFFFB800) else Color(0xFF00E676))
+          )
+          Text(
+            text = if (isInstantPlayExtracting) "Resolving Stream Link..." else "Instant Play • Tap to Watch",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White
           )
         }
       }

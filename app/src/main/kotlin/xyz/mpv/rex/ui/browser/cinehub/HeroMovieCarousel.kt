@@ -29,13 +29,19 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 import kotlin.math.absoluteValue
 
@@ -64,10 +71,9 @@ data class CarouselMovie(
 )
 
 /**
- * OpenTune-style 3D CoverFlow Hero Movie Carousel.
- * The center card is scaled to 1.0, while side cards are scaled to 0.8 and partially visible.
- * Features smooth swipe, snap-to-center spring animations, rounded corners (24dp),
- * subtle border, and bottom gradient overlay displaying the title and subtitle.
+ * Full Banner Size Hero Movie Carousel.
+ * Spans full banner width with rich cinematic backdrop imagery, multi-stop gradient scrim,
+ * badges for Rating and Quality, Title, Subtitle, and prominent Watch Now & Details buttons.
  */
 @Composable
 fun HeroMovieCarousel(
@@ -76,21 +82,34 @@ fun HeroMovieCarousel(
   onPlayClick: ((CarouselMovie) -> Unit)? = null,
   modifier: Modifier = Modifier,
   pagerState: PagerState = rememberPagerState(
-    initialPage = (movies.size / 2).coerceAtLeast(0),
+    initialPage = 0,
     pageCount = { movies.size }
   )
 ) {
   if (movies.isEmpty()) return
 
+  // Optional subtle auto-pager rotation when not actively touched
+  LaunchedEffect(pagerState.pageCount) {
+    if (movies.size > 1) {
+      while (true) {
+        delay(6000)
+        if (!pagerState.isScrollInProgress) {
+          val nextPage = (pagerState.currentPage + 1) % movies.size
+          pagerState.animateScrollToPage(nextPage)
+        }
+      }
+    }
+  }
+
   Column(
     modifier = modifier
       .fillMaxWidth()
-      .padding(top = 8.dp, bottom = 16.dp)
+      .padding(top = 4.dp, bottom = 12.dp)
   ) {
     HorizontalPager(
       state = pagerState,
-      contentPadding = PaddingValues(horizontal = 56.dp),
-      pageSpacing = 16.dp,
+      contentPadding = PaddingValues(horizontal = 16.dp),
+      pageSpacing = 12.dp,
       beyondViewportPageCount = 2,
       flingBehavior = PagerDefaults.flingBehavior(
         state = pagerState,
@@ -101,40 +120,33 @@ fun HeroMovieCarousel(
       ),
       modifier = Modifier
         .fillMaxWidth()
-        .height(300.dp)
+        .height(260.dp)
         .testTag("hero_movie_carousel")
     ) { page ->
       val movie = movies[page]
 
-      // Calculate 3D CoverFlow page offset
-      val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).coerceIn(-2f, 2f)
-      val absOffset = pageOffset.absoluteValue.coerceIn(0f, 1f)
+      // Subtle scale for current active banner
+      val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).coerceIn(-1f, 1f)
+      val absOffset = pageOffset.absoluteValue
+      val scale = 1.0f - (absOffset * 0.05f)
 
-      // Center movie card should be larger (scale 1.0), side cards smaller (0.8)
-      val scale = 1.0f - (absOffset * 0.20f)
-      val alpha = 1.0f - (absOffset * 0.25f)
-      val rotationY = -pageOffset * 10f
-
-      MovieCarouselCard(
+      FullBannerMovieCard(
         movie = movie,
-        modifier = Modifier
-          .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-            this.alpha = alpha
-            this.rotationY = rotationY
-            cameraDistance = 14f * density
-          },
-        onClick = { onMovieClick(movie) }
+        modifier = Modifier.graphicsLayer {
+          scaleX = scale
+          scaleY = scale
+        },
+        onClick = { onMovieClick(movie) },
+        onPlayClick = { (onPlayClick ?: onMovieClick)(movie) }
       )
     }
 
-    // Spring-animated pagination dots
+    // Animated pagination indicator pills
     if (movies.size > 1) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(top = 12.dp),
+          .padding(top = 10.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
       ) {
@@ -142,23 +154,23 @@ fun HeroMovieCarousel(
         repeat(displayCount) { index ->
           val isSelected = pagerState.currentPage % displayCount == index
           val dotWidth by animateDpAsState(
-            targetValue = if (isSelected) 20.dp else 6.dp,
+            targetValue = if (isSelected) 24.dp else 6.dp,
             animationSpec = SpringSpec(
               dampingRatio = Spring.DampingRatioMediumBouncy,
               stiffness = Spring.StiffnessMediumLow
             ),
-            label = "carousel_dot_width"
+            label = "banner_dot_width"
           )
           val dotColor = if (isSelected) {
             MaterialTheme.colorScheme.primary
           } else {
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f)
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
           }
 
           Box(
             modifier = Modifier
               .padding(horizontal = 3.dp)
-              .height(5.dp)
+              .height(4.dp)
               .width(dotWidth)
               .clip(CircleShape)
               .background(dotColor)
@@ -170,92 +182,115 @@ fun HeroMovieCarousel(
 }
 
 /**
- * OpenTune-style Movie Carousel Card.
- * 24dp rounded corners, subtle border, bottom gradient overlay,
- * and movie title and subtitle displayed directly on the poster.
+ * Full Banner Movie Card with high-impact visuals and dual action buttons.
  */
 @Composable
-fun MovieCarouselCard(
+fun FullBannerMovieCard(
   movie: CarouselMovie,
   modifier: Modifier = Modifier,
-  onClick: () -> Unit
+  onClick: () -> Unit,
+  onPlayClick: () -> Unit
 ) {
-  val shape = RoundedCornerShape(24.dp)
+  val shape = RoundedCornerShape(20.dp)
 
   Surface(
     shape = shape,
     color = MaterialTheme.colorScheme.surfaceVariant,
-    shadowElevation = 8.dp,
+    shadowElevation = 6.dp,
     tonalElevation = 2.dp,
-    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
     modifier = modifier
       .fillMaxWidth()
-      .height(290.dp)
+      .height(255.dp)
       .clip(shape)
       .clickable(onClick = onClick)
       .testTag("carousel_card_${movie.id}")
   ) {
     Box(modifier = Modifier.fillMaxSize()) {
-      // Movie poster
+      // Backdrop / Poster Image
       AsyncImage(
-        model = movie.posterUrl ?: movie.backdropUrl,
+        model = movie.backdropUrl ?: movie.posterUrl,
         contentDescription = movie.title,
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxSize()
       )
 
-      // Bottom gradient overlay for readability
+      // Cinematic multi-stop gradient scrim
       Box(
         modifier = Modifier
           .fillMaxSize()
           .background(
             Brush.verticalGradient(
               colors = listOf(
+                Color.Black.copy(alpha = 0.35f),
                 Color.Transparent,
-                Color.Black.copy(alpha = 0.25f),
-                Color.Black.copy(alpha = 0.88f)
+                Color.Black.copy(alpha = 0.55f),
+                Color.Black.copy(alpha = 0.95f)
               ),
-              startY = 100f
+              startY = 0f,
+              endY = Float.POSITIVE_INFINITY
             )
           )
       )
 
-      // Rating badge at top right
-      if (movie.rating != null && movie.rating > 0.0) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(4.dp),
-          modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(14.dp)
-            .intelligentGlassEffect(
-              shape = CircleShape,
-              backgroundColor = Color.Black.copy(alpha = 0.45f),
-              borderColor = Color.White.copy(alpha = 0.2f)
-            )
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+      // Top Row Badges: Quality & Rating
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        // Quality badge
+        Surface(
+          shape = RoundedCornerShape(6.dp),
+          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
         ) {
-          Icon(
-            imageVector = Icons.Filled.Star,
-            contentDescription = null,
-            tint = Color(0xFFFFC107),
-            modifier = Modifier.size(13.dp)
-          )
           Text(
-            text = String.format("%.1f", movie.rating),
+            text = "4K HDR",
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
           )
+        }
+
+        // Rating badge
+        if (movie.rating != null && movie.rating > 0.0) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier
+              .intelligentGlassEffect(
+                shape = CircleShape,
+                backgroundColor = Color.Black.copy(alpha = 0.55f),
+                borderColor = Color.White.copy(alpha = 0.2f)
+              )
+              .padding(horizontal = 8.dp, vertical = 3.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Filled.Star,
+              contentDescription = null,
+              tint = Color(0xFFFFC107),
+              modifier = Modifier.size(13.dp)
+            )
+            Text(
+              text = String.format("%.1f", movie.rating),
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              color = Color.White
+            )
+          }
         }
       }
 
-      // Title & Subtitle overlay at bottom
+      // Bottom Content Overlay: Title, Subtitle & Action Buttons
       Column(
         modifier = Modifier
           .align(Alignment.BottomStart)
-          .padding(horizontal = 18.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
       ) {
         Text(
           text = movie.title,
@@ -263,21 +298,76 @@ fun MovieCarouselCard(
             fontSize = 20.sp,
             lineHeight = 24.sp
           ),
-          fontWeight = FontWeight.Bold,
+          fontWeight = FontWeight.ExtraBold,
           color = Color.White,
-          maxLines = 2,
+          maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )
+
         if (movie.subtitle.isNotBlank()) {
           Text(
             text = movie.subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.82f),
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.85f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
+        }
+
+        // Action Buttons: Watch Now & Details
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.padding(top = 4.dp)
+        ) {
+          Button(
+            onClick = onPlayClick,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+              containerColor = MaterialTheme.colorScheme.primary,
+              contentColor = MaterialTheme.colorScheme.onPrimary
+            ),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.height(38.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.PlayArrow,
+              contentDescription = null,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+              text = "Watch Now",
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = FontWeight.Bold
+            )
+          }
+
+          FilledTonalButton(
+            onClick = onClick,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.filledTonalButtonColors(
+              containerColor = Color.White.copy(alpha = 0.20f),
+              contentColor = Color.White
+            ),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+            modifier = Modifier.height(38.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.Info,
+              contentDescription = null,
+              modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+              text = "Details",
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = FontWeight.SemiBold
+            )
+          }
         }
       }
     }
   }
 }
+
