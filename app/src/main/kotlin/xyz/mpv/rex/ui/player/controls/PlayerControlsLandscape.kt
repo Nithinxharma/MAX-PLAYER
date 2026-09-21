@@ -206,7 +206,7 @@ fun BottomRightPlayerControlsLandscape(
   activity: PlayerActivity,
 ) {
   Row(
-    verticalAlignment = Alignment.CenterVertically,
+    verticalAlignment = Alignment.Bottom,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
     buttons.forEach { button ->
@@ -252,7 +252,7 @@ fun BottomLeftPlayerControlsLandscape(
   activity: PlayerActivity,
 ) {
   Row(
-    verticalAlignment = Alignment.CenterVertically,
+    verticalAlignment = Alignment.Bottom,
     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
   ) {
     buttons.forEach { button ->

@@ -1712,21 +1712,6 @@ fun CineDetailView(
   val inLibrary = libraryEntry != null
   var showLibraryMenu by remember { mutableStateOf(false) }
 
-  // TMDB Metadata Enrichment States
-  var tmdbEnrichedMovie by remember(item) { mutableStateOf<MovieItem?>(null) }
-  var tmdbEnrichedTvShow by remember(item) { mutableStateOf<TvShowItem?>(null) }
-  var isTmdbEnriching by remember(item) { mutableStateOf(false) }
-
-  var detailPendingLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
-  var detailPendingSubs by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
-  var detailPendingEpJson by remember { mutableStateOf<String?>(null) }
-  var detailPendingTitle by remember { mutableStateOf("") }
-  var detailPendingPoster by remember { mutableStateOf<String?>(null) }
-  var detailPendingOverview by remember { mutableStateOf<String?>(null) }
-  var detailPendingYear by remember { mutableStateOf<String?>(null) }
-  var detailPendingRating by remember { mutableStateOf<Double?>(null) }
-  var detailPendingProvider by remember { mutableStateOf<String?>(null) }
-
   val rawTitle = when (item) {
     is MovieItem -> item.title
     is TvShowItem -> item.title
@@ -1737,6 +1722,36 @@ fun CineDetailView(
     is CineHubMediaDetails -> item.title
     else -> ""
   }
+
+  // TMDB Metadata Enrichment States with instant cache check
+  val cachedEnrichedMovie = remember(item) {
+    if (isMovie && rawTitle.isNotBlank()) {
+      val (cleanTitle, _) = CineOnlineScraper.cleanMediaFileName(rawTitle)
+      xyz.mpv.rex.cinehub.data.MetadataCacheManager.loadFromCache<MovieItem>(context, "movie_$cleanTitle")
+        ?: xyz.mpv.rex.cinehub.data.MetadataCacheManager.loadFromCache<MovieItem>(context, "movie_${cleanTitle.lowercase().replace(" ", "_")}")
+    } else null
+  }
+  val cachedEnrichedTvShow = remember(item) {
+    if (!isMovie && rawTitle.isNotBlank()) {
+      val (cleanTitle, _) = CineOnlineScraper.cleanMediaFileName(rawTitle)
+      xyz.mpv.rex.cinehub.data.MetadataCacheManager.loadFromCache<TvShowItem>(context, "tv_$cleanTitle")
+        ?: xyz.mpv.rex.cinehub.data.MetadataCacheManager.loadFromCache<TvShowItem>(context, "tv_${cleanTitle.lowercase().replace(" ", "_")}")
+    } else null
+  }
+
+  var tmdbEnrichedMovie by remember(item) { mutableStateOf<MovieItem?>(cachedEnrichedMovie) }
+  var tmdbEnrichedTvShow by remember(item) { mutableStateOf<TvShowItem?>(cachedEnrichedTvShow) }
+  var isTmdbEnriching by remember(item) { mutableStateOf(cachedEnrichedMovie == null && cachedEnrichedTvShow == null) }
+
+  var detailPendingLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
+  var detailPendingSubs by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
+  var detailPendingEpJson by remember { mutableStateOf<String?>(null) }
+  var detailPendingTitle by remember { mutableStateOf("") }
+  var detailPendingPoster by remember { mutableStateOf<String?>(null) }
+  var detailPendingOverview by remember { mutableStateOf<String?>(null) }
+  var detailPendingYear by remember { mutableStateOf<String?>(null) }
+  var detailPendingRating by remember { mutableStateOf<Double?>(null) }
+  var detailPendingProvider by remember { mutableStateOf<String?>(null) }
   val rawPlot = when (item) {
     is MovieItem -> item.plot
     is TvShowItem -> item.plot
@@ -2874,6 +2889,29 @@ fun CineDetailView(
               }
             }
 
+            // TMDB Episode scanning & enrichment for scraper episodes (like E1, E2)
+            var tmdbSeasonEpisodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
+            var isScanningTmdbEpisodes by remember { mutableStateOf(false) }
+
+            LaunchedEffect(title, selectedSeason, tmdbEnrichedTvShow) {
+              val showTmdbId = tmdbEnrichedTvShow?.tmdbId?.takeIf { it.isNotBlank() && it.all { c -> c.isDigit() } }
+                ?: (item as? TvShowItem)?.tmdbId?.takeIf { it.isNotBlank() && it.all { c -> c.isDigit() } }
+                ?: ""
+              isScanningTmdbEpisodes = true
+              withContext(Dispatchers.IO) {
+                val eps = CineOnlineScraper.fetchTvShowEpisodes(
+                  context = context,
+                  tmdbId = showTmdbId.ifBlank { title },
+                  seasonNumber = selectedSeason,
+                  showTitle = title
+                )
+                withContext(Dispatchers.Main) {
+                  tmdbSeasonEpisodes = eps
+                  isScanningTmdbEpisodes = false
+                }
+              }
+            }
+
             Text(
               text = "Seasons & Episodes (${allEpisodes.size} episodes)",
               style = MaterialTheme.typography.titleMedium,
@@ -2934,6 +2972,22 @@ fun CineDetailView(
               ) {
                 seasonEpisodes.forEachIndexed { idx, ep ->
                   val isExtracting = extractingEpisodeData == ep.data
+                  val epNumber = ep.episode ?: (idx + 1)
+                  val matchedTmdb = tmdbSeasonEpisodes.firstOrNull { it.episode == epNumber }
+
+                  val epDisplayTitle = matchedTmdb?.title?.takeIf { it.isNotBlank() && !it.matches(Regex("(?i)^Episode\\s*\\d+$")) }
+                    ?: ep.name?.takeIf { it.isNotBlank() && !it.matches(Regex("(?i)^E\\d+$")) }
+                    ?: "Episode $epNumber"
+
+                  val epDisplayOverview = matchedTmdb?.plot?.takeIf { it.isNotBlank() && it != "No synopsis available." && it != "No description." && it != "Local Media File." }
+                    ?: ep.description
+
+                  val epDisplayThumbnail = matchedTmdb?.stillPath?.takeIf { it.isNotBlank() }
+                    ?: ep.posterUrl ?: backdropPath ?: posterPath
+
+                  val epDisplayRating = matchedTmdb?.userRating?.takeIf { it > 0.0 }
+                  val epDisplayAired = matchedTmdb?.aired?.takeIf { it.isNotBlank() }
+
                   Card(
                     modifier = Modifier
                       .fillMaxWidth()
@@ -2943,7 +2997,7 @@ fun CineDetailView(
                           context = context,
                           providerName = provName,
                           data = ep.data,
-                          episodeTitle = ep.name,
+                          episodeTitle = epDisplayTitle,
                           seriesTitle = loadResp.name,
                           scope = scope,
                           onDismiss = {
@@ -2963,7 +3017,7 @@ fun CineDetailView(
                                 }
                                 val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
                                 val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
-                                val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                val epTitle = "${loadResp.name} - S${ep.season ?: selectedSeason}E${epNumber} $epDisplayTitle"
                                 MediaUtils.playFile(
                                   source = link.url,
                                   context = context,
@@ -2972,24 +3026,24 @@ fun CineDetailView(
                                   subtitlesJson = subtitlesJson,
                                   episodeMetadataJson = epJson,
                                   title = epTitle,
-                                  posterUrl = ep.posterUrl ?: loadResp.posterUrl,
-                                  overview = ep.description ?: loadResp.plot,
+                                  posterUrl = epDisplayThumbnail,
+                                  overview = epDisplayOverview ?: loadResp.plot,
                                   year = loadResp.year?.toString(),
-                                  rating = loadResp.score?.score,
+                                  rating = epDisplayRating ?: loadResp.score?.score,
                                   providerName = provName,
                                   allLinks = links
                                 )
                               } else if (links.size > 1) {
-                                val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                val epTitle = "${loadResp.name} - S${ep.season ?: selectedSeason}E${epNumber} $epDisplayTitle"
                                 val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
                                 detailPendingLinks = links
                                 detailPendingSubs = subs
                                 detailPendingEpJson = epJson
                                 detailPendingTitle = epTitle
-                                detailPendingPoster = ep.posterUrl ?: loadResp.posterUrl
-                                detailPendingOverview = ep.description ?: loadResp.plot
+                                detailPendingPoster = epDisplayThumbnail
+                                detailPendingOverview = epDisplayOverview ?: loadResp.plot
                                 detailPendingYear = loadResp.year?.toString()
-                                detailPendingRating = loadResp.score?.score
+                                detailPendingRating = epDisplayRating ?: loadResp.score?.score
                                 detailPendingProvider = provName
                               } else if (links.isEmpty()) {
                                 Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
@@ -3009,35 +3063,63 @@ fun CineDetailView(
                         .fillMaxWidth(),
                       verticalAlignment = Alignment.CenterVertically,
                     ) {
-                      if (!ep.posterUrl.isNullOrBlank()) {
-                        AsyncImage(
-                          model = ep.posterUrl,
-                          contentDescription = ep.name,
-                          contentScale = ContentScale.Crop,
+                      if (!epDisplayThumbnail.isNullOrBlank()) {
+                        Box(
                           modifier = Modifier
-                            .size(width = 80.dp, height = 50.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        )
+                            .size(width = 96.dp, height = 58.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                        ) {
+                          AsyncImage(
+                            model = epDisplayThumbnail,
+                            contentDescription = epDisplayTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                          )
+                          Box(
+                            modifier = Modifier
+                              .fillMaxSize()
+                              .background(Color.Black.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                          ) {
+                            Icon(
+                              imageVector = Icons.Default.PlayArrow,
+                              contentDescription = null,
+                              tint = Color.White.copy(alpha = 0.85f),
+                              modifier = Modifier.size(24.dp)
+                            )
+                          }
+                        }
                         Spacer(modifier = Modifier.width(12.dp))
                       }
 
                       Column(modifier = Modifier.weight(1f)) {
                         Text(
-                          text = ep.name?.ifBlank { "Episode ${ep.episode ?: (idx + 1)}" }
-                            ?: "Episode ${ep.episode ?: (idx + 1)}",
+                          text = epDisplayTitle,
                           fontWeight = FontWeight.Bold,
                           style = MaterialTheme.typography.bodyMedium,
                           maxLines = 1,
                           overflow = TextOverflow.Ellipsis,
                         )
+                        val epSubtitle = buildString {
+                          append("Episode $epNumber")
+                          if (ep.season != null && ep.season!! > 0) {
+                            append(" • Season ${ep.season}")
+                          }
+                          if (epDisplayRating != null) {
+                            append(" • ★ %.1f".format(epDisplayRating))
+                          }
+                          if (!epDisplayAired.isNullOrBlank()) {
+                            append(" • $epDisplayAired")
+                          }
+                        }
                         Text(
-                          text = "Episode ${ep.episode ?: (idx + 1)}${if (ep.season != null && ep.season!! > 0) " • Season ${ep.season}" else ""}",
+                          text = epSubtitle,
                           style = MaterialTheme.typography.bodySmall,
                           color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (!ep.description.isNullOrBlank()) {
+                        if (!epDisplayOverview.isNullOrBlank()) {
                           Text(
-                            text = ep.description!!,
+                            text = epDisplayOverview,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                             maxLines = 2,
@@ -3060,7 +3142,7 @@ fun CineDetailView(
                               context = context,
                               providerName = provName,
                               data = ep.data,
-                              episodeTitle = ep.name,
+                              episodeTitle = epDisplayTitle,
                               seriesTitle = loadResp.name,
                               scope = scope,
                               onDismiss = {
@@ -3080,7 +3162,7 @@ fun CineDetailView(
                                     }
                                     val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
                                     val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
-                                    val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                    val epTitle = "${loadResp.name} - S${ep.season ?: selectedSeason}E${epNumber} $epDisplayTitle"
                                     MediaUtils.playFile(
                                       source = link.url,
                                       context = context,
@@ -3089,24 +3171,24 @@ fun CineDetailView(
                                       subtitlesJson = subtitlesJson,
                                       episodeMetadataJson = epJson,
                                       title = epTitle,
-                                      posterUrl = ep.posterUrl ?: loadResp.posterUrl,
-                                      overview = ep.description ?: loadResp.plot,
+                                      posterUrl = epDisplayThumbnail,
+                                      overview = epDisplayOverview ?: loadResp.plot,
                                       year = loadResp.year?.toString(),
-                                      rating = loadResp.score?.score,
+                                      rating = epDisplayRating ?: loadResp.score?.score,
                                       providerName = provName,
                                       allLinks = links
                                     )
                                   } else if (links.size > 1) {
-                                    val epTitle = if (!ep.name.isNullOrBlank()) "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1} ${ep.name}" else "${loadResp.name} - S${ep.season ?: 1}E${ep.episode ?: 1}"
+                                    val epTitle = "${loadResp.name} - S${ep.season ?: selectedSeason}E${epNumber} $epDisplayTitle"
                                     val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
                                     detailPendingLinks = links
                                     detailPendingSubs = subs
                                     detailPendingEpJson = epJson
                                     detailPendingTitle = epTitle
-                                    detailPendingPoster = ep.posterUrl ?: loadResp.posterUrl
-                                    detailPendingOverview = ep.description ?: loadResp.plot
+                                    detailPendingPoster = epDisplayThumbnail
+                                    detailPendingOverview = epDisplayOverview ?: loadResp.plot
                                     detailPendingYear = loadResp.year?.toString()
-                                    detailPendingRating = loadResp.score?.score
+                                    detailPendingRating = epDisplayRating ?: loadResp.score?.score
                                     detailPendingProvider = provName
                                   } else if (links.isEmpty()) {
                                     Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
