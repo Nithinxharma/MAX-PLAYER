@@ -23,10 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +58,7 @@ import xyz.mpv.rex.ui.theme.maxstream.maxStreamTvFocusable
  * - Fluid spring scale & hover / D-pad focus elevation
  * - Dynamic lighting & soft halo glow on active
  * - Multi-stop gradient overlay for high text contrast
- * - Match rating & 4K quality badges
+ * - Dynamic Quality, Dub/Sub, and Star Rating badges (no fake hardcoding)
  * - Optional progress bar for continue watching
  */
 @Composable
@@ -70,9 +68,11 @@ fun MaxStreamPosterCard(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     rating: Double? = null,
-    qualityBadge: String? = "4K HDR",
+    qualityBadge: String? = null,
+    dubSubBadge: String? = null,
+    isNew: Boolean = false,
     watchProgress: Float? = null,
-    cardWidth: Dp = 150.dp,
+    cardWidth: Dp = 145.dp,
     aspectRatio: Float = 2f / 3f,
     onClick: () -> Unit
 ) {
@@ -112,7 +112,7 @@ fun MaxStreamPosterCard(
                 )
                 .maxStreamTvFocusable(
                     onClick = onClick,
-                    focusedScale = 1.0f, // Already scaled parent
+                    focusedScale = 1.0f,
                     shape = MaxStreamTheme.CardShape,
                     interactionSource = interactionSource
                 )
@@ -136,7 +136,7 @@ fun MaxStreamPosterCard(
                             colors = listOf(
                                 Color.Black.copy(alpha = 0.25f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.40f),
+                                Color.Black.copy(alpha = 0.35f),
                                 Color.Black.copy(alpha = 0.90f)
                             ),
                             startY = 0f,
@@ -145,59 +145,33 @@ fun MaxStreamPosterCard(
                     )
             )
 
-            // Top Badges
+            // Top Row Badges: Quality, Dub/Sub, NEW, Rating
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                if (!qualityBadge.isNullOrBlank()) {
-                    Surface(
-                        shape = MaxStreamTheme.BadgeShape,
-                        color = MaxStreamTheme.CrimsonAccent.copy(alpha = 0.90f)
-                    ) {
-                        Text(
-                            text = qualityBadge,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Black
-                            ),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
+                // Left Badges Column / Row
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isNew) {
+                        MaxStreamNewBadge()
                     }
-                } else {
-                    Spacer(modifier = Modifier.size(1.dp))
+                    if (!qualityBadge.isNullOrBlank()) {
+                        MaxStreamQualityBadge(quality = qualityBadge)
+                    }
+                    if (!dubSubBadge.isNullOrBlank()) {
+                        MaxStreamDubSubBadge(dubSub = dubSubBadge)
+                    }
                 }
 
+                // Right Rating Badge
                 if (rating != null && rating > 0.0) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.Black.copy(alpha = 0.70f)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Star,
-                                contentDescription = null,
-                                tint = MaxStreamTheme.AmberGold,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Text(
-                                text = String.format("%.1f", rating),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = Color.White
-                            )
-                        }
-                    }
+                    MaxStreamRatingBadge(rating = rating)
                 }
             }
 

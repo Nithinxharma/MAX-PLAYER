@@ -332,6 +332,8 @@ object CineHubScreen : Screen {
     val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
     val providerRegistry = koinInject<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>()
     val extensionManager = koinInject<xyz.mpv.rex.cinehub.extension.manager.ExtensionManager>()
+    val recentlyPlayedRepository = koinInject<xyz.mpv.rex.domain.recentlyplayed.repository.RecentlyPlayedRepository>()
+    val playbackStateRepository = koinInject<xyz.mpv.rex.domain.playbackstate.repository.PlaybackStateRepository>()
 
     val activeProvidersList by providerRegistry.activeProviders.collectAsState()
     val registeredProvidersList by providerRegistry.registeredProviders.collectAsState()
@@ -347,7 +349,7 @@ object CineHubScreen : Screen {
     val enableMetadataScraping by browserPreferences.enableMetadataScraping.collectAsState()
     val enableArtworkDownloads by browserPreferences.enableArtworkDownloads.collectAsState()
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = All, 1 = Movies, 2 = TV Shows, 3 = Library
+    var selectedCategory by remember { mutableStateOf("All") }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
 
@@ -363,6 +365,7 @@ object CineHubScreen : Screen {
 
     var localMovies by remember { mutableStateOf<List<MovieItem>>(emptyList()) }
     var localTvShows by remember { mutableStateOf<List<TvShowItem>>(emptyList()) }
+    var continueWatchingItems by remember { mutableStateOf<List<xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem>>(emptyList()) }
 
     var extensionSearchResults by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>>(emptyList()) }
     var isSearchingOnline by remember { mutableStateOf(false) }
@@ -410,6 +413,45 @@ object CineHubScreen : Screen {
           withContext(Dispatchers.Main) {
             providerHomeRows = extHomeLists
           }
+
+          // Load Continue Watching from playback history and state
+          val recentEntities = runCatching { recentlyPlayedRepository.getRecentlyPlayed(limit = 20) }.getOrDefault(emptyList())
+          val playbackStates = runCatching { playbackStateRepository.getAllPlaybackStates() }.getOrDefault(emptyList())
+          val cwList = recentEntities.mapNotNull { entity ->
+            val path = entity.filePath
+            val state = playbackStates.find {
+              it.mediaTitle.equals(entity.videoTitle, ignoreCase = true) ||
+              it.mediaTitle.equals(path, ignoreCase = true) ||
+              it.mediaTitle.equals(File(path).name, ignoreCase = true)
+            }
+            val lastPos = state?.lastPosition?.toLong() ?: 0L
+            val stateTotal = state?.let { (it.lastPosition + it.timeRemaining).toLong() } ?: 0L
+            val entityDurSec = if (entity.duration > 0L) {
+              if (entity.duration > 100_000L) entity.duration / 1000L else entity.duration
+            } else 0L
+            val totalDur = if (entityDurSec > 0L) entityDurSec else stateTotal
+            val fraction = if (totalDur > 0L) (lastPos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f) else 0f
+
+            if (lastPos > 0L || fraction > 0.01f || entity.timestamp > 0L) {
+              val title = entity.videoTitle?.ifBlank { null } ?: File(path).nameWithoutExtension
+              val epMatch = Regex("""\b[sS](\d+)[eE](\d+)\b""").find(title)
+              val epInfo = epMatch?.let { "S${it.groupValues[1]} E${it.groupValues[2]}" }
+
+              xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem(
+                id = path,
+                title = title,
+                episodeInfo = epInfo,
+                landscapeImageUrl = path,
+                currentPositionSeconds = lastPos,
+                totalDurationSeconds = totalDur,
+                watchProgressFraction = fraction,
+                rawPayload = entity
+              )
+            } else null
+          }
+          withContext(Dispatchers.Main) {
+            continueWatchingItems = cwList
+          }
         } catch (_: Exception) {
         } finally {
           withContext(Dispatchers.Main) {
@@ -451,6 +493,10 @@ object CineHubScreen : Screen {
               item.year?.toString(),
               item.providerName.takeIf { it.isNotBlank() }
             ).joinToString(" • ").ifBlank { "Trending Now" }
+            val detectedQuality = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectQuality(item)
+            val detectedDubSub = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectDubSub(item)
+            val isNew = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectIsNew(item.year?.toString())
+
             result.add(
               CarouselMovie(
                 id = item.id,
@@ -459,6 +505,11 @@ object CineHubScreen : Screen {
                 posterUrl = item.posterUrl,
                 backdropUrl = item.posterUrl,
                 rating = item.rating,
+                year = item.year?.toString(),
+                quality = detectedQuality,
+                dubSub = detectedDubSub,
+                isNew = isNew,
+                genres = listOfNotNull(item.providerName.takeIf { it.isNotBlank() }),
                 originalItem = item
               )
             )
@@ -473,6 +524,11 @@ object CineHubScreen : Screen {
             movie.premiered.takeIf { it.isNotBlank() },
             movie.genre.takeIf { it.isNotBlank() }
           ).joinToString(" • ").ifBlank { "Featured Movie" }
+          val detectedQuality = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectQuality(movie)
+          val detectedDubSub = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectDubSub(movie)
+          val isNew = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectIsNew(movie.premiered)
+          val genresList = movie.genre.split(",").map { it.trim() }.filter { it.isNotBlank() }
+
           result.add(
             CarouselMovie(
               id = movie.videoFilePath,
@@ -481,6 +537,11 @@ object CineHubScreen : Screen {
               posterUrl = movie.posterPath ?: movie.backdropPath,
               backdropUrl = movie.backdropPath ?: movie.posterPath,
               rating = movie.userRating.takeIf { it > 0.0 },
+              year = movie.premiered.take(4).takeIf { it.isNotBlank() },
+              quality = detectedQuality,
+              dubSub = detectedDubSub,
+              isNew = isNew,
+              genres = genresList,
               originalItem = movie
             )
           )
@@ -493,6 +554,19 @@ object CineHubScreen : Screen {
       } else {
         defaultCuratedHeroMovies
       }
+    }
+
+    // Dynamic Category Filter Chips (Part 4)
+    val baseCategories = remember {
+      listOf("All", "Movies", "TV Shows", "Anime", "Cartoons", "K-Drama", "Asian Drama", "Live TV", "Sports", "Documentary")
+    }
+    val dynamicCategories = remember(providerHomeRows) {
+      providerHomeRows.map { it.title.trim() }.filter { t ->
+        t.isNotBlank() && baseCategories.none { it.equals(t, ignoreCase = true) }
+      }.distinct().take(6)
+    }
+    val allCategoryTabs = remember(dynamicCategories) {
+      (baseCategories + dynamicCategories + "Library").distinct()
     }
 
     Scaffold(
@@ -678,43 +752,32 @@ object CineHubScreen : Screen {
                 }
               }
             } else {
-              // Category Filter Chips
+              // Dynamic Category Filter Chips (Part 4)
               item {
-                Row(
+                LazyRow(
                   modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                   horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  contentPadding = PaddingValues(end = 16.dp),
                 ) {
-                  FilterChip(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    label = { Text("All") },
-                    shape = RoundedCornerShape(16.dp),
-                  )
-                  FilterChip(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    label = { Text("Movies") },
-                    shape = RoundedCornerShape(16.dp),
-                  )
-                  FilterChip(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    label = { Text("TV Shows") },
-                    shape = RoundedCornerShape(16.dp),
-                  )
-                  FilterChip(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    label = { Text("Library") },
-                    shape = RoundedCornerShape(16.dp),
-                  )
+                  items(allCategoryTabs) { category ->
+                    FilterChip(
+                      selected = selectedCategory == category,
+                      onClick = { selectedCategory = category },
+                      label = { Text(category) },
+                      shape = RoundedCornerShape(16.dp),
+                      colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                        selectedLabelColor = Color.White
+                      )
+                    )
+                  }
                 }
               }
 
-              // OpenTune 3D CoverFlow Hero Movie Carousel
-              if ((selectedTab == 0 || selectedTab == 1) && heroMovies.isNotEmpty()) {
+              // Hero Movie Carousel (Part 3)
+              if (selectedCategory != "Library" && heroMovies.isNotEmpty()) {
                 item {
                   HeroMovieCarousel(
                     movies = heroMovies,
@@ -760,8 +823,35 @@ object CineHubScreen : Screen {
                 }
               }
 
-              // All Tab: Dynamic Home Rows from Extensions
-              if (selectedTab == 0) {
+              // Continue Watching Rail (Part 5)
+              if (continueWatchingItems.isNotEmpty() && (selectedCategory == "All" || selectedCategory == "Library")) {
+                item {
+                  xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamContinueWatchingRail(
+                    items = continueWatchingItems,
+                    onItemClick = { cwItem ->
+                      val entity = cwItem.rawPayload as? xyz.mpv.rex.database.entities.RecentlyPlayedEntity
+                      if (entity != null) {
+                        MediaUtils.playFile(
+                          source = entity.filePath,
+                          context = context,
+                          launchSource = "cinehub",
+                          title = entity.videoTitle ?: File(entity.filePath).nameWithoutExtension
+                        )
+                      } else {
+                        MediaUtils.playFile(
+                          source = cwItem.id,
+                          context = context,
+                          launchSource = "cinehub",
+                          title = cwItem.title
+                        )
+                      }
+                    }
+                  )
+                }
+              }
+
+              // Category-Filtered Content Rows (Part 4)
+              if (selectedCategory != "Library") {
                 if (providerHomeRows.isEmpty() && localMovies.isEmpty() && localTvShows.isEmpty()) {
                   item {
                     Box(
@@ -786,7 +876,7 @@ object CineHubScreen : Screen {
                           fontWeight = FontWeight.Bold,
                         )
                         Text(
-                          text = "Install extensions from repositories to browse movies, TV series, and media streams.",
+                          text = "Install extensions from repositories to browse movies, TV series, anime, and media streams.",
                           style = MaterialTheme.typography.bodyMedium,
                           color = MaterialTheme.colorScheme.outline,
                           textAlign = TextAlign.Center,
@@ -805,9 +895,27 @@ object CineHubScreen : Screen {
                     }
                   }
                 } else {
-                  // Extension Rows
+                  // Extension Rows filtered by category
                   providerHomeRows.forEach { homeRow ->
-                    if (homeRow.items.isNotEmpty()) {
+                    val filteredItems = when (selectedCategory) {
+                      "All" -> homeRow.items
+                      "Movies" -> homeRow.items.filter { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.Movie || homeRow.title.contains("movie", ignoreCase = true) }
+                      "TV Shows" -> homeRow.items.filter { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries || homeRow.title.contains("tv", ignoreCase = true) || homeRow.title.contains("series", ignoreCase = true) }
+                      "Anime" -> homeRow.items.filter { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.Anime || homeRow.title.contains("anime", ignoreCase = true) || it.title.contains("anime", ignoreCase = true) }
+                      "Cartoons" -> homeRow.items.filter { homeRow.title.contains("cartoon", ignoreCase = true) || homeRow.title.contains("animation", ignoreCase = true) || it.title.contains("cartoon", ignoreCase = true) }
+                      "K-Drama" -> homeRow.items.filter { homeRow.title.contains("k-drama", ignoreCase = true) || homeRow.title.contains("kdrama", ignoreCase = true) || homeRow.title.contains("korean", ignoreCase = true) }
+                      "Asian Drama" -> homeRow.items.filter { homeRow.title.contains("drama", ignoreCase = true) || homeRow.title.contains("asian", ignoreCase = true) || homeRow.title.contains("cdrama", ignoreCase = true) || homeRow.title.contains("jdrama", ignoreCase = true) }
+                      "Live TV" -> homeRow.items.filter { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.LiveTv || homeRow.title.contains("live", ignoreCase = true) || homeRow.title.contains("iptv", ignoreCase = true) }
+                      "Sports" -> homeRow.items.filter { homeRow.title.contains("sport", ignoreCase = true) }
+                      "Documentary" -> homeRow.items.filter { homeRow.title.contains("doc", ignoreCase = true) }
+                      else -> {
+                        if (homeRow.title.equals(selectedCategory, ignoreCase = true) || homeRow.title.contains(selectedCategory, ignoreCase = true)) {
+                          homeRow.items
+                        } else emptyList()
+                      }
+                    }
+
+                    if (filteredItems.isNotEmpty()) {
                       item {
                         SectionHeader(title = homeRow.title)
                       }
@@ -816,12 +924,13 @@ object CineHubScreen : Screen {
                           contentPadding = PaddingValues(horizontal = 16.dp),
                           horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                          items(homeRow.items) { item ->
+                          items(filteredItems) { item ->
                             MediaPosterCard(
                               title = item.title,
                               posterUrl = item.posterUrl,
                               rating = item.rating ?: 0.0,
                               year = item.year?.toString() ?: "",
+                              rawPayload = item,
                               onClick = {
                                 loadExtensionItemDetails(
                                   providerId = item.providerId,
@@ -844,7 +953,7 @@ object CineHubScreen : Screen {
                   }
 
                   // Local Movies
-                  if (localMovies.isNotEmpty()) {
+                  if (localMovies.isNotEmpty() && (selectedCategory == "All" || selectedCategory == "Movies")) {
                     item {
                       SectionHeader(title = "Local Movies")
                     }
@@ -859,6 +968,7 @@ object CineHubScreen : Screen {
                             posterUrl = movie.posterPath,
                             rating = movie.userRating,
                             year = movie.premiered.take(4),
+                            rawPayload = movie,
                             onClick = {
                               selectedDetailItem = movie
                             },
@@ -869,7 +979,7 @@ object CineHubScreen : Screen {
                   }
 
                   // Local TV Shows
-                  if (localTvShows.isNotEmpty()) {
+                  if (localTvShows.isNotEmpty() && (selectedCategory == "All" || selectedCategory == "TV Shows" || selectedCategory == "Anime")) {
                     item {
                       SectionHeader(title = "Local TV Series")
                     }
@@ -884,168 +994,7 @@ object CineHubScreen : Screen {
                             posterUrl = show.posterPath,
                             rating = show.userRating,
                             year = show.premiered.take(4),
-                            onClick = {
-                              selectedDetailItem = show
-                            },
-                          )
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Movies Tab
-              if (selectedTab == 1) {
-                val movieRows = providerHomeRows.filter { row ->
-                  row.items.any { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.Movie }
-                }
-                if (movieRows.isEmpty() && localMovies.isEmpty()) {
-                  item {
-                    Box(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                      contentAlignment = Alignment.Center,
-                    ) {
-                      Text("No movies available from installed extensions", color = MaterialTheme.colorScheme.outline)
-                    }
-                  }
-                } else {
-                  movieRows.forEach { homeRow ->
-                    val movieItems = homeRow.items.filter { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.Movie }
-                    if (movieItems.isNotEmpty()) {
-                      item {
-                        SectionHeader(title = homeRow.title)
-                      }
-                      item {
-                        LazyRow(
-                          contentPadding = PaddingValues(horizontal = 16.dp),
-                          horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                          items(movieItems) { item ->
-                            MediaPosterCard(
-                              title = item.title,
-                              posterUrl = item.posterUrl,
-                              rating = item.rating ?: 0.0,
-                              year = item.year?.toString() ?: "",
-                              onClick = {
-                                loadExtensionItemDetails(
-                                  providerId = item.providerId,
-                                  providerName = item.providerName,
-                                  url = item.url,
-                                  scope = scope,
-                                  fallbackTitle = item.title,
-                                  fallbackPoster = item.posterUrl,
-                                  fallbackYear = item.year,
-                                  fallbackType = TvType.Movie
-                                ) { details ->
-                                  selectedDetailItem = details
-                                }
-                              }
-                            )
-                          }
-                        }
-                      }
-                    }
-                  }
-
-                  if (localMovies.isNotEmpty()) {
-                    item {
-                      SectionHeader(title = "Local Movies")
-                    }
-                    item {
-                      LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                      ) {
-                        items(localMovies) { movie ->
-                          MediaPosterCard(
-                            title = movie.title,
-                            posterUrl = movie.posterPath,
-                            rating = movie.userRating,
-                            year = movie.premiered.take(4),
-                            onClick = {
-                              selectedDetailItem = movie
-                            },
-                          )
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              // TV Series Tab
-              if (selectedTab == 2) {
-                val tvRows = providerHomeRows.filter { row ->
-                  row.items.any { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries || it.type == xyz.mpv.rex.cinehub.extension.api.TvType.Anime }
-                }
-                if (tvRows.isEmpty() && localTvShows.isEmpty()) {
-                  item {
-                    Box(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                      contentAlignment = Alignment.Center,
-                    ) {
-                      Text("No TV shows available from installed extensions", color = MaterialTheme.colorScheme.outline)
-                    }
-                  }
-                } else {
-                  tvRows.forEach { homeRow ->
-                    val tvItems = homeRow.items.filter { it.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries || it.type == xyz.mpv.rex.cinehub.extension.api.TvType.Anime }
-                    if (tvItems.isNotEmpty()) {
-                      item {
-                        SectionHeader(title = homeRow.title)
-                      }
-                      item {
-                        LazyRow(
-                          contentPadding = PaddingValues(horizontal = 16.dp),
-                          horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                          items(tvItems) { item ->
-                            MediaPosterCard(
-                              title = item.title,
-                              posterUrl = item.posterUrl,
-                              rating = item.rating ?: 0.0,
-                              year = item.year?.toString() ?: "",
-                              onClick = {
-                                loadExtensionItemDetails(
-                                  providerId = item.providerId,
-                                  providerName = item.providerName,
-                                  url = item.url,
-                                  scope = scope,
-                                  fallbackTitle = item.title,
-                                  fallbackPoster = item.posterUrl,
-                                  fallbackYear = item.year,
-                                  fallbackType = TvType.TvSeries
-                                ) { details ->
-                                  selectedDetailItem = details
-                                }
-                              }
-                            )
-                          }
-                        }
-                      }
-                    }
-                  }
-
-                  if (localTvShows.isNotEmpty()) {
-                    item {
-                      SectionHeader(title = "Local TV Series")
-                    }
-                    item {
-                      LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                      ) {
-                        items(localTvShows) { show ->
-                          MediaPosterCard(
-                            title = show.title,
-                            posterUrl = show.posterPath,
-                            rating = show.userRating,
-                            year = show.premiered.take(4),
+                            rawPayload = show,
                             onClick = {
                               selectedDetailItem = show
                             },
@@ -1058,8 +1007,8 @@ object CineHubScreen : Screen {
               }
 
               // Library Section
-              if (selectedTab == 3) {
-                if (libraryItems.isEmpty()) {
+              if (selectedCategory == "Library") {
+                if (libraryItems.isEmpty() && continueWatchingItems.isEmpty() && localMovies.isEmpty() && localTvShows.isEmpty()) {
                   item {
                     Box(
                       modifier = Modifier
@@ -1110,9 +1059,8 @@ object CineHubScreen : Screen {
                               posterUrl = item.posterUrl,
                               rating = 0.0,
                               year = "",
+                              rawPayload = item,
                               onClick = {
-                                // For now, we will attempt to fetch online if possible,
-                                // or launch appropriate handler
                                 scope.launch(Dispatchers.IO) {
                                   val fetched = CineOnlineScraper.getOrFetchMovie(context, item.title, item.url)
                                   withContext(Dispatchers.Main) {
@@ -1126,6 +1074,56 @@ object CineHubScreen : Screen {
                               },
                             )
                           }
+                        }
+                      }
+                    }
+                  }
+
+                  if (localMovies.isNotEmpty()) {
+                    item {
+                      SectionHeader(title = "Local Movies")
+                    }
+                    item {
+                      LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                        items(localMovies) { movie ->
+                          MediaPosterCard(
+                            title = movie.title,
+                            posterUrl = movie.posterPath,
+                            rating = movie.userRating,
+                            year = movie.premiered.take(4),
+                            rawPayload = movie,
+                            onClick = {
+                              selectedDetailItem = movie
+                            },
+                          )
+                        }
+                      }
+                    }
+                  }
+
+                  if (localTvShows.isNotEmpty()) {
+                    item {
+                      SectionHeader(title = "Local TV Series")
+                    }
+                    item {
+                      LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                        items(localTvShows) { show ->
+                          MediaPosterCard(
+                            title = show.title,
+                            posterUrl = show.posterPath,
+                            rating = show.userRating,
+                            year = show.premiered.take(4),
+                            rawPayload = show,
+                            onClick = {
+                              selectedDetailItem = show
+                            },
+                          )
                         }
                       }
                     }
@@ -1578,14 +1576,28 @@ private fun MediaPosterCard(
   posterUrl: String?,
   rating: Double,
   year: String,
+  qualityBadge: String? = null,
+  dubSubBadge: String? = null,
+  isNew: Boolean = false,
+  rawPayload: Any? = null,
   onClick: () -> Unit,
 ) {
+  val detectedQuality = qualityBadge
+    ?: rawPayload?.let { xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectQuality(it) }
+    ?: xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectQuality(title)
+  val detectedDubSub = dubSubBadge
+    ?: rawPayload?.let { xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectDubSub(it) }
+    ?: xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectDubSub(title)
+  val detectedNew = isNew || xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectIsNew(year)
+
   xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamPosterCard(
     title = title,
     posterUrl = posterUrl,
     subtitle = if (year.isNotBlank()) year else null,
     rating = if (rating > 0.0) rating else null,
-    qualityBadge = "4K HDR",
+    qualityBadge = detectedQuality,
+    dubSubBadge = detectedDubSub,
+    isNew = detectedNew,
     cardWidth = 142.dp,
     onClick = onClick
   )

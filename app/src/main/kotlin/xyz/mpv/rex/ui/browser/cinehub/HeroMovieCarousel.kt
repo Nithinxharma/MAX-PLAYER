@@ -5,14 +5,16 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +32,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Button
@@ -43,9 +44,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,23 +60,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
-import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
+import xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamDubSubBadge
+import xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper
+import xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamNewBadge
+import xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamQualityBadge
+import xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamRatingBadge
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
+import xyz.mpv.rex.ui.theme.maxstream.maxStreamGlass
+import xyz.mpv.rex.ui.theme.maxstream.maxStreamTvFocusable
 import kotlin.math.absoluteValue
 
 data class CarouselMovie(
   val id: String,
   val title: String,
-  val subtitle: String,
-  val posterUrl: String?,
-  val backdropUrl: String?,
-  val rating: Double?,
+  val subtitle: String = "",
+  val posterUrl: String? = null,
+  val backdropUrl: String? = null,
+  val rating: Double? = null,
+  val year: String? = null,
+  val quality: String? = null,
+  val dubSub: String? = null,
+  val runtime: String? = null,
+  val genres: List<String> = emptyList(),
+  val isNew: Boolean = false,
   val originalItem: Any
 )
 
 /**
- * Full Banner Size Hero Movie Carousel.
- * Spans full banner width with rich cinematic backdrop imagery, multi-stop gradient scrim,
- * badges for Rating and Quality, Title, Subtitle, and prominent Watch Now & Details buttons.
+ * Flagship Hero Movie Carousel (Part 3).
+ * Spans full banner width with high-resolution landscape artwork, multi-stop gradient scrim,
+ * dynamic badges for detected Quality, Dub/Sub, Rating, Year, Runtime, Genres, and dual Action Triggers.
  */
 @Composable
 fun HeroMovieCarousel(
@@ -88,7 +104,7 @@ fun HeroMovieCarousel(
 ) {
   if (movies.isEmpty()) return
 
-  // Optional subtle auto-pager rotation when not actively touched
+  // Auto-pager rotation with paused state when interacting
   LaunchedEffect(pagerState.pageCount) {
     if (movies.size > 1) {
       while (true) {
@@ -120,15 +136,15 @@ fun HeroMovieCarousel(
       ),
       modifier = Modifier
         .fillMaxWidth()
-        .height(260.dp)
+        .height(275.dp)
         .testTag("hero_movie_carousel")
     ) { page ->
       val movie = movies[page]
 
-      // Subtle scale for current active banner
+      // Subtle depth scaling for current active banner
       val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).coerceIn(-1f, 1f)
       val absOffset = pageOffset.absoluteValue
-      val scale = 1.0f - (absOffset * 0.05f)
+      val scale = 1.0f - (absOffset * 0.04f)
 
       FullBannerMovieCard(
         movie = movie,
@@ -154,7 +170,7 @@ fun HeroMovieCarousel(
         repeat(displayCount) { index ->
           val isSelected = pagerState.currentPage % displayCount == index
           val dotWidth by animateDpAsState(
-            targetValue = if (isSelected) 24.dp else 6.dp,
+            targetValue = if (isSelected) 26.dp else 6.dp,
             animationSpec = SpringSpec(
               dampingRatio = Spring.DampingRatioMediumBouncy,
               stiffness = Spring.StiffnessMediumLow
@@ -162,9 +178,9 @@ fun HeroMovieCarousel(
             label = "banner_dot_width"
           )
           val dotColor = if (isSelected) {
-            MaterialTheme.colorScheme.primary
+            MaxStreamTheme.CrimsonAccent
           } else {
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+            Color.White.copy(alpha = 0.25f)
           }
 
           Box(
@@ -182,8 +198,9 @@ fun HeroMovieCarousel(
 }
 
 /**
- * Full Banner Movie Card with high-impact visuals and dual action buttons.
+ * Flagship Full Banner Movie Card with Landscape Artwork and dynamic metadata overlay.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FullBannerMovieCard(
   movie: CarouselMovie,
@@ -191,23 +208,29 @@ fun FullBannerMovieCard(
   onClick: () -> Unit,
   onPlayClick: () -> Unit
 ) {
-  val shape = RoundedCornerShape(20.dp)
+  val shape = MaxStreamTheme.HeroCardShape
+  val interactionSource = remember { MutableInteractionSource() }
+  val isFocused by interactionSource.collectIsFocusedAsState()
 
   Surface(
     shape = shape,
-    color = MaterialTheme.colorScheme.surfaceVariant,
-    shadowElevation = 6.dp,
-    tonalElevation = 2.dp,
-    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+    color = MaxStreamTheme.ElevatedSurface,
+    shadowElevation = if (isFocused) 16.dp else 6.dp,
+    border = BorderStroke(1.dp, if (isFocused) MaxStreamTheme.CrimsonAccent else Color.White.copy(alpha = 0.10f)),
     modifier = modifier
       .fillMaxWidth()
-      .height(255.dp)
+      .height(275.dp)
+      .maxStreamTvFocusable(
+        onClick = onClick,
+        shape = shape,
+        interactionSource = interactionSource
+      )
       .clip(shape)
       .clickable(onClick = onClick)
       .testTag("carousel_card_${movie.id}")
   ) {
     Box(modifier = Modifier.fillMaxSize()) {
-      // Backdrop / Poster Image
+      // Landscape Fanart / Backdrop Image (Prioritize landscape backdrop, fallback to poster)
       AsyncImage(
         model = movie.backdropUrl ?: movie.posterUrl,
         contentDescription = movie.title,
@@ -215,7 +238,7 @@ fun FullBannerMovieCard(
         modifier = Modifier.fillMaxSize()
       )
 
-      // Cinematic multi-stop gradient scrim
+      // Cinematic Multi-Stop Atmospheric Gradient Scrim
       Box(
         modifier = Modifier
           .fillMaxSize()
@@ -224,8 +247,8 @@ fun FullBannerMovieCard(
               colors = listOf(
                 Color.Black.copy(alpha = 0.35f),
                 Color.Transparent,
-                Color.Black.copy(alpha = 0.55f),
-                Color.Black.copy(alpha = 0.95f)
+                Color.Black.copy(alpha = 0.50f),
+                Color.Black.copy(alpha = 0.96f)
               ),
               startY = 0f,
               endY = Float.POSITIVE_INFINITY
@@ -233,58 +256,35 @@ fun FullBannerMovieCard(
           )
       )
 
-      // Top Row Badges: Quality & Rating
+      // Top Row: Dynamic Badges (Quality, Dub/Sub, NEW, Rating)
       Row(
         modifier = Modifier
           .fillMaxWidth()
           .padding(14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
       ) {
-        // Quality badge
-        Surface(
-          shape = RoundedCornerShape(6.dp),
-          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Text(
-            text = "4K HDR",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-          )
+          if (movie.isNew) {
+            MaxStreamNewBadge()
+          }
+          if (!movie.quality.isNullOrBlank()) {
+            MaxStreamQualityBadge(quality = movie.quality)
+          }
+          if (!movie.dubSub.isNullOrBlank()) {
+            MaxStreamDubSubBadge(dubSub = movie.dubSub)
+          }
         }
 
-        // Rating badge
         if (movie.rating != null && movie.rating > 0.0) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier
-              .intelligentGlassEffect(
-                shape = CircleShape,
-                backgroundColor = Color.Black.copy(alpha = 0.55f),
-                borderColor = Color.White.copy(alpha = 0.2f)
-              )
-              .padding(horizontal = 8.dp, vertical = 3.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Filled.Star,
-              contentDescription = null,
-              tint = Color(0xFFFFC107),
-              modifier = Modifier.size(13.dp)
-            )
-            Text(
-              text = String.format("%.1f", movie.rating),
-              style = MaterialTheme.typography.labelSmall,
-              fontWeight = FontWeight.Bold,
-              color = Color.White
-            )
-          }
+          MaxStreamRatingBadge(rating = movie.rating)
         }
       }
 
-      // Bottom Content Overlay: Title, Subtitle & Action Buttons
+      // Bottom Content Overlay: Title, Metadata Strip, Genres & Action Buttons
       Column(
         modifier = Modifier
           .align(Alignment.BottomStart)
@@ -292,26 +292,64 @@ fun FullBannerMovieCard(
           .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
       ) {
+        // Title
         Text(
           text = movie.title,
           style = MaterialTheme.typography.titleLarge.copy(
-            fontSize = 20.sp,
-            lineHeight = 24.sp
+            fontSize = 21.sp,
+            lineHeight = 25.sp,
+            letterSpacing = (-0.2).sp
           ),
-          fontWeight = FontWeight.ExtraBold,
+          fontWeight = FontWeight.Black,
           color = Color.White,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )
 
-        if (movie.subtitle.isNotBlank()) {
+        // Metadata Strip: Year, Runtime, Subtitle
+        val metaParts = buildList {
+          if (!movie.year.isNullOrBlank()) add(movie.year)
+          if (!movie.runtime.isNullOrBlank()) add(movie.runtime)
+          if (movie.subtitle.isNotBlank() && movie.subtitle != movie.year) add(movie.subtitle)
+        }
+
+        if (metaParts.isNotEmpty()) {
           Text(
-            text = movie.subtitle,
-            style = MaterialTheme.typography.bodySmall,
+            text = metaParts.joinToString(" • "),
+            style = MaterialTheme.typography.bodySmall.copy(
+              fontSize = 11.5.sp,
+              fontWeight = FontWeight.Medium
+            ),
             color = Color.White.copy(alpha = 0.85f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
           )
+        }
+
+        // Genres Pills
+        if (movie.genres.isNotEmpty()) {
+          FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 2.dp)
+          ) {
+            movie.genres.take(3).forEach { genre ->
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color.White.copy(alpha = 0.15f),
+                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.20f))
+              ) {
+                Text(
+                  text = genre,
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                  ),
+                  color = Color.White.copy(alpha = 0.90f),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+              }
+            }
+          }
         }
 
         // Action Buttons: Watch Now & Details
@@ -324,10 +362,10 @@ fun FullBannerMovieCard(
             onClick = onPlayClick,
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-              containerColor = MaterialTheme.colorScheme.primary,
-              contentColor = MaterialTheme.colorScheme.onPrimary
+              containerColor = MaxStreamTheme.CrimsonAccent,
+              contentColor = Color.White
             ),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
             modifier = Modifier.height(38.dp)
           ) {
             Icon(
@@ -338,8 +376,10 @@ fun FullBannerMovieCard(
             Spacer(modifier = Modifier.width(4.dp))
             Text(
               text = "Watch Now",
-              style = MaterialTheme.typography.labelMedium,
-              fontWeight = FontWeight.Bold
+              style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.3.sp
+              )
             )
           }
 
@@ -361,8 +401,9 @@ fun FullBannerMovieCard(
             Spacer(modifier = Modifier.width(4.dp))
             Text(
               text = "Details",
-              style = MaterialTheme.typography.labelMedium,
-              fontWeight = FontWeight.SemiBold
+              style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = FontWeight.SemiBold
+              )
             )
           }
         }
@@ -370,4 +411,3 @@ fun FullBannerMovieCard(
     }
   }
 }
-

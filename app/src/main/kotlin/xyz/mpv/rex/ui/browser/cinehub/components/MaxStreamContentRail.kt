@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +46,9 @@ data class ContentRailItem(
     val posterUrl: String?,
     val subtitle: String? = null,
     val rating: Double? = null,
-    val qualityBadge: String? = "4K HDR",
+    val qualityBadge: String? = null,
+    val dubSubBadge: String? = null,
+    val isNew: Boolean = false,
     val watchProgress: Float? = null,
     val rawPayload: Any? = null
 )
@@ -172,6 +173,8 @@ fun MaxStreamContentRail(
                     subtitle = item.subtitle,
                     rating = item.rating,
                     qualityBadge = item.qualityBadge,
+                    dubSubBadge = item.dubSubBadge,
+                    isNew = item.isNew,
                     watchProgress = item.watchProgress,
                     cardWidth = cardWidth,
                     onClick = { onItemClick(item) }
