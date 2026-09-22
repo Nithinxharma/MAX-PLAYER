@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
@@ -190,7 +191,7 @@ object MainScreen : Screen {
     val enableTabCineTv by browserPreferences.enableTabCineTv.collectAsState()
     val enableCineHubIntegration by browserPreferences.enableCineHubIntegration.collectAsState()
 
-    val homeLabel = stringResource(R.string.home)
+    val homeLabel = "Files"
     val shortsLabel = stringResource(R.string.shorts)
     val cineHubLabel = stringResource(R.string.cinehub)
     val cineTvLabel = stringResource(R.string.cinetv)
@@ -206,12 +207,8 @@ object MainScreen : Screen {
     ) {
       buildList {
         add(
-          VisibleTab("home", homeLabel, icon = Icons.Rounded.Home) {
-            android.util.Log.d("TRANSITION_TRACE", "Before CineHubScreen.Content() on Home")
-            CineHubScreen.Content()
-            androidx.compose.runtime.LaunchedEffect(Unit) {
-              android.util.Log.d("TRANSITION_TRACE", "After CineHubScreen.Content() enters composition")
-            }
+          VisibleTab("home", homeLabel, icon = Icons.Rounded.Folder) {
+            FolderListScreen.Content()
           }
         )
         if (isShortsEnabled) {

@@ -61,14 +61,13 @@ data class NavTabItem(
 )
 
 /**
- * Modern Glassmorphism Navigation Bar with Center MaxStream "M" Logo Badge.
+ * Glassmorphism Navigation Bar styled after original player controls (icons only, hidden text names).
  *
  * Features:
- * - High contrast dark frosted glass container (100% visible in both light & dark themes)
- * - Neon luminous gradient border outline
- * - Center MaxStream tab with glowing multi-color "M" logo badge
- * - Text labels under every tab icon
- * - Active tab animated indicator line & spring bounce scale physics
+ * - Player controls style glassmorphism (`intelligentGlassEffect` with translucent dark background & subtle highlight border)
+ * - Icons ONLY (names hidden) for clean minimal look
+ * - Center MaxStream circular logo badge (`ic_max_stream_logo`)
+ * - Spring scale physics & glowing selection indicator
  */
 @Composable
 fun FloatingBottomNav(
@@ -81,50 +80,39 @@ fun FloatingBottomNav(
 
   val isDark = isSystemInDarkTheme()
 
-  // High contrast frosted glass container (sleek dark pill visible in both themes)
+  // Original player controls glass style background & border
   val containerBg = if (isDark) {
-    Color(0xEB0D0E17)
+    Color(0x3812131D)
   } else {
-    Color(0xF5141624)
+    Color(0x280D0E17)
   }
-
-  // Neon gradient rim glow border
-  val borderGradient = Brush.horizontalGradient(
-    colors = listOf(
-      Color(0xFF802D92),
-      Color(0xFF007AFF),
-      Color(0xFFFF2D92),
-      Color(0xFF32D7FF)
-    )
-  )
+  val containerBorder = Color.White.copy(alpha = 0.18f)
 
   Box(
     modifier = modifier
       .fillMaxWidth()
-      .padding(horizontal = 12.dp),
+      .padding(horizontal = 16.dp),
     contentAlignment = Alignment.Center
   ) {
     Surface(
-      shape = RoundedCornerShape(36.dp),
-      color = containerBg,
-      shadowElevation = 16.dp,
+      shape = RoundedCornerShape(30.dp),
+      color = Color.Transparent,
+      shadowElevation = 8.dp,
       tonalElevation = 0.dp,
-      border = BorderStroke(1.2.dp, borderGradient),
       modifier = Modifier
-        .widthIn(max = 480.dp)
-        .height(72.dp)
-        .clip(RoundedCornerShape(36.dp))
+        .widthIn(max = 440.dp)
+        .height(58.dp)
         .intelligentGlassEffect(
-          shape = RoundedCornerShape(36.dp),
+          shape = RoundedCornerShape(30.dp),
           backgroundColor = containerBg,
-          borderColor = Color.White.copy(alpha = 0.20f),
-          borderWidth = 1.2.dp
+          borderColor = containerBorder,
+          borderWidth = 1.dp
         )
     ) {
       Row(
         modifier = Modifier
           .fillMaxSize()
-          .padding(horizontal = 8.dp),
+          .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
       ) {
@@ -143,24 +131,23 @@ fun FloatingBottomNav(
             label = "tab_icon_scale"
           )
 
-          // Icon and label color transitions
-          val activeColor = MaterialTheme.colorScheme.primary
+          // Icon tint transition
           val tabContentColor by animateColorAsState(
-            targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f),
+            targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f),
             animationSpec = tween(durationMillis = 200),
             label = "tab_content_color"
           )
 
-          // Soft icon glow behind active tab
+          // Active tab glow
           val glowAlpha by animateFloatAsState(
             targetValue = if (isSelected) 0.35f else 0.0f,
             animationSpec = tween(durationMillis = 200),
             label = "tab_glow_alpha"
           )
 
-          // Active indicator line width & opacity
+          // Active indicator dot/bar width
           val indicatorWidth by animateDpAsState(
-            targetValue = if (isSelected) (if (isMaxStream) 28.dp else 22.dp) else 0.dp,
+            targetValue = if (isSelected) (if (isMaxStream) 22.dp else 16.dp) else 0.dp,
             animationSpec = SpringSpec(
               dampingRatio = Spring.DampingRatioLowBouncy,
               stiffness = Spring.StiffnessMediumLow
@@ -180,10 +167,10 @@ fun FloatingBottomNav(
             modifier = Modifier
               .weight(1f)
               .fillMaxHeight()
-              .clip(RoundedCornerShape(24.dp))
+              .clip(RoundedCornerShape(20.dp))
               .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(bounded = true, radius = 30.dp),
+                indication = ripple(bounded = true, radius = 24.dp),
                 onClick = { onTabSelected(index) }
               )
               .testTag("tab_${tab.id}"),
@@ -192,17 +179,17 @@ fun FloatingBottomNav(
             Column(
               horizontalAlignment = Alignment.CenterHorizontally,
               verticalArrangement = Arrangement.Center,
-              modifier = Modifier.padding(vertical = 4.dp)
+              modifier = Modifier.padding(vertical = 2.dp)
             ) {
               Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(if (isMaxStream) 42.dp else 28.dp)
+                modifier = Modifier.size(if (isMaxStream) 38.dp else 26.dp)
               ) {
-                // Soft radial glow for active tab
+                // Radial glow behind active tab
                 if (glowAlpha > 0.01f) {
                   Box(
                     modifier = Modifier
-                      .size(if (isMaxStream) 44.dp else 30.dp)
+                      .size(if (isMaxStream) 40.dp else 28.dp)
                       .graphicsLayer {
                         alpha = glowAlpha
                         scaleX = iconScale
@@ -212,8 +199,8 @@ fun FloatingBottomNav(
                       .background(
                         Brush.radialGradient(
                           colors = listOf(
-                            Color(0xFFFF2D92).copy(alpha = 0.70f),
-                            Color(0xFF007AFF).copy(alpha = 0.30f),
+                            Color(0xFFFF2D92).copy(alpha = 0.60f),
+                            Color(0xFF007AFF).copy(alpha = 0.25f),
                             Color.Transparent
                           )
                         )
@@ -222,11 +209,11 @@ fun FloatingBottomNav(
                 }
 
                 if (isMaxStream) {
-                  // Center MaxStream "M" Logo glowing circular badge
+                  // Center MaxStream circular logo badge
                   Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                      .size(38.dp)
+                      .size(36.dp)
                       .graphicsLayer {
                         scaleX = iconScale
                         scaleY = iconScale
@@ -241,7 +228,7 @@ fun FloatingBottomNav(
                         )
                       )
                       .border(
-                        width = 1.5.dp,
+                        width = 1.2.dp,
                         brush = Brush.linearGradient(
                           colors = listOf(
                             Color(0xFFFF2D92),
@@ -255,7 +242,9 @@ fun FloatingBottomNav(
                     Image(
                       painter = painterResource(id = tab.iconResId ?: R.drawable.ic_max_stream_logo),
                       contentDescription = tab.label,
-                      modifier = Modifier.size(28.dp)
+                      modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
                     )
                   }
                 } else {
@@ -265,7 +254,7 @@ fun FloatingBottomNav(
                       painter = painterResource(id = tab.iconResId),
                       contentDescription = tab.label,
                       modifier = Modifier
-                        .size(23.dp)
+                        .size(22.dp)
                         .graphicsLayer {
                           scaleX = iconScale
                           scaleY = iconScale
@@ -289,20 +278,7 @@ fun FloatingBottomNav(
 
               Spacer(modifier = Modifier.height(2.dp))
 
-              // Text Label under icon
-              Text(
-                text = tab.label,
-                color = tabContentColor,
-                fontSize = 10.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-              )
-
-              Spacer(modifier = Modifier.height(3.dp))
-
-              // Glowing indicator line directly below label
+              // Glowing indicator dot/bar below icon
               Box(
                 modifier = Modifier
                   .height(2.5.dp)
@@ -310,7 +286,7 @@ fun FloatingBottomNav(
                   .graphicsLayer {
                     alpha = indicatorAlpha
                   }
-                  .clip(RoundedCornerShape(1.25.dp))
+                  .clip(CircleShape)
                   .background(
                     Brush.horizontalGradient(
                       colors = listOf(
