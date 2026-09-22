@@ -1431,12 +1431,21 @@ object CineHubScreen : Screen {
 
 @Composable
 private fun SectionHeader(title: String) {
-  Text(
-    text = title,
-    style = MaterialTheme.typography.titleMedium,
-    fontWeight = FontWeight.Bold,
-    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
-  )
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 10.dp)
+  ) {
+    Text(
+      text = title,
+      style = MaterialTheme.typography.titleMedium.copy(
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 0.2.sp
+      ),
+      color = Color.White,
+    )
+  }
 }
 
 @Composable
@@ -1571,90 +1580,15 @@ private fun MediaPosterCard(
   year: String,
   onClick: () -> Unit,
 ) {
-  Column(
-    modifier = Modifier
-      .width(140.dp)
-      .clickable { onClick() },
-  ) {
-    Card(
-      shape = RoundedCornerShape(16.dp),
-      modifier = Modifier
-        .width(140.dp)
-        .height(205.dp),
-    ) {
-      Box(modifier = Modifier.fillMaxSize()) {
-        if (!posterUrl.isNullOrBlank()) {
-          AsyncImage(
-            model = posterUrl,
-            contentDescription = title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-          )
-        } else {
-          Box(
-            modifier = Modifier
-              .fillMaxSize()
-              .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(
-              imageVector = Icons.Outlined.Movie,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.size(36.dp),
-            )
-          }
-        }
-
-        if (rating > 0.0) {
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = Color.Black.copy(alpha = 0.75f),
-            modifier = Modifier
-              .align(Alignment.TopEnd)
-              .padding(6.dp),
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-            ) {
-              Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                tint = Color(0xFFFFB800),
-                modifier = Modifier.size(11.dp),
-              )
-              Spacer(modifier = Modifier.width(2.dp))
-              Text(
-                text = String.format("%.1f", rating),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
-                fontSize = 10.sp,
-              )
-            }
-          }
-        }
-      }
-    }
-
-    Spacer(modifier = Modifier.height(6.dp))
-
-    Text(
-      text = title,
-      style = MaterialTheme.typography.labelMedium,
-      fontWeight = FontWeight.SemiBold,
-      maxLines = 1,
-      overflow = TextOverflow.Ellipsis,
-    )
-
-    if (year.isNotBlank()) {
-      Text(
-        text = year,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.outline,
-      )
-    }
-  }
+  xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamPosterCard(
+    title = title,
+    posterUrl = posterUrl,
+    subtitle = if (year.isNotBlank()) year else null,
+    rating = if (rating > 0.0) rating else null,
+    qualityBadge = "4K HDR",
+    cardWidth = 142.dp,
+    onClick = onClick
+  )
 }
 
 @Composable
