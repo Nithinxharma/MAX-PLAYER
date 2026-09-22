@@ -114,4 +114,21 @@ class ExtractorApiUnitTest {
         assertEquals(1, receivedLinks.size)
         assertEquals("https://direct.teststream.com/stream.mp4", receivedLinks[0].url)
     }
+
+    @Test
+    fun testDefaultExtractorsRegistration() {
+        val extractors = APIHolder.extractorApis
+        println("APIHolder extractors count = ${extractors.size}")
+        assertTrue("APIHolder should have registered default extractors, found: ${extractors.size}", extractors.size > 20)
+        assertNotNull("StreamWish should be registered", extractors.find { it.name.contains("StreamWish", ignoreCase = true) })
+        assertNotNull("FileMoon should be registered", extractors.find { it.name.contains("FileMoon", ignoreCase = true) })
+        assertNotNull("StreamTape should be registered", extractors.find { it.name.contains("StreamTape", ignoreCase = true) })
+        assertNotNull("MixDrop should be registered", extractors.find { it.name.contains("MixDrop", ignoreCase = true) })
+        assertNotNull("DoodStream should be registered", extractors.find { it.name.contains("DoodStream", ignoreCase = true) })
+        assertNotNull("Voe should be registered", extractors.find { it.name.contains("Voe", ignoreCase = true) })
+        assertNotNull("Rabbitstream should be registered", extractors.find { it.name.contains("Rabbitstream", ignoreCase = true) })
+        assertNotNull("VidSrc should be registered", extractors.find { it.name.contains("VidSrc", ignoreCase = true) })
+        assertNotNull("VidHide should be registered", extractors.find { it.name.contains("VidHide", ignoreCase = true) })
+        assertNotNull("OkRu should be registered", extractors.find { it.name.contains("OkRu", ignoreCase = true) })
+    }
 }

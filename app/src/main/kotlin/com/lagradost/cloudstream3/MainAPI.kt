@@ -1011,3 +1011,13 @@ fun bytesToHex(bytes: ByteArray): String {
     return String(hexChars)
 }
 
+fun capitalizeString(str: String): String {
+    return capitalizeStringNullable(str) ?: str
+}
+
+fun capitalizeStringNullable(str: String?): String? {
+    if (str == null) return null
+    return str.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.ROOT) else it.toString() }
+}
+
+

@@ -3,35 +3,25 @@ package xyz.mpv.rex.ui.browser.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,20 +29,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import xyz.mpv.rex.R
-import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
-
 import xyz.mpv.rex.ui.player.controls.components.glassSurface
 
 data class NavTabItem(
@@ -63,13 +46,14 @@ data class NavTabItem(
 )
 
 /**
- * Reimagined Glassmorphism Navigation Bar built strictly using player controls glass surface styling.
+ * Reimagined Glassmorphism Navigation Bar built strictly using REX Player Controls glass surface styling.
  *
- * Features:
- * - Direct `glassSurface` modifier matching REX Player Controls (directional inner highlight & drop shadow)
- * - Icons ONLY (text hidden) with individual player-control-like button glass capsules for selected tab
- * - Center MaxStream tab using `R.drawable.ic_max_stream_mark` (exact brand mark from CineHub top bar)
- * - Spring scale physics & glowing accent indicator
+ * Requirements:
+ * - Authentic `glassSurface` modifier matching player controls (directional inner highlights & soft shadows)
+ * - Icons ONLY (text hidden)
+ * - Uses exact CineHub brand mark `R.drawable.ic_max_stream_mark` without unnatural nested borders
+ * - Individual circular glass button state for selected tab
+ * - Spring physics for tactile feedback
  */
 @Composable
 fun FloatingBottomNav(
@@ -82,7 +66,7 @@ fun FloatingBottomNav(
 
   val isDark = isSystemInDarkTheme()
 
-  // Original player controls glass background
+  // Original REX player controls glass container background
   val containerBg = if (isDark) {
     Color(0x3B12131D)
   } else {
@@ -97,18 +81,18 @@ fun FloatingBottomNav(
   ) {
     Box(
       modifier = Modifier
-        .widthIn(max = 420.dp)
+        .widthIn(max = 440.dp)
         .height(62.dp)
         .glassSurface(
           shape = RoundedCornerShape(31.dp),
           backgroundColor = containerBg,
-          borderColor = Color.White.copy(alpha = 0.18f),
+          borderColor = Color.White.copy(alpha = 0.16f),
           borderWidth = 1.dp,
           innerHighlightColor = Color.White.copy(alpha = 0.30f),
-          innerHighlightBlur = 5.dp,
+          innerHighlightBlur = 6.dp,
           innerHighlightOffsetX = (-2).dp,
           innerHighlightOffsetY = (-2).dp,
-          innerShadowColor = Color.Black.copy(alpha = 0.40f),
+          innerShadowColor = Color.Black.copy(alpha = 0.35f),
           innerShadowBlur = 6.dp,
           innerShadowOffsetX = 2.dp,
           innerShadowOffsetY = 2.dp
@@ -118,18 +102,20 @@ fun FloatingBottomNav(
       Row(
         modifier = Modifier
           .fillMaxSize()
-          .padding(horizontal = 8.dp),
+          .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
       ) {
         tabs.forEachIndexed { index, tab ->
           val isSelected = selectedTab == index
           val isMaxStream = tab.id == "cinehub" || tab.id == "maxstream" ||
-              tab.iconResId != null || tab.label.contains("MaxStream", ignoreCase = true)
+              tab.iconResId == R.drawable.ic_max_stream_mark ||
+              tab.label.contains("MaxStream", ignoreCase = true) ||
+              tab.label.contains("CineHub", ignoreCase = true)
 
-          // Smooth spring scale physics
+          // Smooth spring scale animation
           val iconScale by animateFloatAsState(
-            targetValue = if (isSelected) 1.15f else 1.0f,
+            targetValue = if (isSelected) 1.12f else 1.0f,
             animationSpec = SpringSpec(
               dampingRatio = Spring.DampingRatioMediumBouncy,
               stiffness = Spring.StiffnessMediumLow
@@ -139,26 +125,26 @@ fun FloatingBottomNav(
 
           // Icon tint transition
           val tabContentColor by animateColorAsState(
-            targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.50f),
+            targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f),
             animationSpec = tween(durationMillis = 180),
             label = "tab_content_color"
           )
 
-          // Selected tab glass button modifier (Player controls style)
+          // Selected tab circular glass button (Player Controls style)
           val tabGlassModifier = if (isSelected) {
             Modifier.glassSurface(
-              shape = RoundedCornerShape(22.dp),
-              backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-              borderColor = Color.White.copy(alpha = 0.30f),
+              shape = CircleShape,
+              backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
+              borderColor = Color.White.copy(alpha = 0.35f),
               borderWidth = 1.dp,
-              innerHighlightColor = Color.White.copy(alpha = 0.40f),
+              innerHighlightColor = Color.White.copy(alpha = 0.45f),
               innerHighlightBlur = 4.dp,
-              innerHighlightOffsetX = (-1).dp,
-              innerHighlightOffsetY = (-1).dp,
+              innerHighlightOffsetX = (-1.5).dp,
+              innerHighlightOffsetY = (-1.5).dp,
               innerShadowColor = Color.Black.copy(alpha = 0.30f),
               innerShadowBlur = 4.dp,
-              innerShadowOffsetX = 1.dp,
-              innerShadowOffsetY = 1.dp
+              innerShadowOffsetX = 1.5.dp,
+              innerShadowOffsetY = 1.5.dp
             )
           } else {
             Modifier
@@ -168,10 +154,9 @@ fun FloatingBottomNav(
 
           Box(
             modifier = Modifier
-              .weight(1f)
-              .height(46.dp)
+              .size(46.dp)
               .then(tabGlassModifier)
-              .clip(RoundedCornerShape(22.dp))
+              .clip(CircleShape)
               .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true, radius = 24.dp),
@@ -180,90 +165,41 @@ fun FloatingBottomNav(
               .testTag("tab_${tab.id}"),
             contentAlignment = Alignment.Center
           ) {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center,
-            ) {
-              Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(if (isMaxStream) 34.dp else 24.dp)
-              ) {
-                if (isMaxStream) {
-                  // Center MaxStream logo badge with exact brand mark from CineHubScreen top bar
-                  Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                      .size(32.dp)
-                      .graphicsLayer {
-                        scaleX = iconScale
-                        scaleY = iconScale
-                      }
-                      .clip(CircleShape)
-                      .background(
-                        Brush.linearGradient(
-                          colors = listOf(
-                            Color(0xFF2E1236),
-                            Color(0xFF121B36)
-                          )
-                        )
-                      )
-                      .border(
-                        width = 1.2.dp,
-                        brush = Brush.linearGradient(
-                          colors = listOf(
-                            Color(0xFFFF2D92),
-                            Color(0xFFA855F7),
-                            Color(0xFF007AFF)
-                          )
-                        ),
-                        shape = CircleShape
-                      )
-                  ) {
-                    Image(
-                      painter = painterResource(id = tab.iconResId ?: R.drawable.ic_max_stream_mark),
-                      contentDescription = tab.label,
-                      modifier = Modifier.size(22.dp)
-                    )
+            if (isMaxStream) {
+              // Exact MaxStream brand mark used beside the name on CineHub top bar
+              Image(
+                painter = painterResource(id = R.drawable.ic_max_stream_mark),
+                contentDescription = tab.label,
+                modifier = Modifier
+                  .size(28.dp)
+                  .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
                   }
-                } else {
-                  // Standard tab icon
-                  if (tab.iconResId != null) {
-                    Image(
-                      painter = painterResource(id = tab.iconResId),
-                      contentDescription = tab.label,
-                      modifier = Modifier
-                        .size(22.dp)
-                        .graphicsLayer {
-                          scaleX = iconScale
-                          scaleY = iconScale
-                        }
-                    )
-                  } else if (tab.icon != null) {
-                    Icon(
-                      imageVector = tab.icon,
-                      contentDescription = tab.label,
-                      modifier = Modifier
-                        .size(22.dp)
-                        .graphicsLayer {
-                          scaleX = iconScale
-                          scaleY = iconScale
-                        },
-                      tint = tabContentColor
-                    )
+              )
+            } else if (tab.iconResId != null) {
+              Image(
+                painter = painterResource(id = tab.iconResId),
+                contentDescription = tab.label,
+                modifier = Modifier
+                  .size(24.dp)
+                  .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
                   }
-                }
-              }
-
-              if (isSelected && !isMaxStream) {
-                Spacer(modifier = Modifier.height(2.dp))
-                // Glowing indicator dot below standard tab icon
-                Box(
-                  modifier = Modifier
-                    .size(4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                )
-              }
+              )
+            } else if (tab.icon != null) {
+              Icon(
+                imageVector = tab.icon,
+                contentDescription = tab.label,
+                modifier = Modifier
+                  .size(24.dp)
+                  .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                  },
+                tint = tabContentColor
+              )
             }
           }
         }
@@ -271,5 +207,3 @@ fun FloatingBottomNav(
     }
   }
 }
-
-

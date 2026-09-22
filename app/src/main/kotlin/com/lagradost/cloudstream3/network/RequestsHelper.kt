@@ -37,6 +37,7 @@ fun buildDefaultClient(context: Context, ignoreSSL: Boolean = false): OkHttpClie
         .followRedirects(true)
         .followSslRedirects(true)
         .addInterceptor(CloudflareKiller())
+        .addInterceptor(DdosGuardKiller())
         .apply {
             if (ignoreSSL) {
                 ignoreAllSSLErrors()

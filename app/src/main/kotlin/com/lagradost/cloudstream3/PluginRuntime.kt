@@ -2,7 +2,7 @@ package com.lagradost.cloudstream3
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.util.Log
+import com.lagradost.api.Log
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import dalvik.system.DexClassLoader
 import okhttp3.Cookie
@@ -27,19 +27,10 @@ object AcraApplication {
 }
 
 object APIHolder {
-    init {
-        Log.i("APIHolder", "INSTANCE_IDENTITY: APIHolder initialized. identityHashCode=${System.identityHashCode(this)}")
-        runCatching {
-            addExtractor(com.lagradost.cloudstream3.extractors.Filesim())
-            addExtractor(com.lagradost.cloudstream3.extractors.GMPlayer())
-            addExtractor(com.lagradost.cloudstream3.extractors.Jeniusplay())
-            addExtractor(com.lagradost.cloudstream3.extractors.PixelDrain())
-            addExtractor(com.lagradost.cloudstream3.extractors.StreamSB())
-            addExtractor(com.lagradost.cloudstream3.extractors.Voe())
-        }
-    }
     val unixTimeMS: Long get() = System.currentTimeMillis()
     val unixTime: Long get() = unixTimeMS / 1000L
+
+    fun String.capitalize(): String = capitalizeString(this)
 
     val apis = java.util.concurrent.CopyOnWriteArrayList<MainAPI>()
     val allProviders = java.util.concurrent.CopyOnWriteArrayList<MainAPI>()
@@ -50,6 +41,13 @@ object APIHolder {
 
     var onApiAddedListener: ((MainAPI) -> Unit)? = null
     var onApiRemovedListener: ((MainAPI) -> Unit)? = null
+
+    init {
+        Log.i("APIHolder", "INSTANCE_IDENTITY: APIHolder initialized. identityHashCode=${System.identityHashCode(this)}")
+        runCatching {
+            com.lagradost.cloudstream3.extractors.DefaultExtractors.registerAll()
+        }
+    }
 
     fun addPlugin(api: MainAPI) {
         _registerMainApiCallsCount.incrementAndGet()
@@ -76,7 +74,7 @@ object APIHolder {
 
     fun addExtractor(api: ExtractorApi) {
         Log.i("ExtensionManager", "EXTENSION_LOAD: registerExtractorAPI called: ${api.name} (${api.mainUrl})")
-        val existing = extractorApis.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }
+        val existing = extractorApis.find { it.name.equals(api.name, ignoreCase = true) && (it.mainUrl.isBlank() || it.mainUrl == api.mainUrl) }
         if (existing != null) {
             extractorApis.remove(existing)
         }

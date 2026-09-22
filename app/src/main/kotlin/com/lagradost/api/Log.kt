@@ -3,27 +3,51 @@ package com.lagradost.api
 import android.util.Log as AndroidLog
 
 object Log {
-    fun d(tag: String, msg: String) {
-        AndroidLog.d(tag, msg)
+    fun d(tag: String, message: String) {
+        try {
+            AndroidLog.d(tag, message)
+        } catch (_: Throwable) {
+            println("[$tag][DEBUG] $message")
+        }
     }
 
-    fun i(tag: String, msg: String) {
-        AndroidLog.i(tag, msg)
+    fun i(tag: String, message: String) {
+        try {
+            AndroidLog.i(tag, message)
+        } catch (_: Throwable) {
+            println("[$tag][INFO] $message")
+        }
     }
 
-    fun w(tag: String, msg: String) {
-        AndroidLog.w(tag, msg)
+    fun w(tag: String, message: String) {
+        try {
+            AndroidLog.w(tag, message)
+        } catch (_: Throwable) {
+            println("[$tag][WARN] $message")
+        }
     }
 
-    fun e(tag: String, msg: String) {
-        AndroidLog.e(tag, msg)
+    fun w(tag: String, message: String, throwable: Throwable) {
+        try {
+            AndroidLog.w(tag, message, throwable)
+        } catch (_: Throwable) {
+            println("[$tag][WARN] $message: ${throwable.message}")
+        }
     }
 
-    fun e(tag: String, msg: String, tr: Throwable?) {
-        AndroidLog.e(tag, msg, tr)
+    fun e(tag: String, message: String) {
+        try {
+            AndroidLog.e(tag, message)
+        } catch (_: Throwable) {
+            println("[$tag][ERROR] $message")
+        }
     }
 
-    fun printStackTrace(t: Throwable?) {
-        t?.printStackTrace()
+    fun e(tag: String, message: String, throwable: Throwable) {
+        try {
+            AndroidLog.e(tag, message, throwable)
+        } catch (_: Throwable) {
+            println("[$tag][ERROR] $message: ${throwable.message}")
+        }
     }
 }

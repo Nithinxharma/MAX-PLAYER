@@ -3,6 +3,7 @@ package com.lagradost.cloudstream3.utils
 import android.util.Log
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.SubtitleFile
+import kotlinx.coroutines.CancellationException
 
 val INFER_TYPE: ExtractorLinkType = ExtractorLinkType.VIDEO
 
@@ -32,6 +33,10 @@ fun getPacked(string: String): String? {
 
 fun getAndUnpack(string: String): String {
     val packed = getPacked(string) ?: string
+    val jsUnpacked = JsUnpacker(packed).unpack()
+    if (!jsUnpacked.isNullOrBlank()) {
+        return jsUnpacked
+    }
     return unpack(packed)
 }
 
@@ -89,44 +94,125 @@ suspend fun newExtractorLink(
     return link
 }
 
+fun ExtractorApi.fixUrl(url: String): String {
+    if (url.startsWith("http") || url.startsWith("{\"")) {
+        return url
+    }
+    if (url.isEmpty()) {
+        return ""
+    }
+    return if (url.startsWith("//")) {
+        "https:$url"
+    } else if (url.startsWith('/')) {
+        mainUrl + url
+    } else {
+        "$mainUrl/$url"
+    }
+}
+
+fun getExtractorApiFromName(name: String): ExtractorApi? {
+    val apis = APIHolder.extractorApis
+    return apis.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: apis.firstOrNull()
+}
+
+fun requireReferer(name: String): Boolean {
+    return getExtractorApiFromName(name)?.requiresReferer ?: false
+}
+
+private val schemaStripRegex = Regex("""^(https?:)?//(www\.)?""")
+
+fun getExtractorForUrl(url: String): ExtractorApi? {
+    val cleanUrl = url.trim()
+    val compareUrl = cleanUrl.lowercase().replace(schemaStripRegex, "").trimEnd('/')
+    val extractors = APIHolder.extractorApis.toList().reversed()
+
+    // 1. Direct domain / prefix matching
+    for (extractor in extractors) {
+        val mainUrl = extractor.mainUrl
+        if (mainUrl.isBlank()) continue
+        val domains = mainUrl.split(",").map {
+            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/').trimEnd('*').trimEnd('.')
+        }
+        val isMatch = domains.any { domain ->
+            domain.isNotBlank() && (compareUrl.startsWith(domain) || compareUrl.contains(domain))
+        }
+        if (isMatch) return extractor
+    }
+
+    // 2. Levenshtein mirror matching
+    for (extractor in extractors) {
+        val cleanMain = extractor.mainUrl.lowercase().replace(schemaStripRegex, "").substringBefore('/').trimEnd('*').trimEnd('.')
+        val cleanHost = compareUrl.substringBefore('/')
+        if (cleanMain.isNotBlank() && cleanHost.isNotBlank()) {
+            val ratio = Levenshtein.partialRatio(cleanMain, cleanHost)
+            if (ratio > 80) return extractor
+        }
+    }
+
+    return null
+}
+
 suspend fun loadExtractor(
     url: String,
     referer: String? = null,
-    subtitleCallback: (SubtitleFile) -> Unit = {},
+    subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
     val cleanUrl = url.trim()
-    val cleanNoProtocol = cleanUrl.removePrefix("https://").removePrefix("http://").removePrefix("//").trimEnd('/')
+    val compareUrl = cleanUrl.lowercase().replace(schemaStripRegex, "").trimEnd('/')
     val extractors = APIHolder.extractorApis.toList().reversed()
     var extracted = false
+
+    // 1. Direct domain / prefix matching
     for (extractor in extractors) {
         val mainUrl = extractor.mainUrl
-        val isMatch = if (mainUrl.isBlank()) false else {
-            val domains = mainUrl.split(",").map {
-                it.trim().removePrefix("https://").removePrefix("http://").removePrefix("//").trimEnd('/')
-            }
-            domains.any { domain ->
-                domain.isNotBlank() && (cleanNoProtocol.startsWith(domain) || cleanNoProtocol.contains(domain))
-            }
+        if (mainUrl.isBlank()) continue
+        val domains = mainUrl.split(",").map {
+            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/')
+        }
+        val isMatch = domains.any { domain ->
+            domain.isNotBlank() && (compareUrl.startsWith(domain) || compareUrl.contains(domain))
         }
         if (isMatch) {
             try {
                 extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
                 extracted = true
-            } catch (t: Throwable) {
-                Log.w("ExtractorApi", "Extractor ${extractor.name} failed for $cleanUrl", t)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Log.w("ExtractorApi", "Extractor ${extractor.name} failed for $cleanUrl", e)
             }
         }
     }
 
-    // Fallback: If no matched extractor produced links, attempt extractors whose mainUrl is blank/generic
+    // 2. Levenshtein mirror matching (for mirrors like example.sx, example.to, example.me)
+    if (!extracted) {
+        for (extractor in extractors) {
+            val cleanMain = extractor.mainUrl.lowercase().replace(schemaStripRegex, "").substringBefore('/')
+            val cleanHost = compareUrl.substringBefore('/')
+            if (cleanMain.isNotBlank() && cleanHost.isNotBlank()) {
+                val ratio = Levenshtein.partialRatio(cleanMain, cleanHost)
+                if (ratio > 80) {
+                    try {
+                        extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
+                        extracted = true
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Fallback: Universal / generic extractors
     if (!extracted) {
         for (extractor in extractors) {
             if (extractor.mainUrl.isBlank()) {
                 try {
                     extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
                     extracted = true
-                } catch (_: Throwable) {}
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
             }
         }
     }
@@ -142,18 +228,39 @@ suspend fun loadExtractor(
     return loadExtractor(url, null, subtitleCallback, callback)
 }
 
+suspend fun loadExtractor(
+    url: String,
+    referer: String?,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    return loadExtractor(url, referer, {}, callback)
+}
+
+suspend fun loadExtractor(
+    url: String,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    return loadExtractor(url, null, {}, callback)
+}
+
 abstract class ExtractorApi {
     open val name: String = ""
     open val mainUrl: String = ""
     open val requiresReferer: Boolean = false
     open var sourcePlugin: String? = null
 
+    open suspend fun getUrl(url: String, referer: String? = null): List<ExtractorLink>? {
+        return emptyList()
+    }
+
     open suspend fun getUrl(
         url: String,
         referer: String? = null,
-        subtitleCallback: (SubtitleFile) -> Unit = {},
+        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) {}
+    ) {
+        getUrl(url, referer)?.forEach(callback)
+    }
 
     open suspend fun getSafeUrl(
         url: String,
@@ -163,7 +270,17 @@ abstract class ExtractorApi {
     ) {
         try {
             getUrl(url, referer, subtitleCallback, callback)
-        } catch (_: Throwable) {}
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.w("ExtractorApi", "Extractor $name failed for $url: ${e.message}")
+        }
+    }
+
+    open fun getExtractorUrl(id: String): String = id
+
+    companion object {
+        fun getExtractorForUrl(url: String): ExtractorApi? = com.lagradost.cloudstream3.utils.getExtractorForUrl(url)
     }
 }
+
 

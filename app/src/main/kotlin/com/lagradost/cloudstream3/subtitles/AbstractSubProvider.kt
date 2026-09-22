@@ -81,6 +81,12 @@ class SubtitleResource {
         file.deleteOnExit()
     }
 
+    companion object {
+        fun clearTempFiles(context: android.content.Context) {
+            com.lagradost.cloudstream3.utils.SubtitleUtils.clearSubtitleCache(context)
+        }
+    }
+
     suspend fun addZipUrl(
         url: String,
         nameGenerator: (String, File) -> String? = { _, _ -> null }
