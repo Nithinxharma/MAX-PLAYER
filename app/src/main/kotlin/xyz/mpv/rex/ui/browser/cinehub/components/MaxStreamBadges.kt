@@ -70,6 +70,7 @@ fun MaxStreamDubSubBadge(
         upper.contains("MULTI") -> Color(0xFF8B5CF6).copy(alpha = 0.90f) to Color.White
         upper.contains("DUB") -> Color(0xFFF59E0B).copy(alpha = 0.90f) to Color.Black
         upper.contains("SUB") -> Color(0xFF10B981).copy(alpha = 0.90f) to Color.White
+        upper.contains("RAW") -> Color(0xFF64748B).copy(alpha = 0.90f) to Color.White
         else -> Color.Black.copy(alpha = 0.75f) to Color.White
     }
 

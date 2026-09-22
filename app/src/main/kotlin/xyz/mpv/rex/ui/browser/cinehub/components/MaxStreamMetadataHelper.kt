@@ -154,8 +154,24 @@ object MaxStreamMetadataHelper {
     }
 
     /**
-     * Checks if item is newly released (released in current or previous calendar year).
+     * Determines highest available media quality with "HD" fallback if unknown.
      */
+    fun detectQualityOrDefault(item: Any?): String {
+        return detectQuality(item) ?: "HD"
+    }
+
+    /**
+     * Converts a TMDB image path or URL to the highest resolution fanart/backdrop available.
+     * Always selects original/w1280 landscape backdrop where applicable.
+     */
+    fun toHighResFanart(imageUrl: String?): String? {
+        if (imageUrl.isNullOrBlank()) return null
+        if (imageUrl.contains("image.tmdb.org")) {
+            // Replace /w500/ or /w780/ or /w300/ with /original/ or /w1280/ for maximum fidelity
+            return imageUrl.replace(Regex("""/w\d{3,4}/"""), "/original/")
+        }
+        return imageUrl
+    }
     fun detectIsNew(yearStr: String?): Boolean {
         if (yearStr.isNullOrBlank()) return false
         val yearNum = Regex("""\b(19\d{2}|20\d{2})\b""").find(yearStr)?.value?.toIntOrNull() ?: return false

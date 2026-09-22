@@ -497,13 +497,14 @@ object CineHubScreen : Screen {
             val detectedDubSub = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectDubSub(item)
             val isNew = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectIsNew(item.year?.toString())
 
+            val highResFanart = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.toHighResFanart(item.posterUrl)
             result.add(
               CarouselMovie(
                 id = item.id,
                 title = item.title,
                 subtitle = subtitle,
                 posterUrl = item.posterUrl,
-                backdropUrl = item.posterUrl,
+                backdropUrl = highResFanart ?: item.posterUrl,
                 rating = item.rating,
                 year = item.year?.toString(),
                 quality = detectedQuality,
@@ -535,7 +536,8 @@ object CineHubScreen : Screen {
               title = movie.title,
               subtitle = subtitle,
               posterUrl = movie.posterPath ?: movie.backdropPath,
-              backdropUrl = movie.backdropPath ?: movie.posterPath,
+              backdropUrl = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.toHighResFanart(movie.backdropPath)
+                ?: movie.backdropPath ?: movie.posterPath,
               rating = movie.userRating.takeIf { it > 0.0 },
               year = movie.premiered.take(4).takeIf { it.isNotBlank() },
               quality = detectedQuality,

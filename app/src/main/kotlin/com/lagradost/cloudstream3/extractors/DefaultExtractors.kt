@@ -210,10 +210,13 @@ object DefaultExtractors {
             // VCloud
             VCloud(),
 
-            // Direct Media Hosts: Mediafire, Krakenfiles, Gofile
+            // Direct Media Hosts: Mediafire, Krakenfiles, Gofile, ByseSX, GDMirrorbot, VidStack
             Mediafire(),
             Krakenfiles(),
-            Gofile()
+            Gofile(),
+            ByseSX(),
+            GDMirrorbot(),
+            VidStack()
         )
 
         for (extractor in extractors) {
