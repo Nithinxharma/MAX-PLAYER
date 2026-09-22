@@ -220,7 +220,7 @@ object MainScreen : Screen {
         }
         if (isCineHubTabVisible) {
           add(
-            VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_logo) {
+            VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
               CineHubScreen.Content()
             }
           )
