@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 import xyz.mpv.rex.R
@@ -205,31 +206,31 @@ object MainScreen : Screen {
     ) {
       buildList {
         add(
-          VisibleTab("home", homeLabel, Icons.Rounded.Home) {
-            android.util.Log.d("TRANSITION_TRACE", "Before FolderListScreen.Content()")
-            FolderListScreen.Content()
+          VisibleTab("home", homeLabel, icon = Icons.Rounded.Home) {
+            android.util.Log.d("TRANSITION_TRACE", "Before CineHubScreen.Content() on Home")
+            CineHubScreen.Content()
             androidx.compose.runtime.LaunchedEffect(Unit) {
-              android.util.Log.d("TRANSITION_TRACE", "After FolderListScreen.Content() enters composition")
+              android.util.Log.d("TRANSITION_TRACE", "After CineHubScreen.Content() enters composition")
             }
           }
         )
         if (isShortsEnabled) {
           add(
-            VisibleTab("shorts", shortsLabel, Icons.Rounded.SlowMotionVideo) {
+            VisibleTab("shorts", shortsLabel, icon = Icons.Rounded.SlowMotionVideo) {
               ShortsScreen().Content()
             }
           )
         }
         if (isCineHubTabVisible) {
           add(
-            VisibleTab("cinehub", cineHubLabel, Icons.Rounded.Movie) {
+            VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_logo) {
               CineHubScreen.Content()
             }
           )
         }
         if (enableTabCineTv) {
           add(
-            VisibleTab("cinetv", cineTvLabel, Icons.Rounded.Tv) {
+            VisibleTab("cinetv", cineTvLabel, icon = Icons.Rounded.Tv) {
               xyz.mpv.rex.cinetv.ui.LiveTvTabScreen(
                 searchQuery = "",
                 onPlayRequested = { streamUrl, title, meta ->
@@ -253,21 +254,21 @@ object MainScreen : Screen {
         }
         if (enableTabRecents) {
           add(
-            VisibleTab("recents", recentsLabel, Icons.Rounded.History) {
+            VisibleTab("recents", recentsLabel, icon = Icons.Rounded.History) {
               RecentlyPlayedScreen.Content()
             }
           )
         }
         if (enableTabPlaylists) {
           add(
-            VisibleTab("playlists", playlistsLabel, Icons.AutoMirrored.Rounded.PlaylistPlay) {
+            VisibleTab("playlists", playlistsLabel, icon = Icons.AutoMirrored.Rounded.PlaylistPlay) {
               PlaylistScreen.Content()
             }
           )
         }
         if (enableTabNetwork) {
           add(
-            VisibleTab("network", networkLabel, Icons.Rounded.Language) {
+            VisibleTab("network", networkLabel, icon = Icons.Rounded.Language) {
               NetworkStreamingScreen.Content()
             }
           )
@@ -391,7 +392,7 @@ object MainScreen : Screen {
           ) {
             if (enableModernGlassUI) {
               FloatingBottomNav(
-                tabs = visibleTabs.map { NavTabItem(id = it.id, label = it.label, icon = it.icon) },
+                tabs = visibleTabs.map { NavTabItem(id = it.id, label = it.label, icon = it.icon, iconResId = it.iconResId) },
                 selectedTab = selectedTab,
                 onTabSelected = { index ->
                   haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -422,7 +423,17 @@ object MainScreen : Screen {
                         selectedTab = index
                       }
                     },
-                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    icon = {
+                      if (tab.iconResId != null) {
+                        androidx.compose.foundation.Image(
+                          painter = androidx.compose.ui.res.painterResource(tab.iconResId),
+                          contentDescription = tab.label,
+                          modifier = Modifier.size(24.dp)
+                        )
+                      } else if (tab.icon != null) {
+                        Icon(tab.icon, contentDescription = tab.label)
+                      }
+                    },
                     label = { Text(tab.label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                     alwaysShowLabel = false
                   )
@@ -532,6 +543,7 @@ val LocalNavigationBarHeight = compositionLocalOf { 0.dp }
 private data class VisibleTab(
   val id: String,
   val label: String,
-  val icon: androidx.compose.ui.graphics.vector.ImageVector,
+  val icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+  val iconResId: Int? = null,
   val content: @Composable () -> Unit
 )

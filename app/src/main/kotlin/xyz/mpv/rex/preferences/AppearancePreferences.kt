@@ -21,7 +21,7 @@ class AppearancePreferences(
   preferenceStore: PreferenceStore,
 ) {
   val darkMode = preferenceStore.getEnum("dark_mode", DarkMode.Dark)
-  val appTheme = preferenceStore.getEnum("app_theme", AppTheme.Default)
+  val appTheme = preferenceStore.getEnum("app_theme", AppTheme.Dynamic)
   val appLanguage = preferenceStore.getString("app_language", "")
   val onboardingCompleted = preferenceStore.getBoolean("onboarding_completed", false)
   val materialYou = preferenceStore.getBoolean("material_you", true)
