@@ -942,3 +942,72 @@ fun String?.toRatingInt(): Int? {
     return (this.toDoubleOrNull()?.times(10))?.toInt()
 }
 
+fun fixTitle(title: String): String {
+    return title.trim().replace(Regex("""\s+"""), " ")
+}
+
+fun getBaseUrl(url: String): String {
+    return try {
+        val uri = java.net.URI(url)
+        val scheme = uri.scheme ?: "https"
+        val host = uri.host ?: url.substringBefore("/").substringBefore("?")
+        "$scheme://$host"
+    } catch (_: Throwable) {
+        if (url.startsWith("http")) url.substringBefore("/", url) else url
+    }
+}
+
+@JvmName("getBaseUrlExt")
+fun String.getBaseUrl(): String = getBaseUrl(this)
+
+fun updateUrl(url: String): String = url
+
+fun SearchResponse.addPoster(url: String?, headers: Map<String, String>? = null) {
+    if (url.isNullOrBlank()) return
+    this.posterUrl = url
+    if (headers != null) {
+        this.posterHeaders = headers
+    }
+}
+
+fun SearchResponse.addQuality(quality: String?) {
+    if (quality.isNullOrBlank()) return
+    this.quality = getQualityFromString(quality)
+}
+
+fun SearchResponse.addQuality(quality: SearchQuality?) {
+    if (quality == null) return
+    this.quality = quality
+}
+
+fun LoadResponse.addPoster(url: String?, headers: Map<String, String>? = null) {
+    if (url.isNullOrBlank()) return
+    this.posterUrl = url
+    if (headers != null) {
+        this.posterHeaders = headers
+    }
+}
+
+fun hexToBytes(hex: String): ByteArray {
+    val cleanHex = hex.trim().replace(" ", "").lowercase()
+    val len = cleanHex.length
+    val data = ByteArray(len / 2)
+    var i = 0
+    while (i < len) {
+        data[i / 2] = ((Character.digit(cleanHex[i], 16) shl 4) + Character.digit(cleanHex[i + 1], 16)).toByte()
+        i += 2
+    }
+    return data
+}
+
+fun bytesToHex(bytes: ByteArray): String {
+    val hexArray = "0123456789abcdef".toCharArray()
+    val hexChars = CharArray(bytes.size * 2)
+    for (j in bytes.indices) {
+        val v = bytes[j].toInt() and 0xFF
+        hexChars[j * 2] = hexArray[v ushr 4]
+        hexChars[j * 2 + 1] = hexArray[v and 0x0F]
+    }
+    return String(hexChars)
+}
+

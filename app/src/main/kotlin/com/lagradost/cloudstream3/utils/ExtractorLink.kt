@@ -96,3 +96,43 @@ data class ExtractorLinkPlayList(
     audioTracks = audioTracks
 )
 
+data class DrmExtractorLink(
+    override val source: String,
+    override val name: String,
+    override val url: String,
+    override var referer: String = "",
+    override var quality: Int = Qualities.Unknown.value,
+    override var type: ExtractorLinkType = ExtractorLinkType.VIDEO,
+    override var headers: Map<String, String> = mapOf(),
+    override var extractorData: String? = null,
+    val kid: String? = null,
+    val key: String? = null,
+    val kType: String? = null
+) : ExtractorLink(
+    source = source,
+    name = name,
+    url = url,
+    referer = referer,
+    quality = quality,
+    type = type,
+    headers = headers,
+    extractorData = extractorData
+)
+
+suspend fun newDrmExtractorLink(
+    source: String,
+    name: String,
+    url: String,
+    type: ExtractorLinkType = ExtractorLinkType.VIDEO,
+    initializer: suspend DrmExtractorLink.() -> Unit = {}
+): DrmExtractorLink {
+    val link = DrmExtractorLink(
+        source = source,
+        name = name,
+        url = url,
+        type = type
+    )
+    initializer(link)
+    return link
+}
+
