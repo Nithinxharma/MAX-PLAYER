@@ -55,6 +55,7 @@ import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerStateManager
 import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
 import xyz.mpv.rex.ui.splash.SplashScreen
 import xyz.mpv.rex.ui.welcome.WelcomeScreen
+import xyz.mpv.rex.ui.auth.LoginScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -208,6 +209,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
     val isMainScreen = currentRoute == MainScreen
     val isWelcomeScreen = currentRoute == WelcomeScreen
     val isSplashScreen = currentRoute == SplashScreen
+    val isLoginScreen = currentRoute == LoginScreen
     
     val targetBottomPadding = if (isMainScreen && !hideNavigationBar) {
       if (miniPlayerState.isExpanded) 8.dp else 88.dp
@@ -218,7 +220,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
       label = "miniPlayerBottomPadding"
     )
 
-    val targetMiniPlayerHeight = if (miniPlayerState.isPlaybackActive && !isSplashScreen) MiniPlayerDefaults.CompactHeight else 0.dp
+    val targetMiniPlayerHeight = if (miniPlayerState.isPlaybackActive && !isSplashScreen && !isLoginScreen) MiniPlayerDefaults.CompactHeight else 0.dp
     val miniPlayerHeight by androidx.compose.animation.core.animateDpAsState(
       targetValue = targetMiniPlayerHeight,
       animationSpec = tween(220),
@@ -227,7 +229,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
     val navBarHeight = if (isMainScreen && !hideNavigationBar) 80.dp else 0.dp
     val totalNavigationBarHeight = navBarHeight + miniPlayerHeight
 
-    BackHandler(enabled = isMainScreen || isWelcomeScreen || isSplashScreen) {
+    BackHandler(enabled = isMainScreen || isWelcomeScreen || isSplashScreen || isLoginScreen) {
       (context as? Activity)?.moveTaskToBack(true)
     }
 

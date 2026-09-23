@@ -10,6 +10,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
 import xyz.mpv.rex.database.repository.VideoMetadataCacheRepository
 import xyz.mpv.rex.database.repository.HybridMediaIndexRepository
 import xyz.mpv.rex.di.DatabaseModule
@@ -114,6 +118,45 @@ class App : Application() {
     applicationScope.launch {
       runCatching {
         metadataCache.performMaintenance()
+      }
+    }
+
+    // Firebase Integration Verification
+    verifyFirebaseIntegration()
+  }
+
+  private fun verifyFirebaseIntegration() {
+    applicationScope.launch(Dispatchers.IO) {
+      try {
+        val firebaseApp = FirebaseApp.getInstance()
+        Log.d("FirebaseTest", "[Firebase] Initialized (${firebaseApp.name})")
+
+        val auth = FirebaseAuth.getInstance()
+        Log.d("FirebaseTest", "[FirebaseAuth] Initialized (Current User: ${auth.currentUser?.uid ?: "Anonymous/None"})")
+
+        val firestore = FirebaseFirestore.getInstance()
+        Log.d("FirebaseTest", "[Firestore] Connected")
+
+        firestore.collection("users").document("test_user")
+          .get()
+          .addOnSuccessListener { document ->
+            if (document != null && document.exists()) {
+              Log.d("FirebaseTest", "[Firestore] Read Success")
+              val data = document.data
+              Log.d("FirebaseTest", "[Firestore] Document Data = $data")
+              Log.d("FirebaseTest", "[Firestore] name: ${document.getString("name")}")
+              Log.d("FirebaseTest", "[Firestore] email: ${document.getString("email")}")
+              Log.d("FirebaseTest", "[Firestore] premium: ${document.get("premium")}")
+              Log.d("FirebaseTest", "[Firestore] createdAt: ${document.get("createdAt")}")
+            } else {
+              Log.d("FirebaseTest", "[Firestore] Document Missing")
+            }
+          }
+          .addOnFailureListener { exception ->
+            Log.e("FirebaseTest", "[Firestore] Connection Failed: ${exception.message}", exception)
+          }
+      } catch (e: Throwable) {
+        Log.e("FirebaseTest", "[Firestore] Connection Failed: ${e.message}", e)
       }
     }
   }

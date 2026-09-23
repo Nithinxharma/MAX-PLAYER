@@ -3,6 +3,10 @@ package xyz.mpv.rex.ui.splash
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -38,20 +42,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
+import xyz.mpv.rex.auth.AuthManager
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.presentation.Screen
+import xyz.mpv.rex.ui.auth.LoginScreen
 import xyz.mpv.rex.ui.browser.MainScreen
 import xyz.mpv.rex.ui.theme.MaxStreamBgDark
 import xyz.mpv.rex.ui.utils.LocalBackStack
-import xyz.mpv.rex.ui.welcome.WelcomeScreen
 
 /**
- * Premium cinematic MAX STREAM splash screen with Lottie Animation:
+ * Premium cinematic MAX STREAM splash screen:
  * 1. Deep OLED dark background (#050505)
- * 2. Lottie animation rendered seamlessly from assets/splash_animation.json
- * 3. Soft ambient background glow synchronized with animation
+ * 2. High-energy pulse & breathing ribbon glow
+ * 3. Lottie animation rendered from assets/splash_animation.json
  * 4. Illuminated typography "MAX STREAM" ascending smoothly
- * 5. Fluid fade transition into MainScreen or WelcomeScreen
+ * 5. ~2.5s duration then fluid transition into Auth Check (Authenticated -> Home / Unauthenticated -> Login)
  */
 @Serializable
 object SplashScreen : Screen {
@@ -60,6 +65,7 @@ object SplashScreen : Screen {
   override fun Content() {
     val backstack = LocalBackStack.current
     val appearancePreferences = koinInject<AppearancePreferences>()
+    val authManager = koinInject<AuthManager>()
 
     // Load Lottie Composition from assets/splash_animation.json
     val composition by rememberLottieComposition(
@@ -69,10 +75,31 @@ object SplashScreen : Screen {
       composition = composition,
       iterations = 1,
       isPlaying = true,
-      speed = 1.0f
+      speed = 1.15f
     )
 
-    // Animation Drivers for typography & smooth exit
+    // Breathing & Pulse Infinite Transitions
+    val infiniteTransition = rememberInfiniteTransition(label = "splash_breathing")
+    val energyPulse by infiniteTransition.animateFloat(
+      initialValue = 0.92f,
+      targetValue = 1.08f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+        repeatMode = RepeatMode.Reverse
+      ),
+      label = "energyPulse"
+    )
+    val ribbonGlowAlpha by infiniteTransition.animateFloat(
+      initialValue = 0.6f,
+      targetValue = 0.95f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(durationMillis = 900, easing = LinearEasing),
+        repeatMode = RepeatMode.Reverse
+      ),
+      label = "ribbonGlow"
+    )
+
+    // Entrance and Exit Drivers
     val backgroundGlowAlpha = remember { Animatable(0f) }
     val backgroundGlowScale = remember { Animatable(0.85f) }
     val textAlpha = remember { Animatable(0f) }
@@ -82,68 +109,72 @@ object SplashScreen : Screen {
 
     LaunchedEffect(Unit) {
       // 1. Soft atmospheric glow emerges
-      delay(300)
+      delay(200)
       launch {
         backgroundGlowAlpha.animateTo(
-          targetValue = 0.85f,
-          animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
+          targetValue = 0.9f,
+          animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
         )
       }
       launch {
         backgroundGlowScale.animateTo(
-          targetValue = 1.15f,
-          animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing)
+          targetValue = 1.2f,
+          animationSpec = tween(durationMillis = 1800, easing = FastOutSlowInEasing)
         )
       }
 
-      // 2. MAX STREAM typography smoothly illuminates as logo forms
-      delay(800)
+      // 2. MAX STREAM typography smoothly illuminates
+      delay(600)
       launch {
         textAlpha.animateTo(
           targetValue = 1f,
-          animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
+          animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
         )
       }
       launch {
         textOffsetY.animateTo(
           targetValue = 0f,
-          animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
+          animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing)
         )
       }
       launch {
         taglineAlpha.animateTo(
-          targetValue = 0.75f,
-          animationSpec = tween(durationMillis = 700, delayMillis = 150, easing = FastOutSlowInEasing)
+          targetValue = 0.85f,
+          animationSpec = tween(durationMillis = 600, delayMillis = 100, easing = FastOutSlowInEasing)
         )
       }
     }
 
-    // Navigate when Lottie reaches end (or safety timeout)
+    // Auth Check & Navigation Trigger after ~2.5s
+    fun proceedToNextScreen() {
+      val isAuthenticated = authManager.isAuthenticated
+      val targetScreen: Screen = if (isAuthenticated) {
+        MainScreen
+      } else {
+        LoginScreen
+      }
+      backstack.clear()
+      backstack.add(targetScreen)
+    }
+
+    // Navigate when animation reaches completion (~2.4s)
     LaunchedEffect(lottieProgress) {
-      if (lottieProgress >= 0.98f) {
-        delay(250)
+      if (lottieProgress >= 0.95f) {
+        delay(150)
         exitAlpha.animateTo(
           targetValue = 0f,
-          animationSpec = tween(durationMillis = 350, easing = LinearEasing)
+          animationSpec = tween(durationMillis = 300, easing = LinearEasing)
         )
-
-        val hasCompletedOnboarding = appearancePreferences.onboardingCompleted.get()
-        val targetScreen = if (hasCompletedOnboarding) MainScreen else WelcomeScreen
-
-        backstack.clear()
-        backstack.add(targetScreen)
+        proceedToNextScreen()
       }
     }
 
-    // Fallback safety timer in case composition is delayed
+    // Safety timer for exactly 2.5s
     LaunchedEffect(Unit) {
-      delay(4500)
+      delay(2500)
       if (exitAlpha.value > 0.1f) {
-        exitAlpha.animateTo(0f, tween(300))
-        val hasCompletedOnboarding = appearancePreferences.onboardingCompleted.get()
-        val targetScreen = if (hasCompletedOnboarding) MainScreen else WelcomeScreen
-        backstack.clear()
-        backstack.add(targetScreen)
+        exitAlpha.animateTo(0f, tween(250))
+        proceedToNextScreen()
       }
     }
 
@@ -154,19 +185,20 @@ object SplashScreen : Screen {
         .graphicsLayer { alpha = exitAlpha.value },
       contentAlignment = Alignment.Center
     ) {
-      // Atmospheric Soft Glow Backdrop
+      // Atmospheric Energy Pulse Glow Backdrop
       Box(
         modifier = Modifier
           .size(360.dp)
-          .scale(backgroundGlowScale.value)
-          .alpha(backgroundGlowAlpha.value)
+          .scale(backgroundGlowScale.value * energyPulse)
+          .alpha(backgroundGlowAlpha.value * ribbonGlowAlpha)
           .blur(64.dp)
           .background(
             Brush.radialGradient(
               colors = listOf(
-                Color(0x5500A2FF),
-                Color(0x356366F1),
-                Color(0x18EC4899),
+                Color(0xFFFF5F1F),
+                Color(0xFFFF2D55),
+                Color(0xFF7B61FF),
+                Color(0xFF00C2FF),
                 Color.Transparent
               )
             )
@@ -176,9 +208,11 @@ object SplashScreen : Screen {
       Column(
         horizontalAlignment = Alignment.CenterHorizontally
       ) {
-        // Lottie Animation Container
+        // Lottie Animation Container with breathing scale
         Box(
-          modifier = Modifier.size(240.dp),
+          modifier = Modifier
+            .size(240.dp)
+            .scale(energyPulse),
           contentAlignment = Alignment.Center
         ) {
           LottieAnimation(

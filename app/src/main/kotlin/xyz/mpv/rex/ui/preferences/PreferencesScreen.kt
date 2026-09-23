@@ -1,5 +1,15 @@
 package xyz.mpv.rex.ui.preferences
-import xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute
+import xyz.mpv.rex.auth.AuthManager
+import xyz.mpv.rex.ui.profile.ProfileScreen
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import org.koin.compose.koinInject
+import coil.compose.AsyncImage
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.sp
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -101,6 +111,17 @@ object PreferencesScreen : Screen {
       },
     ) { padding ->
       val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
+      val authManager = koinInject<AuthManager>()
+      val userProfile by authManager.userProfile.collectAsState()
+      val userRole by authManager.userRole.collectAsState()
+      val isAdmin by authManager.isAdmin.collectAsState()
+      val isPremium by authManager.isPremium.collectAsState()
+      val currentUser = authManager.currentUser
+
+      val displayName = userProfile?.name ?: currentUser?.displayName ?: "Guest User"
+      val email = userProfile?.email ?: currentUser?.email ?: "Tap to sign in or view profile"
+      val photoUrl = userProfile?.photo ?: currentUser?.photoUrl?.toString()
+
       ProvidePreferenceLocals {
         LazyColumn(
           modifier = Modifier
@@ -109,6 +130,93 @@ object PreferencesScreen : Screen {
           contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = navBarHeight + 24.dp),
           verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+          // Account & Profile Card
+          item {
+            Surface(
+              onClick = { backstack.add(ProfileScreen) },
+              shape = RoundedCornerShape(20.dp),
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp)),
+              color = MaterialTheme.colorScheme.surfaceContainerHigh,
+              border = BorderStroke(1.dp, if (isAdmin) Color(0xFFFFB800).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.12f)),
+              tonalElevation = 2.dp,
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                if (!photoUrl.isNullOrBlank()) {
+                  AsyncImage(
+                    model = photoUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                      .size(44.dp)
+                      .clip(CircleShape)
+                  )
+                } else {
+                  Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(44.dp)
+                  ) {
+                    Box(contentAlignment = Alignment.Center) {
+                      Icon(
+                        imageVector = Icons.Outlined.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                      )
+                    }
+                  }
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                      text = displayName,
+                      style = MaterialTheme.typography.titleMedium,
+                      fontWeight = FontWeight.Bold,
+                      color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (isAdmin) {
+                      Spacer(modifier = Modifier.width(6.dp))
+                      Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFFFB800).copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, Color(0xFFFFB800).copy(alpha = 0.6f))
+                      ) {
+                        Text(
+                          text = "ADMIN",
+                          color = Color(0xFFFFB800),
+                          fontSize = 9.sp,
+                          fontWeight = FontWeight.Bold,
+                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                      }
+                    }
+                  }
+                  Spacer(modifier = Modifier.height(2.dp))
+                  Text(
+                    text = email,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+
+                Icon(
+                  imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.outline,
+                )
+              }
+            }
+          }
+
           // Search bar - full width, prominent placement
           item {
             Surface(

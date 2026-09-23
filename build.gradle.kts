@@ -5,4 +5,5 @@ plugins {
   alias(libs.plugins.kotlinx.serialization) apply false
   alias(libs.plugins.ksp) apply false
   alias(libs.plugins.room) apply false
+  id("com.google.gms.google-services") version "4.4.3" apply false
 }

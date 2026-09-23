@@ -6,6 +6,7 @@ plugins {
   alias(libs.plugins.kotlinx.serialization)
   alias(libs.plugins.ksp)
   alias(libs.plugins.room)
+  id("com.google.gms.google-services")
 }
 
 android {
@@ -219,6 +220,12 @@ dependencies {
   implementation(libs.reorderable)
   implementation(libs.compose.markdown)
   implementation(libs.lottie.compose)
+
+  // Firebase & Google Auth
+  implementation(platform("com.google.firebase:firebase-bom:33.10.0"))
+  implementation("com.google.firebase:firebase-auth")
+  implementation("com.google.firebase:firebase-firestore")
+  implementation("com.google.android.gms:play-services-auth:21.3.0")
 
   // Unit Testing
   testImplementation(libs.junit)
