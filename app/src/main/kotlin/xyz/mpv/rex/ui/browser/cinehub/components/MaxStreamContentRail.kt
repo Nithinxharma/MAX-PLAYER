@@ -72,6 +72,9 @@ fun MaxStreamContentRail(
 ) {
     if (items.isEmpty()) return
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
     val listState = rememberLazyListState()
 
     Column(
@@ -99,13 +102,13 @@ fun MaxStreamContentRail(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.2.sp
                     ),
-                    color = MaxStreamTheme.TextPrimary
+                    color = primaryTextColor
                 )
 
                 if (!categoryBadge.isNullOrBlank()) {
                     Surface(
                         shape = MaxStreamTheme.BadgeShape,
-                        color = MaxStreamTheme.GlassSurfaceActive
+                        color = if (isDark) MaxStreamTheme.GlassSurfaceActive else MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         Text(
                             text = categoryBadge,
@@ -113,7 +116,7 @@ fun MaxStreamContentRail(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
                             ),
-                            color = MaxStreamTheme.ElectricCyan,
+                            color = if (isDark) MaxStreamTheme.ElectricCyan else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -142,12 +145,12 @@ fun MaxStreamContentRail(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         ),
-                        color = if (isSeeAllFocused) MaxStreamTheme.CrimsonAccent else MaxStreamTheme.TextSecondary
+                        color = if (isSeeAllFocused) MaxStreamTheme.CrimsonAccent else secondaryTextColor
                     )
                     Icon(
                         imageVector = Icons.Filled.ChevronRight,
                         contentDescription = "See all $title",
-                        tint = if (isSeeAllFocused) MaxStreamTheme.CrimsonAccent else MaxStreamTheme.TextSecondary,
+                        tint = if (isSeeAllFocused) MaxStreamTheme.CrimsonAccent else secondaryTextColor,
                         modifier = Modifier.size(16.dp)
                     )
                 }

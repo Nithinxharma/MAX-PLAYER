@@ -3871,13 +3871,19 @@ fun ProviderSelectorSheet(
     onProvidersChanged: () -> Unit
 ) {
     val registeredProviders by providerRegistry.registeredProviders.collectAsState()
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val containerBg = if (isDark) Color(0xF210111A) else MaterialTheme.colorScheme.surface
+    val textColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val subTextColor = if (isDark) Color.White.copy(alpha = 0.70f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val itemBg = if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    val itemBorder = if (isDark) Color.White.copy(alpha = 0.10f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = Color(0xF210111A),
-        dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0x66FFFFFF)) }
+        containerColor = containerBg,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = if (isDark) Color(0x66FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) }
     ) {
         Column(
             modifier = Modifier
@@ -3897,12 +3903,12 @@ fun ProviderSelectorSheet(
                         text = "Extension Providers",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
+                        color = textColor
                     )
                     Text(
                         text = "Enable or disable providers to optimize home loading speed",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.70f)
+                        color = subTextColor
                     )
                 }
 
@@ -3936,7 +3942,7 @@ fun ProviderSelectorSheet(
                     Text(
                         text = "No providers currently registered. Install or reload extensions.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.60f)
+                        color = subTextColor
                     )
                 }
             } else {
@@ -3949,10 +3955,10 @@ fun ProviderSelectorSheet(
 
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = if (isEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.05f),
+                            color = if (isEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else itemBg,
                             border = BorderStroke(
                                 1.dp,
-                                if (isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.10f)
+                                if (isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else itemBorder
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -3984,12 +3990,12 @@ fun ProviderSelectorSheet(
                                             text = provider.name,
                                             style = MaterialTheme.typography.bodyLarge,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            color = textColor
                                         )
                                         Text(
                                             text = "ID: ${provider.id} • ${if (isEnabled) "Active" else "Disabled"}",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Color.White.copy(alpha = 0.55f)
+                                            color = subTextColor
                                         )
                                     }
                                 }

@@ -138,6 +138,15 @@ fun CineHubSearchScreen(
         }
     }
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val bgColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
+    val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+    val mutedTextColor = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.outline
+    val glassSurface = if (isDark) MaxStreamTheme.GlassSurface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+    val elevatedSurface = if (isDark) MaxStreamTheme.ElevatedSurface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    val glassBorder = if (isDark) Color.White.copy(alpha = 0.18f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -148,7 +157,7 @@ fun CineHubSearchScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         ),
-                        color = Color.White,
+                        color = primaryTextColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -162,7 +171,7 @@ fun CineHubSearchScreen(
                             Icon(
                                 Icons.Rounded.ArrowBack,
                                 contentDescription = "Back to search results",
-                                tint = Color.White
+                                tint = primaryTextColor
                             )
                         }
                     } else if (onBack != null) {
@@ -173,17 +182,17 @@ fun CineHubSearchScreen(
                             Icon(
                                 Icons.Rounded.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White
+                                tint = primaryTextColor
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaxStreamTheme.AbyssBackground
+                    containerColor = bgColor
                 )
             )
         },
-        containerColor = MaxStreamTheme.AbyssBackground
+        containerColor = bgColor
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -238,8 +247,8 @@ fun CineHubSearchScreen(
                     // Glass Capsule Search Input
                     Surface(
                         shape = MaxStreamTheme.CapsuleShape,
-                        color = MaxStreamTheme.GlassSurface,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                        color = glassSurface,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, glassBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -263,7 +272,7 @@ fun CineHubSearchScreen(
                                     Text(
                                         "Search movies, shows, anime & actors…",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                                        color = MaxStreamTheme.TextMuted
+                                        color = mutedTextColor
                                     )
                                 },
                                 singleLine = true,
@@ -280,8 +289,8 @@ fun CineHubSearchScreen(
                                     focusedContainerColor = Color.Transparent,
                                     unfocusedContainerColor = Color.Transparent,
                                     cursorColor = MaxStreamTheme.CrimsonAccent,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
+                                    focusedTextColor = primaryTextColor,
+                                    unfocusedTextColor = primaryTextColor
                                 )
                             )
 
@@ -295,7 +304,7 @@ fun CineHubSearchScreen(
                                     Icon(
                                         Icons.Default.Close,
                                         contentDescription = "Clear search",
-                                        tint = Color.White.copy(alpha = 0.7f),
+                                        tint = primaryTextColor.copy(alpha = 0.7f),
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -308,7 +317,7 @@ fun CineHubSearchScreen(
                                     Icon(
                                         Icons.Default.Mic,
                                         contentDescription = "Voice search",
-                                        tint = MaxStreamTheme.TextSecondary,
+                                        tint = secondaryTextColor,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -326,8 +335,8 @@ fun CineHubSearchScreen(
                         items(suggestions) { chip ->
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = MaxStreamTheme.ElevatedSurface,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+                                color = elevatedSurface,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, glassBorder),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable {
@@ -341,7 +350,7 @@ fun CineHubSearchScreen(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold
                                     ),
-                                    color = MaxStreamTheme.TextSecondary,
+                                    color = secondaryTextColor,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
@@ -472,6 +481,13 @@ fun MediaDetailView(
     activeEpisode: String?,
     onPlayClick: (dataUrl: String, title: String?) -> Unit
 ) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val primaryTextColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+    val mutedTextColor = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.outline
+    val elevatedSurface = if (isDark) MaxStreamTheme.ElevatedSurface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    val glassBorder = if (isDark) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -486,8 +502,8 @@ fun MediaDetailView(
             ) {
                 Surface(
                     shape = MaxStreamTheme.CardShape,
-                    color = MaxStreamTheme.ElevatedSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                    color = elevatedSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, glassBorder),
                     modifier = Modifier
                         .width(115.dp)
                         .aspectRatio(2f / 3f)
@@ -504,7 +520,7 @@ fun MediaDetailView(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Movie, contentDescription = null, tint = MaxStreamTheme.TextMuted)
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = mutedTextColor)
                         }
                     }
                 }
@@ -516,7 +532,7 @@ fun MediaDetailView(
                             fontWeight = FontWeight.Black,
                             fontSize = 20.sp
                         ),
-                        color = Color.White
+                        color = primaryTextColor
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(
@@ -525,12 +541,12 @@ fun MediaDetailView(
                     ) {
                         Surface(
                             shape = MaxStreamTheme.BadgeShape,
-                            color = MaxStreamTheme.GlassSurfaceActive
+                            color = if (isDark) MaxStreamTheme.GlassSurfaceActive else MaterialTheme.colorScheme.secondaryContainer
                         ) {
                             Text(
                                 text = details.apiName,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaxStreamTheme.ElectricCyan,
+                                color = if (isDark) MaxStreamTheme.ElectricCyan else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -538,7 +554,7 @@ fun MediaDetailView(
                             Text(
                                 text = "• ${details.year}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaxStreamTheme.TextSecondary
+                                color = secondaryTextColor
                             )
                         }
                     }
@@ -549,7 +565,7 @@ fun MediaDetailView(
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
                             maxLines = 4,
                             overflow = TextOverflow.Ellipsis,
-                            color = Color.White.copy(alpha = 0.80f)
+                            color = secondaryTextColor
                         )
                     }
                 }
@@ -561,7 +577,7 @@ fun MediaDetailView(
             if (isExtracting) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = MaxStreamTheme.MidnightSurface,
+                    color = if (isDark) MaxStreamTheme.MidnightSurface else MaterialTheme.colorScheme.surfaceVariant,
                     border = androidx.compose.foundation.BorderStroke(1.dp, MaxStreamTheme.CrimsonAccent.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -577,7 +593,7 @@ fun MediaDetailView(
                         Text(
                             text = "Resolving high-speed stream links…",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White
+                            color = primaryTextColor
                         )
                     }
                 }
@@ -616,7 +632,7 @@ fun MediaDetailView(
                 Text(
                     text = "Episodes (${details.episodes.size})",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
-                    color = Color.White,
+                    color = primaryTextColor,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
@@ -625,10 +641,10 @@ fun MediaDetailView(
                 val isCurrent = activeEpisode == ep.name
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (isCurrent) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.20f) else MaxStreamTheme.ElevatedSurface,
+                    color = if (isCurrent) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.20f) else elevatedSurface,
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (isCurrent) MaxStreamTheme.CrimsonAccent else Color.White.copy(alpha = 0.10f)
+                        if (isCurrent) MaxStreamTheme.CrimsonAccent else glassBorder
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -648,13 +664,13 @@ fun MediaDetailView(
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold
                                 ),
-                                color = if (isCurrent) MaxStreamTheme.CrimsonAccent else Color.White
+                                color = if (isCurrent) MaxStreamTheme.CrimsonAccent else primaryTextColor
                             )
                             if (ep.season != null || ep.episode != null) {
                                 Text(
                                     text = "Season ${ep.season ?: 1} • Episode ${ep.episode ?: 1}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaxStreamTheme.TextMuted
+                                    color = mutedTextColor
                                 )
                             }
                         }
@@ -662,7 +678,7 @@ fun MediaDetailView(
                         Icon(
                             imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = "Play Episode",
-                            tint = if (isCurrent) MaxStreamTheme.CrimsonAccent else Color.White,
+                            tint = if (isCurrent) MaxStreamTheme.CrimsonAccent else primaryTextColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
