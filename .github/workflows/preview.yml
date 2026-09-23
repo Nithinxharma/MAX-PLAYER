@@ -38,7 +38,20 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Setup Google Services
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "Restoring google-services.json from secret..."
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > app/google-services.json
+          elif [ -f "app/google-services.json" ]; then
+            echo "app/google-services.json exists."
+          else
+            echo "Warning: google-services.json missing, relying on Gradle fallback generator."
+          fi
+
       - name: Build with Gradle
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: ./gradlew assemblePreview
 
       - name: Sign APKs

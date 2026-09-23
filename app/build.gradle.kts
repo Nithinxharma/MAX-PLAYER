@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Base64
 
 plugins {
   alias(libs.plugins.android.application)
@@ -7,6 +8,122 @@ plugins {
   alias(libs.plugins.ksp)
   alias(libs.plugins.room)
   id("com.google.gms.google-services")
+}
+
+// Ensure google-services.json exists for CI environments (e.g. GitHub Actions without secrets)
+val googleServicesFile = file("google-services.json")
+if (!googleServicesFile.exists()) {
+  val envSecret = System.getenv("GOOGLE_SERVICES_JSON")
+  if (!envSecret.isNullOrBlank()) {
+    try {
+      val decoded = Base64.getDecoder().decode(envSecret.trim())
+      googleServicesFile.writeBytes(decoded)
+    } catch (e: Exception) {
+      googleServicesFile.writeText(envSecret)
+    }
+  } else {
+    googleServicesFile.writeText(
+      """
+      {
+        "project_info": {
+          "project_number": "533471513816",
+          "project_id": "maxstream-5f77c",
+          "storage_bucket": "maxstream-5f77c.firebasestorage.app"
+        },
+        "client": [
+          {
+            "client_info": {
+              "mobilesdk_app_id": "1:533471513816:android:b5f9b8a0350e5393a75bad",
+              "android_client_info": {
+                "package_name": "xyz.mpv.rex"
+              }
+            },
+            "oauth_client": [
+              {
+                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                "client_type": 3
+              }
+            ],
+            "api_key": [
+              {
+                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
+              }
+            ],
+            "services": {
+              "appinvite_service": {
+                "other_platform_oauth_client": [
+                  {
+                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "client_info": {
+              "mobilesdk_app_id": "1:533471513816:android:a625d7a6ef25b4faa75bad",
+              "android_client_info": {
+                "package_name": "com.mpv.rex"
+              }
+            },
+            "oauth_client": [
+              {
+                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                "client_type": 3
+              }
+            ],
+            "api_key": [
+              {
+                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
+              }
+            ],
+            "services": {
+              "appinvite_service": {
+                "other_platform_oauth_client": [
+                  {
+                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "client_info": {
+              "mobilesdk_app_id": "1:533471513816:android:b5f9b8a0350e5393a75bad",
+              "android_client_info": {
+                "package_name": "xyz.mpv.rex.debug"
+              }
+            },
+            "oauth_client": [
+              {
+                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                "client_type": 3
+              }
+            ],
+            "api_key": [
+              {
+                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
+              }
+            ],
+            "services": {
+              "appinvite_service": {
+                "other_platform_oauth_client": [
+                  {
+                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "configuration_version": "1"
+      }
+      """.trimIndent()
+    )
+  }
 }
 
 android {
