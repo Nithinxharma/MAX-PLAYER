@@ -3,6 +3,7 @@ package xyz.mpv.rex.ui.browser.cinehub.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,9 +79,9 @@ data class MediaInfoDetails(
 )
 
 /**
- * Flagship Media Info Sheet.
- * Displays high-impact imagery, title, genres, rating, cast and actions.
- * Never displays ugly raw URLs or technical logs to users.
+ * Flagship Liquid Glass Media Info Sheet.
+ * Displays high-impact imagery, title, genres, rating, cast and actions with glassmorphic styling
+ * and adaptive colors for both dark and light modes.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -91,13 +92,29 @@ fun MaxStreamMediaInfoSheet(
     modifier: Modifier = Modifier
 ) {
     var isBookmarked by remember { mutableStateOf(false) }
+    val isDark = isSystemInDarkTheme()
+
+    val sheetBgColor = if (isDark) {
+        Color(0xFF0C0F17).copy(alpha = 0.95f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+    }
+
+    val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+    val glassPillBg = if (isDark) Color.White.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f)
+    val glassBorderColor = if (isDark) Color.White.copy(alpha = 0.18f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaxStreamTheme.MidnightSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.35f)) },
+        containerColor = sheetBgColor,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDark) Color.White.copy(alpha = 0.35f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            )
+        },
         modifier = modifier.testTag("media_info_sheet")
     ) {
         LazyColumn(
@@ -113,9 +130,11 @@ fun MaxStreamMediaInfoSheet(
                         .height(210.dp)
                         .padding(horizontal = 16.dp)
                         .clip(RoundedCornerShape(20.dp))
+                        .border(1.dp, glassBorderColor, RoundedCornerShape(20.dp))
                 ) {
+                    val highResBackdrop = MaxStreamMetadataHelper.toHighResFanart(details.backdropUrl ?: details.posterUrl)
                     AsyncImage(
-                        model = details.backdropUrl ?: details.posterUrl,
+                        model = highResBackdrop,
                         contentDescription = details.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -129,14 +148,14 @@ fun MaxStreamMediaInfoSheet(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.Black.copy(alpha = 0.45f),
-                                        MaxStreamTheme.MidnightSurface
+                                        Color.Black.copy(alpha = 0.40f),
+                                        if (isDark) Color(0xFF0C0F17) else MaterialTheme.colorScheme.surface
                                     )
                                 )
                             )
                     )
 
-                    // Top Action: Close Button
+                    // Top Action: Close Button (Liquid Glass Circle)
                     IconButton(
                         onClick = onDismissRequest,
                         modifier = Modifier
@@ -144,6 +163,7 @@ fun MaxStreamMediaInfoSheet(
                             .padding(10.dp)
                             .clip(CircleShape)
                             .background(Color.Black.copy(alpha = 0.60f))
+                            .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -176,7 +196,7 @@ fun MaxStreamMediaInfoSheet(
                                     fontSize = 22.sp,
                                     lineHeight = 28.sp
                                 ),
-                                color = Color.White
+                                color = primaryTextColor
                             )
 
                             // Year & Runtime & Provider Badge
@@ -189,25 +209,26 @@ fun MaxStreamMediaInfoSheet(
                                     Text(
                                         text = details.year,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaxStreamTheme.TextSecondary
+                                        color = secondaryTextColor
                                     )
                                 }
                                 if (!details.runtime.isNullOrBlank()) {
                                     Text(
                                         text = "• ${details.runtime}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaxStreamTheme.TextSecondary
+                                        color = secondaryTextColor
                                     )
                                 }
                                 if (!details.providerBadge.isNullOrBlank()) {
                                     Surface(
                                         shape = MaxStreamTheme.BadgeShape,
-                                        color = MaxStreamTheme.GlassSurfaceActive
+                                        color = if (isDark) MaxStreamTheme.GlassSurfaceActive else MaterialTheme.colorScheme.primaryContainer,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, glassBorderColor)
                                     ) {
                                         Text(
                                             text = details.providerBadge,
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                            color = MaxStreamTheme.ElectricCyan,
+                                            color = if (isDark) MaxStreamTheme.ElectricCyan else MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
@@ -218,8 +239,8 @@ fun MaxStreamMediaInfoSheet(
                         if (details.rating != null && details.rating > 0.0) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color.Black.copy(alpha = 0.7f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                                color = if (isDark) Color.Black.copy(alpha = 0.7f) else MaterialTheme.colorScheme.surfaceVariant,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, glassBorderColor)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -237,7 +258,7 @@ fun MaxStreamMediaInfoSheet(
                                         style = MaterialTheme.typography.labelMedium.copy(
                                             fontWeight = FontWeight.Bold
                                         ),
-                                        color = Color.White
+                                        color = primaryTextColor
                                     )
                                 }
                             }
@@ -286,17 +307,17 @@ fun MaxStreamMediaInfoSheet(
                             onClick = { isBookmarked = !isBookmarked },
                             shape = MaxStreamTheme.ButtonShape,
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = Color.White.copy(alpha = 0.14f),
-                                contentColor = Color.White
+                                containerColor = glassPillBg,
+                                contentColor = primaryTextColor
                             ),
                             modifier = Modifier
                                 .height(46.dp)
-                                .border(1.dp, Color.White.copy(alpha = 0.2f), MaxStreamTheme.ButtonShape)
+                                .border(1.dp, glassBorderColor, MaxStreamTheme.ButtonShape)
                         ) {
                             Icon(
                                 imageVector = if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
                                 contentDescription = "Bookmark",
-                                tint = if (isBookmarked) MaxStreamTheme.CrimsonAccent else Color.White
+                                tint = if (isBookmarked) MaxStreamTheme.CrimsonAccent else primaryTextColor
                             )
                         }
                     }
@@ -310,13 +331,13 @@ fun MaxStreamMediaInfoSheet(
                             details.genres.forEach { genre ->
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
-                                    color = MaxStreamTheme.ElevatedSurface,
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f))
+                                    color = glassPillBg,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, glassBorderColor)
                                 ) {
                                     Text(
                                         text = genre,
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                        color = MaxStreamTheme.TextPrimary,
+                                        color = primaryTextColor,
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                     )
                                 }
@@ -333,7 +354,7 @@ fun MaxStreamMediaInfoSheet(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 ),
-                                color = Color.White
+                                color = primaryTextColor
                             )
                             Text(
                                 text = details.overview,
@@ -341,7 +362,7 @@ fun MaxStreamMediaInfoSheet(
                                     fontSize = 13.sp,
                                     lineHeight = 18.sp
                                 ),
-                                color = Color.White.copy(alpha = 0.85f)
+                                color = secondaryTextColor
                             )
                         }
                     }
@@ -355,7 +376,7 @@ fun MaxStreamMediaInfoSheet(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 ),
-                                color = Color.White
+                                color = primaryTextColor
                             )
                             Text(
                                 text = details.cast.joinToString(", "),
@@ -363,7 +384,7 @@ fun MaxStreamMediaInfoSheet(
                                     fontSize = 12.sp,
                                     lineHeight = 16.sp
                                 ),
-                                color = MaxStreamTheme.TextSecondary
+                                color = secondaryTextColor
                             )
                         }
                     }
@@ -372,3 +393,4 @@ fun MaxStreamMediaInfoSheet(
         }
     }
 }
+

@@ -231,8 +231,9 @@ fun FullBannerMovieCard(
   ) {
     Box(modifier = Modifier.fillMaxSize()) {
       // Landscape Fanart / Backdrop Image (Prioritize landscape backdrop, fallback to poster)
+      val highResBackdrop = MaxStreamMetadataHelper.toHighResFanart(movie.backdropUrl ?: movie.posterUrl)
       AsyncImage(
-        model = movie.backdropUrl ?: movie.posterUrl,
+        model = highResBackdrop,
         contentDescription = movie.title,
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxSize()

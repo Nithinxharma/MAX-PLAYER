@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.ui.res.painterResource
 import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 import androidx.compose.ui.graphics.Brush
@@ -370,6 +371,7 @@ object CineHubScreen : Screen {
     var extensionSearchResults by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>>(emptyList()) }
     var isSearchingOnline by remember { mutableStateOf(false) }
     var providerHomeRows by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubHomePageList>>(emptyList()) }
+    var seeAllSheetData by remember { mutableStateOf<Pair<String, List<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>>?>(null) }
 
     var selectedDetailItem by remember { mutableStateOf<Any?>(null) }
 
@@ -414,11 +416,15 @@ object CineHubScreen : Screen {
             providerHomeRows = extHomeLists
           }
 
-          // Load Continue Watching from playback history and state
-          val recentEntities = runCatching { recentlyPlayedRepository.getRecentlyPlayed(limit = 20) }.getOrDefault(emptyList())
+          // Load Continue Watching from playback history and state as a prioritized stack
+          val recentEntities = runCatching { recentlyPlayedRepository.getRecentlyPlayed(limit = 50) }.getOrDefault(emptyList())
           val playbackStates = runCatching { playbackStateRepository.getAllPlaybackStates() }.getOrDefault(emptyList())
-          val cwList = recentEntities.mapNotNull { entity ->
+          val cwMap = mutableMapOf<String, xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem>()
+
+          // 1. Process recent playback entities (ordered most recent first)
+          for (entity in recentEntities) {
             val path = entity.filePath
+            if (path.isBlank() || cwMap.containsKey(path)) continue
             val state = playbackStates.find {
               it.mediaTitle.equals(entity.videoTitle, ignoreCase = true) ||
               it.mediaTitle.equals(path, ignoreCase = true) ||
@@ -432,25 +438,55 @@ object CineHubScreen : Screen {
             val totalDur = if (entityDurSec > 0L) entityDurSec else stateTotal
             val fraction = if (totalDur > 0L) (lastPos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f) else 0f
 
-            if (lastPos > 0L || fraction > 0.01f || entity.timestamp > 0L) {
-              val title = entity.videoTitle?.ifBlank { null } ?: File(path).nameWithoutExtension
-              val epMatch = Regex("""\b[sS](\d+)[eE](\d+)\b""").find(title)
+            val title = entity.videoTitle?.ifBlank { null } ?: File(path).nameWithoutExtension
+            val epMatch = Regex("""\b[sS](\d+)[eE](\d+)\b""").find(title)
+            val epInfo = epMatch?.let { "S${it.groupValues[1]} E${it.groupValues[2]}" }
+
+            val localMovieMatch = localMovies.find { it.videoFilePath == path || it.title.equals(title, ignoreCase = true) }
+            val localTvMatch = localTvShows.find { it.folderPath == path || it.title.equals(title, ignoreCase = true) }
+            val resolvedFanart = localMovieMatch?.backdropPath ?: localMovieMatch?.posterPath
+              ?: localTvMatch?.backdropPath ?: localTvMatch?.posterPath ?: path
+
+            cwMap[path] = xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem(
+              id = path,
+              title = title,
+              episodeInfo = epInfo,
+              landscapeImageUrl = resolvedFanart,
+              currentPositionSeconds = lastPos,
+              totalDurationSeconds = totalDur,
+              watchProgressFraction = fraction,
+              rawPayload = entity
+            )
+          }
+
+          // 2. Process remaining playback states with saved progress
+          for (state in playbackStates) {
+            val titleOrPath = state.mediaTitle
+            if (titleOrPath.isBlank() || cwMap.containsKey(titleOrPath)) continue
+            if (state.lastPosition > 0) {
+              val stateTotal = (state.lastPosition + state.timeRemaining).toLong()
+              val fraction = if (stateTotal > 0L) (state.lastPosition.toFloat() / stateTotal.toFloat()).coerceIn(0f, 1f) else 0f
+              val epMatch = Regex("""\b[sS](\d+)[eE](\d+)\b""").find(titleOrPath)
               val epInfo = epMatch?.let { "S${it.groupValues[1]} E${it.groupValues[2]}" }
 
-              xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem(
-                id = path,
-                title = title,
+              val localMovieMatch = localMovies.find { it.videoFilePath == titleOrPath || it.title.equals(titleOrPath, ignoreCase = true) }
+              val resolvedFanart = localMovieMatch?.backdropPath ?: localMovieMatch?.posterPath ?: titleOrPath
+
+              cwMap[titleOrPath] = xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem(
+                id = titleOrPath,
+                title = titleOrPath,
                 episodeInfo = epInfo,
-                landscapeImageUrl = path,
-                currentPositionSeconds = lastPos,
-                totalDurationSeconds = totalDur,
+                landscapeImageUrl = resolvedFanart,
+                currentPositionSeconds = state.lastPosition.toLong(),
+                totalDurationSeconds = stateTotal,
                 watchProgressFraction = fraction,
-                rawPayload = entity
+                rawPayload = state
               )
-            } else null
+            }
           }
+
           withContext(Dispatchers.Main) {
-            continueWatchingItems = cwList
+            continueWatchingItems = cwMap.values.toList()
           }
         } catch (_: Exception) {
         } finally {
@@ -635,11 +671,11 @@ object CineHubScreen : Screen {
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = navBarHeight + 32.dp),
           ) {
-            // Search Input Field
+            // Liquid Glass Search Input Field (Expandable)
             item {
-              OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { query ->
+              xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamLiquidGlassSearch(
+                query = searchQuery,
+                onQueryChange = { query ->
                   searchQuery = query
                   if (query.length >= 2) {
                     isSearchActive = true
@@ -664,31 +700,22 @@ object CineHubScreen : Screen {
                       }
                     }
                   } else {
-                    isSearchActive = false
-                    extensionSearchResults = emptyList()
-                  }
-                },
-                placeholder = { Text("Search movies, TV shows, actors…") },
-                leadingIcon = {
-                  Icon(imageVector = Icons.Default.Search, contentDescription = null)
-                },
-                trailingIcon = {
-                  if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = {
-                      searchQuery = ""
-                      isSearchActive = false
+                    if (query.isEmpty()) {
                       extensionSearchResults = emptyList()
-                    }) {
-                      Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
                     }
                   }
                 },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
+                isExpanded = isSearchActive,
+                onExpandedChange = { expanded ->
+                  isSearchActive = expanded
+                  if (!expanded) {
+                    searchQuery = ""
+                    extensionSearchResults = emptyList()
+                  }
+                },
                 modifier = Modifier
                   .fillMaxWidth()
                   .padding(horizontal = 16.dp, vertical = 8.dp)
-                  .testTag("cinehub_search_input"),
               )
             }
 
@@ -918,15 +945,21 @@ object CineHubScreen : Screen {
                     }
 
                     if (filteredItems.isNotEmpty()) {
+                      val displayItems = filteredItems.take(15)
+                      val hasMore = filteredItems.size > 15
+
                       item {
-                        SectionHeader(title = homeRow.title)
+                        SectionHeader(
+                          title = homeRow.title,
+                          onSeeAllClick = if (hasMore) { { seeAllSheetData = homeRow.title to filteredItems } } else null
+                        )
                       }
                       item {
                         LazyRow(
                           contentPadding = PaddingValues(horizontal = 16.dp),
                           horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                          items(filteredItems) { item ->
+                          items(displayItems) { item ->
                             MediaPosterCard(
                               title = item.title,
                               posterUrl = item.posterUrl,
@@ -948,6 +981,15 @@ object CineHubScreen : Screen {
                                 }
                               }
                             )
+                          }
+
+                          if (hasMore) {
+                            item {
+                              xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamSeeAllCard(
+                                remainingCount = filteredItems.size - 15,
+                                onClick = { seeAllSheetData = homeRow.title to filteredItems }
+                              )
+                            }
                           }
                         }
                       }
@@ -1143,6 +1185,29 @@ object CineHubScreen : Screen {
             selectedDetailItem = null
             CineDetailStateHolder.open(backstack, item)
           }
+        }
+
+        // See All Provider Row Sheet
+        seeAllSheetData?.let { (title, items) ->
+          xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamSeeAllSheet(
+            title = title,
+            items = items,
+            onDismissRequest = { seeAllSheetData = null },
+            onItemClick = { item ->
+              loadExtensionItemDetails(
+                providerId = item.providerId,
+                providerName = item.providerName,
+                url = item.url,
+                scope = scope,
+                fallbackTitle = item.title,
+                fallbackPoster = item.posterUrl,
+                fallbackYear = item.year,
+                fallbackType = if (item.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
+              ) { details ->
+                selectedDetailItem = details
+              }
+            }
+          )
         }
 
         if (pendingStreamLinks.isNotEmpty()) {
@@ -1430,11 +1495,18 @@ object CineHubScreen : Screen {
 }
 
 @Composable
-private fun SectionHeader(title: String) {
+private fun SectionHeader(
+  title: String,
+  onSeeAllClick: (() -> Unit)? = null
+) {
+  val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+  val titleColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
   Row(
     verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 10.dp)
+    horizontalArrangement = Arrangement.SpaceBetween,
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(start = 18.dp, end = 18.dp, top = 22.dp, bottom = 10.dp)
   ) {
     Text(
       text = title,
@@ -1443,8 +1515,31 @@ private fun SectionHeader(title: String) {
         fontWeight = FontWeight.Bold,
         letterSpacing = 0.2.sp
       ),
-      color = Color.White,
+      color = titleColor,
     )
+
+    if (onSeeAllClick != null) {
+      TextButton(
+        onClick = onSeeAllClick,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+      ) {
+        Text(
+          text = "Show All",
+          style = MaterialTheme.typography.labelMedium.copy(
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp
+          ),
+          color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+          imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+          contentDescription = "Show All",
+          tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+          modifier = Modifier.size(13.dp)
+        )
+      }
+    }
   }
 }
 
