@@ -218,6 +218,7 @@ dependencies {
   implementation(libs.lazycolumnscrollbar)
   implementation(libs.reorderable)
   implementation(libs.compose.markdown)
+  implementation(libs.lottie.compose)
 
   // Unit Testing
   testImplementation(libs.junit)

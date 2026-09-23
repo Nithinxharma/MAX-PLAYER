@@ -1,11 +1,9 @@
 package xyz.mpv.rex.ui.splash
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,29 +15,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
-import xyz.mpv.rex.R
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.MainScreen
@@ -48,13 +46,12 @@ import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.ui.welcome.WelcomeScreen
 
 /**
- * Premium cinematic MAX STREAM splash screen:
- * 1. Pure black background (#050505)
- * 2. MAX STREAM logo fades in smoothly
- * 3. Soft atmospheric glow emerges behind logo
- * 4. Gradient light sweep beam glides across the logo mark
- * 5. MAX STREAM studio text ascends and illuminates
- * 6. Seamless transition into home / welcome screen
+ * Premium cinematic MAX STREAM splash screen with Lottie Animation:
+ * 1. Deep OLED dark background (#050505)
+ * 2. Lottie animation rendered seamlessly from assets/splash_animation.json
+ * 3. Soft ambient background glow synchronized with animation
+ * 4. Illuminated typography "MAX STREAM" ascending smoothly
+ * 5. Fluid fade transition into MainScreen or WelcomeScreen
  */
 @Serializable
 object SplashScreen : Screen {
@@ -64,113 +61,90 @@ object SplashScreen : Screen {
     val backstack = LocalBackStack.current
     val appearancePreferences = koinInject<AppearancePreferences>()
 
-    // Cinematic Animation Drivers
+    // Load Lottie Composition from assets/splash_animation.json
+    val composition by rememberLottieComposition(
+      spec = LottieCompositionSpec.Asset("splash_animation.json")
+    )
+    val lottieProgress by animateLottieCompositionAsState(
+      composition = composition,
+      iterations = 1,
+      isPlaying = true,
+      speed = 1.0f
+    )
+
+    // Animation Drivers for typography & smooth exit
     val backgroundGlowAlpha = remember { Animatable(0f) }
-    val backgroundGlowScale = remember { Animatable(0.75f) }
-
-    val logoAlpha = remember { Animatable(0f) }
-    val logoScale = remember { Animatable(0.92f) }
-
-    val sweepProgress = remember { Animatable(-0.5f) }
-    val sweepAlpha = remember { Animatable(0f) }
-
+    val backgroundGlowScale = remember { Animatable(0.85f) }
     val textAlpha = remember { Animatable(0f) }
-    val textOffsetY = remember { Animatable(14f) }
+    val textOffsetY = remember { Animatable(18f) }
     val taglineAlpha = remember { Animatable(0f) }
-
     val exitAlpha = remember { Animatable(1f) }
 
-    val cinematicEase = remember { CubicBezierEasing(0.16f, 1f, 0.3f, 1f) }
-
     LaunchedEffect(Unit) {
-      // 1. Initial Pure Black Silence (150ms)
-      delay(150)
-
-      // 2. MAX STREAM Logo Fades in
-      launch {
-        logoAlpha.animateTo(
-          targetValue = 1f,
-          animationSpec = tween(durationMillis = 650, easing = cinematicEase)
-        )
-      }
-      launch {
-        logoScale.animateTo(
-          targetValue = 1.0f,
-          animationSpec = tween(durationMillis = 800, easing = cinematicEase)
-        )
-      }
-
-      // 3. Soft Glow emerges around logo
-      delay(250)
+      // 1. Soft atmospheric glow emerges
+      delay(300)
       launch {
         backgroundGlowAlpha.animateTo(
-          targetValue = 0.9f,
-          animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
+          targetValue = 0.85f,
+          animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
         )
       }
       launch {
         backgroundGlowScale.animateTo(
-          targetValue = 1.2f,
-          animationSpec = tween(durationMillis = 1600, easing = FastOutSlowInEasing)
+          targetValue = 1.15f,
+          animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing)
         )
       }
 
-      // 4. Gradient light sweep passes through logo
-      delay(400)
-      sweepAlpha.snapTo(1f)
-      launch {
-        sweepProgress.animateTo(
-          targetValue = 1.5f,
-          animationSpec = tween(durationMillis = 750, easing = LinearEasing)
-        )
-        sweepAlpha.animateTo(
-          targetValue = 0f,
-          animationSpec = tween(durationMillis = 200)
-        )
-      }
-
-      // 5. MAX STREAM text appears
-      delay(300)
+      // 2. MAX STREAM typography smoothly illuminates as logo forms
+      delay(800)
       launch {
         textAlpha.animateTo(
           targetValue = 1f,
-          animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing)
+          animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
         )
       }
       launch {
         textOffsetY.animateTo(
           targetValue = 0f,
-          animationSpec = tween(durationMillis = 550, easing = cinematicEase)
+          animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
         )
       }
       launch {
         taglineAlpha.animateTo(
-          targetValue = 0.7f,
-          animationSpec = tween(durationMillis = 600, delayMillis = 100, easing = FastOutSlowInEasing)
+          targetValue = 0.75f,
+          animationSpec = tween(durationMillis = 700, delayMillis = 150, easing = FastOutSlowInEasing)
         )
       }
+    }
 
-      // Hold iconic presence
-      delay(800)
+    // Navigate when Lottie reaches end (or safety timeout)
+    LaunchedEffect(lottieProgress) {
+      if (lottieProgress >= 0.98f) {
+        delay(250)
+        exitAlpha.animateTo(
+          targetValue = 0f,
+          animationSpec = tween(durationMillis = 350, easing = LinearEasing)
+        )
 
-      // 6. Smooth transition into home
-      exitAlpha.animateTo(
-        targetValue = 0f,
-        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
-      )
+        val hasCompletedOnboarding = appearancePreferences.onboardingCompleted.get()
+        val targetScreen = if (hasCompletedOnboarding) MainScreen else WelcomeScreen
 
-      android.util.Log.d("TRANSITION_TRACE", "SplashScreen: Checking appearancePreferences.onboardingCompleted.get()")
-      val hasCompletedOnboarding = appearancePreferences.onboardingCompleted.get()
-      if (hasCompletedOnboarding) {
-        android.util.Log.d("TRANSITION_TRACE", "ABOUT TO NAVIGATE TO MAIN")
-      } else {
-        android.util.Log.d("TRANSITION_TRACE", "ABOUT TO NAVIGATE TO WELCOME")
+        backstack.clear()
+        backstack.add(targetScreen)
       }
-      val targetScreen = if (hasCompletedOnboarding) MainScreen else WelcomeScreen
+    }
 
-      backstack.clear()
-      backstack.add(targetScreen)
-      android.util.Log.d("TRANSITION_TRACE", "SplashScreen: backstack updated to targetScreen: " + targetScreen::class.simpleName)
+    // Fallback safety timer in case composition is delayed
+    LaunchedEffect(Unit) {
+      delay(4500)
+      if (exitAlpha.value > 0.1f) {
+        exitAlpha.animateTo(0f, tween(300))
+        val hasCompletedOnboarding = appearancePreferences.onboardingCompleted.get()
+        val targetScreen = if (hasCompletedOnboarding) MainScreen else WelcomeScreen
+        backstack.clear()
+        backstack.add(targetScreen)
+      }
     }
 
     Box(
@@ -183,16 +157,16 @@ object SplashScreen : Screen {
       // Atmospheric Soft Glow Backdrop
       Box(
         modifier = Modifier
-          .size(380.dp)
+          .size(360.dp)
           .scale(backgroundGlowScale.value)
           .alpha(backgroundGlowAlpha.value)
-          .blur(72.dp)
+          .blur(64.dp)
           .background(
             Brush.radialGradient(
               colors = listOf(
-                Color(0x60A855F7),
-                Color(0x35007AFF),
-                Color(0x1232D7FF),
+                Color(0x5500A2FF),
+                Color(0x356366F1),
+                Color(0x18EC4899),
                 Color.Transparent
               )
             )
@@ -202,59 +176,21 @@ object SplashScreen : Screen {
       Column(
         horizontalAlignment = Alignment.CenterHorizontally
       ) {
-        // Logo container with specular light sweep
+        // Lottie Animation Container
         Box(
-          modifier = Modifier.size(150.dp),
+          modifier = Modifier.size(240.dp),
           contentAlignment = Alignment.Center
         ) {
-          // Ambient Bloom under logo
-          Image(
-            painter = painterResource(id = R.drawable.ic_max_stream_mark),
-            contentDescription = null,
-            modifier = Modifier
-              .size(140.dp)
-              .scale(logoScale.value * 1.05f)
-              .alpha(backgroundGlowAlpha.value * 0.4f)
-              .blur(20.dp)
+          LottieAnimation(
+            composition = composition,
+            progress = { lottieProgress },
+            modifier = Modifier.fillMaxSize()
           )
-
-          // Main Crisp Vector Mark with Light Sheen Sweep
-          Box(
-            modifier = Modifier
-              .size(124.dp)
-              .scale(logoScale.value)
-              .alpha(logoAlpha.value)
-              .drawWithContent {
-                drawContent()
-
-                // Specular gradient sweep
-                if (sweepAlpha.value > 0f) {
-                  val sweepX = size.width * sweepProgress.value
-                  val sweepBrush = Brush.linearGradient(
-                    colors = listOf(
-                      Color.Transparent,
-                      Color.White.copy(alpha = 0.65f * sweepAlpha.value),
-                      Color(0xFF32D7FF).copy(alpha = 0.45f * sweepAlpha.value),
-                      Color.Transparent
-                    ),
-                    start = Offset(sweepX - 60f, 0f),
-                    end = Offset(sweepX + 60f, size.height)
-                  )
-                  drawRect(brush = sweepBrush, blendMode = BlendMode.SrcAtop)
-                }
-              }
-          ) {
-            Image(
-              painter = painterResource(id = R.drawable.ic_max_stream_mark),
-              contentDescription = "MAX STREAM Logo",
-              modifier = Modifier.fillMaxSize()
-            )
-          }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Typography: "MAX STREAM"
+        // Typography: "MAX STREAM" & Tagline
         Column(
           horizontalAlignment = Alignment.CenterHorizontally,
           modifier = Modifier
@@ -264,7 +200,7 @@ object SplashScreen : Screen {
           Text(
             text = "MAX STREAM",
             color = Color.White,
-            fontSize = 25.sp,
+            fontSize = 26.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.SansSerif,
             letterSpacing = 6.sp

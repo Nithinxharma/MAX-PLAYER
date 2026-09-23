@@ -16,6 +16,7 @@ okhttp = "5.3.2"
 sardineAndroid = "0.8"
 reorderable = "3.0.0"
 compose-markdown = "0.5.0"
+lottie = "6.6.2"
 splashScreen = "1.0.1"
 junit = "4.13.2"
 mockk = "1.13.17"
@@ -78,6 +79,7 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 compose-markdown = { module = "com.github.jeziellago:compose-markdown", version.ref = "compose-markdown" }
+lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottie" }
 
 [bundles]
 koin = ["koin-core", "koin-android", "koin-compose", "koin-viewmodel"]
