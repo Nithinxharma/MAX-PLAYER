@@ -64,7 +64,7 @@ fun LiveTvTabScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaxStreamTheme.isDark
 
     // Theme Adaptive Color Tokens
     val bgColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
@@ -1039,7 +1039,7 @@ private fun CineTvHeroBanner(
 ) {
     if (featuredChannels.isEmpty()) return
     val currentChannel = featuredChannels.first()
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaxStreamTheme.isDark
 
     Surface(
         shape = RoundedCornerShape(22.dp),
@@ -1178,12 +1178,12 @@ private fun CineTvCategoryRail(
     onSeeAllClick: () -> Unit,
     onPlayChannel: (LiveChannelItem, String) -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaxStreamTheme.isDark
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
     val secondaryTextColor = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
 
-    val displayChannels = remember(channels) { channels.take(15) }
-    val hasMore = channels.size > 15
+    val displayChannels = remember(channels) { channels }
+    val showSeeAllCard = channels.size > 5
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // Rail Title Header
@@ -1215,7 +1215,7 @@ private fun CineTvCategoryRail(
                 )
             }
 
-            if (hasMore) {
+            if (channels.size > 5) {
                 TextButton(
                     onClick = onSeeAllClick,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
@@ -1256,7 +1256,7 @@ private fun CineTvCategoryRail(
                 )
             }
 
-            if (hasMore) {
+            if (showSeeAllCard) {
                 item {
                     // "See All" Glass Action Card
                     Surface(
@@ -1297,7 +1297,7 @@ private fun CineTvCategoryRail(
                                 color = primaryTextColor
                             )
                             Text(
-                                text = "+${channels.size - 15} more",
+                                text = "${channels.size} channels",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = secondaryTextColor
                             )
@@ -1319,7 +1319,7 @@ fun LiveTvGridChannelCard(
     isM3uFallback: Boolean,
     onPlayRequested: (channelId: String) -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaxStreamTheme.isDark
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
     val secondaryTextColor = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
     val isPaid = globalPaidChannels[currentActiveId] == true
@@ -1442,7 +1442,7 @@ fun LiveChannelRowItem(
     isManualMapping: Boolean,
     onPlayRequested: (channelId: String) -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = MaxStreamTheme.isDark
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
     val secondaryTextColor = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
     val mutedTextColor = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.outline

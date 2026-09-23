@@ -37,6 +37,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 import xyz.mpv.rex.ui.theme.pillShape
 
 /**
@@ -46,15 +47,19 @@ import xyz.mpv.rex.ui.theme.pillShape
 fun MediaMetadataChip(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
-    contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    color: Color? = null,
+    contentColor: Color? = null,
     shape: Shape = pillShape,
 ) {
+    val isDark = MaxStreamTheme.isDark
+    val defaultBg = if (isDark) MaxStreamTheme.ElevatedSurface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    val defaultContent = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    
     Surface(
         modifier = modifier,
         shape = shape,
-        color = color,
-        contentColor = contentColor,
+        color = color ?: defaultBg,
+        contentColor = contentColor ?: defaultContent,
     ) {
         Text(
             text = text,
@@ -95,13 +100,15 @@ fun BaseMediaCard(
     chipsContent: @Composable (FlowRowScope.() -> Unit)? = null,
     overlayContent: @Composable (BoxScope.() -> Unit)? = null,
 ) {
+    val isDark = MaxStreamTheme.isDark
+    val primaryText = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
     val selectionScale by animateFloatAsState(
         targetValue = if (isSelected) 0.96f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "cardScale"
     )
     val cardBackground by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        targetValue = if (isSelected) (if (isDark) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
                       else Color.Transparent,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "cardBackground"
@@ -148,7 +155,7 @@ fun BaseMediaCard(
                             .fillMaxWidth()
                             .aspectRatio(thumbnailAspectRatio)
                             .clip(thumbnailShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .background(if (isDark) MaxStreamTheme.ElevatedSurface else MaterialTheme.colorScheme.surfaceContainerHigh)
                             .then(
                                 if (onThumbClick != null) {
                                     Modifier.combinedClickable(
@@ -192,7 +199,7 @@ fun BaseMediaCard(
                             Icons.Filled.PlayArrow,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.secondary
+                            tint = if (isDark) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary
                         )
                     }
                     
@@ -205,7 +212,7 @@ fun BaseMediaCard(
                                 .height(4.dp)
                                 .align(Alignment.BottomCenter)
                                 .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp)),
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaxStreamTheme.CrimsonAccent,
                             trackColor = Color.Black.copy(alpha = 0.35f),
                         )
                     }
@@ -218,7 +225,7 @@ fun BaseMediaCard(
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaxStreamTheme.CrimsonAccent,
                             modifier = Modifier
                                 .padding(6.dp)
                                 .size(22.dp),
@@ -227,7 +234,7 @@ fun BaseMediaCard(
                             Icon(
                                 Icons.Filled.Check,
                                 contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = Color.White,
                                 modifier = Modifier.padding(3.dp),
                             )
                         }
@@ -244,9 +251,9 @@ fun BaseMediaCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     color = when {
-                        shouldHighlight -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                        isWatched -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        else -> MaterialTheme.colorScheme.onSurface
+                        shouldHighlight -> MaxStreamTheme.CrimsonAccent
+                        isWatched -> primaryText.copy(alpha = 0.6f)
+                        else -> primaryText
                     },
                     maxLines = maxTitleLines,
                     overflow = TextOverflow.Ellipsis,
@@ -294,7 +301,7 @@ fun BaseMediaCard(
               .width(thumbnailSize)
               .aspectRatio(thumbnailAspectRatio)
               .clip(thumbnailShape)
-              .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+              .background(if (isDark) MaxStreamTheme.ElevatedSurface else MaterialTheme.colorScheme.surfaceContainerHigh)
               .then(
                   if (onThumbClick != null) {
                       Modifier.combinedClickable(
@@ -338,7 +345,7 @@ fun BaseMediaCard(
                             Icons.Filled.PlayArrow,
                             contentDescription = null,
                             modifier = Modifier.size(thumbnailSize / 1.5f),
-                            tint = MaterialTheme.colorScheme.secondary,
+                            tint = if (isDark) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary,
                         )
                     }
 
@@ -351,7 +358,7 @@ fun BaseMediaCard(
                                 .height(3.dp)
                                 .align(Alignment.BottomCenter)
                                 .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp)),
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaxStreamTheme.CrimsonAccent,
                             trackColor = Color.Black.copy(alpha = 0.35f),
                         )
                     }
@@ -364,7 +371,7 @@ fun BaseMediaCard(
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaxStreamTheme.CrimsonAccent,
                             modifier = Modifier
                                 .padding(4.dp)
                                 .size(20.dp),
@@ -373,7 +380,7 @@ fun BaseMediaCard(
                             Icon(
                                 Icons.Filled.Check,
                                 contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = Color.White,
                                 modifier = Modifier.padding(2.5.dp),
                             )
                         }
@@ -390,9 +397,9 @@ fun BaseMediaCard(
                         text = title,
                         style = listTitleStyle ?: MaterialTheme.typography.titleMedium,
                         color = when {
-                            shouldHighlight -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                            isWatched -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            else -> MaterialTheme.colorScheme.onSurface
+                            shouldHighlight -> MaxStreamTheme.CrimsonAccent
+                            isWatched -> primaryText.copy(alpha = 0.6f)
+                            else -> primaryText
                         },
                         maxLines = maxTitleLines,
                         overflow = TextOverflow.Ellipsis,

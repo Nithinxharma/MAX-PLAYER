@@ -74,10 +74,56 @@ object MaxStreamTheme {
     val AmberGold = Color(0xFFFBBF24)
     val EmeraldLive = Color(0xFF10B981)
 
-    // Text Hierarchy
+    // Base Palette Tokens
     val TextPrimary = Color(0xFFF9FAFB)
     val TextSecondary = Color(0xFF94A3B8)
     val TextMuted = Color(0xFF64748B)
+
+    // Light Palette Tokens
+    val TextPrimaryLight = Color(0xFF0F172A)
+    val TextSecondaryLight = Color(0xFF475569)
+    val TextMutedLight = Color(0xFF94A3B8)
+
+    // Theme Adaptive Colors
+    val isDark: Boolean
+        @Composable
+        get() {
+            val surface = MaterialTheme.colorScheme.surface
+            val lum = (0.299f * surface.red + 0.587f * surface.green + 0.114f * surface.blue)
+            return lum < 0.5f
+        }
+
+    val primaryTextColor: Color
+        @Composable
+        get() = if (isDark) TextPrimary else TextPrimaryLight
+
+    val secondaryTextColor: Color
+        @Composable
+        get() = if (isDark) TextSecondary else TextSecondaryLight
+
+    val mutedTextColor: Color
+        @Composable
+        get() = if (isDark) TextMuted else TextMutedLight
+
+    val backgroundColor: Color
+        @Composable
+        get() = if (isDark) AbyssBackground else Color(0xFFF8FAFC)
+
+    val surfaceColor: Color
+        @Composable
+        get() = if (isDark) MidnightSurface else Color(0xFFFFFFFF)
+
+    val elevatedSurfaceColor: Color
+        @Composable
+        get() = if (isDark) ElevatedSurface else Color(0xFFF1F5F9)
+
+    val glassSurfaceColor: Color
+        @Composable
+        get() = if (isDark) GlassSurface else Color(0xFFF1F5F9).copy(alpha = 0.90f)
+
+    val glassBorderColor: Color
+        @Composable
+        get() = if (isDark) GlassBorder else Color(0x2E000000)
 
     // Common Shapes
     val CardShape = RoundedCornerShape(18.dp)

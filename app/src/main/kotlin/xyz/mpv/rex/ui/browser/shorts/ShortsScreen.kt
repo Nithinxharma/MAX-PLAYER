@@ -1159,16 +1159,18 @@ private fun MoreActionsSheet(
     val holdForMultipleSpeed by playerPreferences.holdForMultipleSpeed.collectAsState()
     val view = LocalView.current
 
+    val isDark = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.isDark
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
+        containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.MidnightSurface else MaterialTheme.colorScheme.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
                     .padding(vertical = 12.dp)
                     .size(width = 32.dp, height = 4.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        color = if (isDark) Color.White.copy(alpha = 0.3f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         shape = MaterialTheme.shapes.extraLarge
                     )
             )

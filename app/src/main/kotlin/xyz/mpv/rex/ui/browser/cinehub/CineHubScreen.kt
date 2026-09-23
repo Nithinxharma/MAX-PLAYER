@@ -945,8 +945,8 @@ object CineHubScreen : Screen {
                     }
 
                     if (filteredItems.isNotEmpty()) {
-                      val displayItems = filteredItems.take(15)
-                      val hasMore = filteredItems.size > 15
+                      val displayItems = filteredItems
+                      val hasMore = filteredItems.size > 5
 
                       item {
                         SectionHeader(
@@ -986,7 +986,7 @@ object CineHubScreen : Screen {
                           if (hasMore) {
                             item {
                               xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamSeeAllCard(
-                                remainingCount = filteredItems.size - 15,
+                                remainingCount = filteredItems.size,
                                 onClick = { seeAllSheetData = homeRow.title to filteredItems }
                               )
                             }
@@ -1499,7 +1499,7 @@ private fun SectionHeader(
   title: String,
   onSeeAllClick: (() -> Unit)? = null
 ) {
-  val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+  val isDark = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.isDark
   val titleColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
   Row(
     verticalAlignment = Alignment.CenterVertically,
@@ -3871,7 +3871,7 @@ fun ProviderSelectorSheet(
     onProvidersChanged: () -> Unit
 ) {
     val registeredProviders by providerRegistry.registeredProviders.collectAsState()
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.isDark
     val containerBg = if (isDark) Color(0xF210111A) else MaterialTheme.colorScheme.surface
     val textColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subTextColor = if (isDark) Color.White.copy(alpha = 0.70f) else MaterialTheme.colorScheme.onSurfaceVariant
