@@ -86,8 +86,14 @@ class FirebaseAuthManager(
     }
 
     override fun getGoogleSignInClient(context: Context): GoogleSignInClient {
+        val webClientId = try {
+            val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+            if (resId != 0) context.getString(resId) else defaultWebClientId
+        } catch (e: Exception) {
+            defaultWebClientId
+        }
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(defaultWebClientId)
+            .requestIdToken(webClientId)
             .requestEmail()
             .requestProfile()
             .build()
@@ -97,7 +103,7 @@ class FirebaseAuthManager(
     override suspend fun signInWithGoogleToken(idToken: String): Result<UserProfile> = withContext(Dispatchers.IO) {
         try {
             _authState.value = AuthState.Loading
-            Log.d(tag, "[Firebase Auth] Initiating Google Credential Authentication")
+            Log.d(tag, "[Firebase Auth] Initiating Google Credential Authentication with token length: ${idToken.length}")
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = auth.signInWithCredential(credential).await()
             val user = authResult.user ?: return@withContext Result.failure<UserProfile>(
@@ -106,32 +112,70 @@ class FirebaseAuthManager(
                 _authState.value = AuthState.Error("Authentication returned empty user")
             }
 
-            Log.d(tag, "[Firebase Auth] Authentication Success. UID: ${user.uid}")
-            val profileResult = syncUserToFirestore(user)
-            if (profileResult.isSuccess) {
-                _authState.value = AuthState.Authenticated
-            } else {
-                _authState.value = AuthState.Authenticated // Auth succeeded even if offline sync pending
+            Log.d(tag, "[Firebase Auth] Authentication Success! UID: ${user.uid}, Email: ${user.email}")
+            _firebaseUser.value = user
+            _authState.value = AuthState.Authenticated
+
+            val baseProfile = UserProfile(
+                uid = user.uid,
+                name = user.displayName ?: "MaxStream User",
+                email = user.email ?: "",
+                photo = user.photoUrl?.toString(),
+                role = UserRole.USER,
+                premium = false
+            )
+            applyProfileState(baseProfile)
+
+            // Asynchronously sync profile to Firestore in background (does not block authentication)
+            scope.launch {
+                try {
+                    syncUserToFirestore(user)
+                } catch (e: Exception) {
+                    Log.w(tag, "[Firestore] Background user sync deferred: ${e.message}")
+                }
             }
-            profileResult
+
+            Result.success(baseProfile)
         } catch (e: Exception) {
             Log.e(tag, "[Firebase Auth] Sign-in failed: ${e.message}", e)
-            _authState.value = AuthState.Error(e.message ?: "Authentication failed")
+            _authState.value = AuthState.Error(e.localizedMessage ?: "Authentication failed")
             Result.failure(e)
         }
     }
 
     override suspend fun handleGoogleSignInResult(data: Intent?): Result<UserProfile> = withContext(Dispatchers.IO) {
         try {
+            if (data == null) {
+                Log.w(tag, "[Google Sign-In] Intent data is null")
+                return@withContext Result.failure(IllegalStateException("No sign-in response received from Google."))
+            }
             val task = GoogleSignIn.getSignedInAccountFromIntent(data)
             val account = task.getResult(ApiException::class.java)
-            val idToken = account?.idToken ?: return@withContext Result.failure(
-                IllegalStateException("Google ID Token is missing from sign-in response")
-            )
+            val idToken = account?.idToken
+            if (idToken.isNullOrBlank()) {
+                Log.e(tag, "[Google Sign-In] ID token is null for account: ${account?.email}")
+                return@withContext Result.failure(
+                    IllegalStateException("Google ID Token is missing. Verify Google Cloud Web Client ID configuration.")
+                )
+            }
+            Log.d(tag, "[Google Sign-In] Retrieved Google ID Token for ${account.email}")
             signInWithGoogleToken(idToken)
+        } catch (e: ApiException) {
+            val message = when (e.statusCode) {
+                12501 -> "Google Sign-In was cancelled."
+                12500 -> "Google Sign-In error (Status 12500). Please check SHA-1 certificate configuration."
+                10 -> "Google Developer Error (Status 10). Package name or SHA-1 fingerprint mismatch in Firebase."
+                7 -> "Network connection error. Please check your internet connection."
+                else -> "Google Sign-In error (${e.statusCode}): ${e.localizedMessage ?: "Unknown"}"
+            }
+            Log.e(tag, "[Google Sign-In] ApiException (Code ${e.statusCode}): $message", e)
+            if (e.statusCode != 12501) {
+                _authState.value = AuthState.Error(message)
+            }
+            Result.failure(Exception(message, e))
         } catch (e: Exception) {
             Log.e(tag, "[Google Sign-In] Failed to process sign-in result", e)
-            _authState.value = AuthState.Error(e.message ?: "Google Sign-In failed")
+            _authState.value = AuthState.Error(e.localizedMessage ?: "Google Sign-In failed")
             Result.failure(e)
         }
     }

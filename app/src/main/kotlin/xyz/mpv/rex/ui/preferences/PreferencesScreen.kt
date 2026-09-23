@@ -225,7 +225,8 @@ object PreferencesScreen : Screen {
               modifier = Modifier
                 .fillMaxWidth()
                 .clip(searchShape),
-              color = MaterialTheme.colorScheme.surfaceContainerHigh,
+              color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+              border = BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
               tonalElevation = 2.dp,
             ) {
               Row(

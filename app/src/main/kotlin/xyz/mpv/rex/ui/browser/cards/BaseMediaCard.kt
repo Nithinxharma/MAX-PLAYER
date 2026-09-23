@@ -11,6 +11,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -109,6 +110,7 @@ fun BaseMediaCard(
     )
     val cardBackground by animateColorAsState(
         targetValue = if (isSelected) (if (isDark) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
+                      else if (isRecentlyPlayed) Color(0xFF141420).copy(alpha = 0.65f)
                       else Color.Transparent,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "cardBackground"
@@ -134,6 +136,13 @@ fun BaseMediaCard(
             }
             .clip(cardShape)
             .background(cardBackground)
+            .then(
+                if (isRecentlyPlayed && !isSelected) Modifier.border(
+                    1.dp,
+                    Color.White.copy(alpha = 0.10f),
+                    cardShape
+                ) else Modifier
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,

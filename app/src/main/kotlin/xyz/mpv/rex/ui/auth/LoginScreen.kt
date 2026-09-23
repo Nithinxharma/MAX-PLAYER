@@ -17,6 +17,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,8 +76,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import xyz.mpv.rex.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -123,19 +127,23 @@ object LoginScreen : Screen {
         val googleSignInLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.StartActivityForResult()
         ) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            if (data != null) {
                 scope.launch {
                     isAuthenticating = true
                     errorMessage = null
-                    val syncResult = authManager.handleGoogleSignInResult(result.data)
+                    val syncResult = authManager.handleGoogleSignInResult(data)
                     isAuthenticating = false
                     syncResult.onSuccess {
                         appearancePreferences.onboardingCompleted.set(true)
                         backstack.clear()
                         backstack.add(MainScreen)
                     }.onFailure { error ->
-                        errorMessage = error.localizedMessage ?: "Google sign-in failed. Please try again."
-                        Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+                        val msg = error.localizedMessage ?: "Google sign-in failed. Please try again."
+                        if (!msg.contains("cancelled", ignoreCase = true)) {
+                            errorMessage = msg
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             } else {
@@ -145,7 +153,8 @@ object LoginScreen : Screen {
 
         // Automatic redirection if authenticated
         LaunchedEffect(authState) {
-            if (authState is AuthState.Authenticated) {
+            if (authState is AuthState.Authenticated || authManager.currentUser != null) {
+                appearancePreferences.onboardingCompleted.set(true)
                 backstack.clear()
                 backstack.add(MainScreen)
             }
@@ -169,7 +178,7 @@ object LoginScreen : Screen {
                 ) {
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Animated Max Stream Brand Emblem
+                    // Premium Max Stream Brand Emblem (No square, no play button, original vector logo)
                     MaxStreamBrandLogo()
 
                     Spacer(modifier = Modifier.height(28.dp))
@@ -183,7 +192,9 @@ object LoginScreen : Screen {
                                 isAuthenticating = true
                                 errorMessage = null
                                 val client = authManager.getGoogleSignInClient(context)
-                                googleSignInLauncher.launch(client.signInIntent)
+                                client.signOut().addOnCompleteListener {
+                                    googleSignInLauncher.launch(client.signInIntent)
+                                }
                             }
                         },
                         onEmailSignInClick = {
@@ -222,85 +233,35 @@ object LoginScreen : Screen {
 }
 
 /**
- * Animated Glowing Max Stream Logo Emblem
+ * Premium Max Stream Logo Presentation (Clean, vector, preserved proportions, no square, no play button)
  */
 @Composable
 private fun MaxStreamBrandLogo() {
     val infiniteTransition = rememberInfiniteTransition(label = "logo_anim")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.04f,
+        initialValue = 0.98f,
+        targetValue = 1.02f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 3600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
     )
 
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow"
-    )
-
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(100.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
     ) {
-        // Soft Neon Glow Backdrop
-        Box(
+        Image(
+            painter = painterResource(id = R.drawable.ic_max_stream_logo),
+            contentDescription = "MAX STREAM",
+            contentScale = ContentScale.Fit,
             modifier = Modifier
-                .size(90.dp)
+                .height(100.dp)
                 .scale(pulseScale)
-                .alpha(glowAlpha)
-                .blur(28.dp)
-                .background(
-                    Brush.radialGradient(
-                        listOf(
-                            Color(0xFFFF5F1F),
-                            Color(0xFFFF2D55),
-                            Color(0xFF7B61FF),
-                            Color.Transparent
-                        )
-                    )
-                )
         )
-
-        // Glass Emblem Badge
-        Surface(
-            modifier = Modifier
-                .size(76.dp)
-                .scale(pulseScale)
-                .shadow(16.dp, CircleShape, spotColor = Color(0xFFFF2D55)),
-            shape = CircleShape,
-            color = Color(0xFF161622).copy(alpha = 0.75f),
-            border = BorderStroke(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.45f),
-                        Color(0xFFFF5F1F).copy(alpha = 0.5f),
-                        Color(0xFF7B61FF).copy(alpha = 0.5f)
-                    )
-                )
-            )
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayCircle,
-                    contentDescription = "Max Stream Logo",
-                    tint = Color.White,
-                    modifier = Modifier.size(42.dp)
-                )
-            }
-        }
     }
 }
 
@@ -317,18 +278,18 @@ private fun FloatingGlassAuthCard(
 ) {
     val cardShape = RoundedCornerShape(28.dp)
 
-    Surface(
+        Surface(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(
                 elevation = 24.dp,
                 shape = cardShape,
-                ambientColor = Color.Black.copy(alpha = 0.7f),
-                spotColor = Color(0xFF7B61FF).copy(alpha = 0.25f)
+                ambientColor = Color.Black.copy(alpha = 0.8f),
+                spotColor = Color(0xFF6B21A8).copy(alpha = 0.20f)
             ),
         shape = cardShape,
-        color = Color(0xFF12121A).copy(alpha = 0.68f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+        color = Color(0xFF0E0E16).copy(alpha = 0.75f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
     ) {
         Column(
             modifier = Modifier
@@ -406,12 +367,18 @@ private fun FloatingGlassAuthCard(
                     }
                 }
             } else {
-                // 1. Continue with Google
+                // 1. Continue with Google (Official Google 4-color G-mark)
                 GlassPillButton(
                     text = "Continue with Google",
-                    icon = Icons.Default.Person,
+                    iconContent = {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_google_logo),
+                            contentDescription = "Google",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
                     highlightBrush = Brush.horizontalGradient(
-                        listOf(Color(0xFFFF5F1F), Color(0xFFFF2D55))
+                        listOf(Color(0xFF6B21A8).copy(alpha = 0.28f), Color(0xFF831843).copy(alpha = 0.22f))
                     ),
                     isPrimary = true,
                     onClick = onGoogleSignInClick,
@@ -424,9 +391,7 @@ private fun FloatingGlassAuthCard(
                 GlassPillButton(
                     text = "Continue with Email",
                     icon = Icons.Default.Email,
-                    highlightBrush = Brush.horizontalGradient(
-                        listOf(Color(0xFF7B61FF), Color(0xFF00C2FF))
-                    ),
+                    highlightBrush = null,
                     isPrimary = false,
                     onClick = onEmailSignInClick,
                     modifier = Modifier.testTag("btn_email_signin")
@@ -465,9 +430,10 @@ private fun FloatingGlassAuthCard(
 @Composable
 private fun GlassPillButton(
     text: String,
-    icon: ImageVector,
-    highlightBrush: Brush?,
-    isPrimary: Boolean,
+    icon: ImageVector? = null,
+    iconContent: (@Composable () -> Unit)? = null,
+    highlightBrush: Brush? = null,
+    isPrimary: Boolean = false,
     isSubtle: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -484,15 +450,15 @@ private fun GlassPillButton(
     val shape = RoundedCornerShape(50)
 
     val backgroundColor = when {
-        isPrimary -> Color(0xFF1E1E2E).copy(alpha = 0.85f)
+        isPrimary -> Color(0xFF161622).copy(alpha = 0.85f)
         isSubtle -> Color.White.copy(alpha = 0.05f)
-        else -> Color(0xFF14141F).copy(alpha = 0.65f)
+        else -> Color(0xFF12121A).copy(alpha = 0.65f)
     }
 
     val borderColor = when {
-        isPrimary -> Color.White.copy(alpha = 0.28f)
+        isPrimary -> Color.White.copy(alpha = 0.24f)
         isSubtle -> Color.White.copy(alpha = 0.10f)
-        else -> Color.White.copy(alpha = 0.18f)
+        else -> Color.White.copy(alpha = 0.16f)
     }
 
     Surface(
@@ -514,12 +480,12 @@ private fun GlassPillButton(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Subtle gradient glow for primary button
+            // Subtle ambient gradient glow for primary button
             if (highlightBrush != null && isPrimary) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .alpha(0.18f)
+                        .alpha(0.25f)
                         .background(highlightBrush)
                 )
             }
@@ -529,12 +495,16 @@ private fun GlassPillButton(
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(horizontal = 20.dp)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isSubtle) Color.White.copy(alpha = 0.6f) else Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (iconContent != null) {
+                    iconContent()
+                } else if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (isSubtle) Color.White.copy(alpha = 0.6f) else Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -705,7 +675,7 @@ private fun EmailAuthDialog(
 
                     Text(
                         text = if (isRegisterMode) "Already have an account? Sign In" else "New to Max Stream? Create Account",
-                        color = Color(0xFF00C2FF),
+                        color = Color(0xFFD8B4FE),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable {

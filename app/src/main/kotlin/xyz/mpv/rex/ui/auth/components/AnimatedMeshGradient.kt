@@ -21,22 +21,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
- * Animated Mesh Gradient Background featuring OTT dark aesthetic with vibrant energy:
- * Colors: #FF5F1F (Orange), #FF2D55 (Neon Pink), #7B61FF (Vibrant Purple), #00C2FF (Electric Cyan)
+ * Premium Dark Cinematic Mesh Gradient Background for MAX STREAM:
+ * - Deep OLED black base (#050508)
+ * - Subtle purple & deep magenta ambient ambient lighting (no large cyan/blue glow, no bright halo)
+ * - Clean glassmorphism contrast and readability
  */
 @Composable
 fun AnimatedMeshGradient(
     modifier: Modifier = Modifier,
-    blurRadius: Int = 80,
+    blurRadius: Int = 90,
     content: @Composable () -> Unit = {}
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "mesh_gradient")
+    val infiniteTransition = rememberInfiniteTransition(label = "cinematic_mesh_gradient")
 
     val t1 by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 8000, easing = LinearEasing),
+            animation = tween(durationMillis = 14000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "t1"
@@ -46,27 +48,27 @@ fun AnimatedMeshGradient(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 11000, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 18000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "t2"
     )
 
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.15f,
+    val subtlePulse by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 6000, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 8000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "pulse"
+        label = "subtlePulse"
     )
 
-    val colorOrange = Color(0xFFFF5F1F)
-    val colorCrimson = Color(0xFFFF2D55)
-    val colorPurple = Color(0xFF7B61FF)
-    val colorCyan = Color(0xFF00C2FF)
-    val colorDarkBase = Color(0xFF07070A)
+    // Cinematic deep dark palette: subtle purple/magenta accents with zero cyan/blue glow
+    val deepPurple = Color(0xFF6B21A8) // Deep violet
+    val subtleMagenta = Color(0xFF831843) // Deep rich berry/magenta
+    val darkCharcoal = Color(0xFF0F0B18)
+    val colorDarkBase = Color(0xFF06060A) // Ultra deep cinematic OLED black
 
     Box(
         modifier = modifier
@@ -81,53 +83,44 @@ fun AnimatedMeshGradient(
             val w = size.width
             val h = size.height
 
-            // Orb 1: Neon Pink / Crimson (Top Left wandering)
+            // Orb 1: Subtle deep magenta accent (top-left, soft and diffused)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(colorCrimson.copy(alpha = 0.45f), Color.Transparent),
-                    center = Offset(w * (0.2f + 0.3f * t1), h * (0.15f + 0.25f * t2)),
-                    radius = (w * 0.55f) * pulse
+                    colors = listOf(subtleMagenta.copy(alpha = 0.16f), Color.Transparent),
+                    center = Offset(w * (0.2f + 0.15f * t1), h * (0.15f + 0.12f * t2)),
+                    radius = (w * 0.65f) * subtlePulse
                 )
             )
 
-            // Orb 2: Electric Cyan (Top Right wandering)
+            // Orb 2: Deep atmospheric violet (bottom-right wandering)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(colorCyan.copy(alpha = 0.40f), Color.Transparent),
-                    center = Offset(w * (0.85f - 0.35f * t2), h * (0.25f + 0.3f * t1)),
-                    radius = (w * 0.60f) * pulse
+                    colors = listOf(deepPurple.copy(alpha = 0.18f), Color.Transparent),
+                    center = Offset(w * (0.78f - 0.18f * t2), h * (0.75f - 0.15f * t1)),
+                    radius = (w * 0.70f) * subtlePulse
                 )
             )
 
-            // Orb 3: Sunset Orange (Bottom Left wandering)
+            // Orb 3: Very subtle dark warmth in center-bottom
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(colorOrange.copy(alpha = 0.42f), Color.Transparent),
-                    center = Offset(w * (0.25f + 0.25f * t2), h * (0.8f - 0.25f * t1)),
-                    radius = (w * 0.58f) * (2f - pulse)
-                )
-            )
-
-            // Orb 4: Vibrant Purple (Bottom Right / Center wandering)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(colorPurple.copy(alpha = 0.48f), Color.Transparent),
-                    center = Offset(w * (0.75f - 0.25f * t1), h * (0.75f - 0.2f * t2)),
-                    radius = (w * 0.65f) * pulse
+                    colors = listOf(darkCharcoal.copy(alpha = 0.25f), Color.Transparent),
+                    center = Offset(w * 0.5f, h * (0.55f + 0.1f * t1)),
+                    radius = w * 0.8f
                 )
             )
         }
 
-        // Dark Vignette / Contrast overlay
+        // Deep Cinematic Vignette & Contrast Overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Black.copy(alpha = 0.15f),
-                            Color.Black.copy(alpha = 0.65f)
+                            Color(0xFF06060A).copy(alpha = 0.60f),
+                            Color(0xFF06060A).copy(alpha = 0.30f),
+                            Color(0xFF06060A).copy(alpha = 0.85f)
                         )
                     )
                 )

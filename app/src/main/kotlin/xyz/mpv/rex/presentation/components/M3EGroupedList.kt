@@ -1,5 +1,6 @@
 package xyz.mpv.rex.presentation.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -55,6 +56,9 @@ fun GroupedListItem(
     content: @Composable () -> Unit,
 ) {
     val shape = groupedItemShape(position)
+    val glassColor = color ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
+    val glassBorder = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+
     if (onClick != null) {
         Surface(
             onClick = onClick,
@@ -63,7 +67,8 @@ fun GroupedListItem(
                 .fillMaxWidth()
                 .clip(shape),
             shape = shape,
-            color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = glassColor,
+            border = glassBorder,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = tonalElevation,
             shadowElevation = 0.dp,
@@ -76,7 +81,8 @@ fun GroupedListItem(
                 .fillMaxWidth()
                 .clip(shape),
             shape = shape,
-            color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = glassColor,
+            border = glassBorder,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = tonalElevation,
             shadowElevation = 0.dp,

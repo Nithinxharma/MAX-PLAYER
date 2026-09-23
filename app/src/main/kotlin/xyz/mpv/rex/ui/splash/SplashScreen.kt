@@ -185,20 +185,18 @@ object SplashScreen : Screen {
         .graphicsLayer { alpha = exitAlpha.value },
       contentAlignment = Alignment.Center
     ) {
-      // Atmospheric Energy Pulse Glow Backdrop
+      // Atmospheric Subtle Ambient Violet/Rose Backdrop (No cyan/blue glow, no excessive bloom)
       Box(
         modifier = Modifier
-          .size(360.dp)
+          .size(320.dp)
           .scale(backgroundGlowScale.value * energyPulse)
-          .alpha(backgroundGlowAlpha.value * ribbonGlowAlpha)
-          .blur(64.dp)
+          .alpha(backgroundGlowAlpha.value * ribbonGlowAlpha * 0.45f)
+          .blur(80.dp)
           .background(
             Brush.radialGradient(
               colors = listOf(
-                Color(0xFFFF5F1F),
-                Color(0xFFFF2D55),
-                Color(0xFF7B61FF),
-                Color(0xFF00C2FF),
+                Color(0xFF6B21A8).copy(alpha = 0.35f),
+                Color(0xFF831843).copy(alpha = 0.20f),
                 Color.Transparent
               )
             )
