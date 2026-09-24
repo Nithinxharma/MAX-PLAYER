@@ -133,7 +133,7 @@ fun MaxStreamContinueWatchingCard(
         label = "cw_card_scale"
     )
 
-    // Dynamically extract thumbnail for local videos if needed
+    // Dynamically extract thumbnail for local videos on IO dispatcher to keep UI 100% fluid
     val localThumbnailBitmap by produceState<Bitmap?>(initialValue = null, item.landscapeImageUrl, item.id) {
         val imgUrl = item.landscapeImageUrl
         if (imgUrl != null && !imgUrl.startsWith("http://") && !imgUrl.startsWith("https://")) {
@@ -142,10 +142,16 @@ fun MaxStreamContinueWatchingCard(
             } else {
                 Uri.fromFile(File(imgUrl))
             }
-            value = MediaThumbnailUtils.extractThumbnailOrCoverArt(context, uri)
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                MediaThumbnailUtils.extractThumbnailOrCoverArt(context, uri)
+            }
         } else {
             value = null
         }
+    }
+
+    val highResBackdropUrl = remember(item.landscapeImageUrl) {
+        MaxStreamMetadataHelper.toHighResFanart(item.landscapeImageUrl) ?: item.landscapeImageUrl
     }
 
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
@@ -190,10 +196,9 @@ fun MaxStreamContinueWatchingCard(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                val highResUrl = MaxStreamMetadataHelper.toHighResFanart(item.landscapeImageUrl) ?: item.landscapeImageUrl
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(highResUrl)
+                        .data(highResBackdropUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = item.title,

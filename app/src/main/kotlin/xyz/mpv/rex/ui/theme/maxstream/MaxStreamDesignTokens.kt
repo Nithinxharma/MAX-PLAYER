@@ -161,27 +161,14 @@ fun Modifier.maxStreamGlass(
     .then(
         if (glowRadius > 0.dp && glowColor != Color.Transparent) {
             Modifier.drawBehind {
-                drawIntoCanvas { canvas ->
-                    val paint = Paint().apply {
-                        asFrameworkPaint().apply {
-                            isAntiAlias = true
-                            color = glowColor.toArgb()
-                            maskFilter = android.graphics.BlurMaskFilter(
-                                glowRadius.toPx(),
-                                android.graphics.BlurMaskFilter.Blur.NORMAL
-                            )
-                        }
-                    }
-                    canvas.drawRoundRect(
-                        left = -4.dp.toPx(),
-                        top = -4.dp.toPx(),
-                        right = size.width + 4.dp.toPx(),
-                        bottom = size.height + 4.dp.toPx(),
-                        radiusX = 18.dp.toPx(),
-                        radiusY = 18.dp.toPx(),
-                        paint = paint
-                    )
-                }
+                drawRoundRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(glowColor, Color.Transparent),
+                        center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f),
+                        radius = (size.width.coerceAtLeast(size.height) / 2f) + glowRadius.toPx()
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(18.dp.toPx())
+                )
             }
         } else Modifier
     )

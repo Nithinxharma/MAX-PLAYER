@@ -166,6 +166,14 @@ class MPVView(
     MPVLib.setOptionString("hr-seek", if (preciseSeek) "yes" else "no")
     MPVLib.setOptionString("hr-seek-framedrop", if (preciseSeek) "no" else "yes")
 
+    // Performance & Battery: Optimize demuxer caching and network streaming
+    MPVLib.setOptionString("cache", "yes")
+    MPVLib.setOptionString("demuxer-max-bytes", "64MiB")
+    MPVLib.setOptionString("demuxer-max-back-bytes", "32MiB")
+    MPVLib.setOptionString("demuxer-readahead-secs", "60")
+    MPVLib.setOptionString("vd-lavc-threads", "0")
+    MPVLib.setOptionString("audio-buffer", "0.2")
+
     // Anime4K shader initialization (MUST be in initOptions, not after file load!)
     applyAnime4KShaders()
 

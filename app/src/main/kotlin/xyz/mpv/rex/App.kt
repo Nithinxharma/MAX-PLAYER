@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.database.ContentObserver
+import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -14,6 +15,11 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import android.util.Log
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import coil.request.CachePolicy
 import xyz.mpv.rex.database.repository.VideoMetadataCacheRepository
 import xyz.mpv.rex.database.repository.HybridMediaIndexRepository
 import xyz.mpv.rex.di.DatabaseModule
@@ -21,7 +27,6 @@ import xyz.mpv.rex.di.FileManagerModule
 import xyz.mpv.rex.di.PreferencesModule
 import xyz.mpv.rex.presentation.crash.CrashActivity
 import xyz.mpv.rex.presentation.crash.GlobalExceptionHandler
-import xyz.mpv.rex.utils.media.MediaLibraryEvents
 import `is`.xyz.mpv.FastThumbnails
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,14 +34,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.merge
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.annotation.KoinExperimentalAPI
 
 @OptIn(KoinExperimentalAPI::class, kotlinx.coroutines.FlowPreview::class)
-class App : Application() {
+class App : Application(), ImageLoaderFactory {
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
   private val metadataCache: VideoMetadataCacheRepository by inject()
   private val hybridMediaIndex: HybridMediaIndexRepository by inject()
@@ -48,6 +52,32 @@ class App : Application() {
 
   override fun attachBaseContext(base: Context) {
     super.attachBaseContext(xyz.mpv.rex.utils.locale.LocaleHelper.wrapContext(base))
+  }
+
+  override fun newImageLoader(): ImageLoader {
+    return ImageLoader.Builder(this)
+      .memoryCache {
+        MemoryCache.Builder(this)
+          .maxSizePercent(0.25)
+          .strongReferencesEnabled(true)
+          .build()
+      }
+      .diskCache {
+        DiskCache.Builder()
+          .directory(cacheDir.resolve("image_cache"))
+          .maxSizeBytes(250L * 1024 * 1024) // 250MB dedicated disk cache
+          .build()
+      }
+      .crossfade(true)
+      .bitmapConfig(Bitmap.Config.ARGB_8888)
+      .allowHardware(true)
+      .allowRgb565(false)
+      .memoryCachePolicy(CachePolicy.ENABLED)
+      .diskCachePolicy(CachePolicy.ENABLED)
+      .networkCachePolicy(CachePolicy.ENABLED)
+      .respectCacheHeaders(false)
+      .dispatcher(Dispatchers.IO)
+      .build()
   }
 
   override fun onCreate() {
@@ -137,34 +167,11 @@ class App : Application() {
     applicationScope.launch(Dispatchers.IO) {
       try {
         val firebaseApp = FirebaseApp.getInstance()
-        Log.d("FirebaseTest", "[Firebase] Initialized (${firebaseApp.name})")
-
         val auth = FirebaseAuth.getInstance()
-        Log.d("FirebaseTest", "[FirebaseAuth] Initialized (Current User: ${auth.currentUser?.uid ?: "Anonymous/None"})")
-
         val firestore = FirebaseFirestore.getInstance()
-        Log.d("FirebaseTest", "[Firestore] Connected")
-
-        firestore.collection("users").document("test_user")
-          .get()
-          .addOnSuccessListener { document ->
-            if (document != null && document.exists()) {
-              Log.d("FirebaseTest", "[Firestore] Read Success")
-              val data = document.data
-              Log.d("FirebaseTest", "[Firestore] Document Data = $data")
-              Log.d("FirebaseTest", "[Firestore] name: ${document.getString("name")}")
-              Log.d("FirebaseTest", "[Firestore] email: ${document.getString("email")}")
-              Log.d("FirebaseTest", "[Firestore] premium: ${document.get("premium")}")
-              Log.d("FirebaseTest", "[Firestore] createdAt: ${document.get("createdAt")}")
-            } else {
-              Log.d("FirebaseTest", "[Firestore] Document Missing")
-            }
-          }
-          .addOnFailureListener { exception ->
-            Log.e("FirebaseTest", "[Firestore] Connection Failed: ${exception.message}", exception)
-          }
+        Log.d("FirebaseTest", "[Firebase] Initialized (${firebaseApp.name}) Auth UID: ${auth.currentUser?.uid ?: "Anonymous/None"} Firestore: Ready")
       } catch (e: Throwable) {
-        Log.e("FirebaseTest", "[Firestore] Connection Failed: ${e.message}", e)
+        Log.e("FirebaseTest", "[Firebase] Initialization check: ${e.message}", e)
       }
     }
   }

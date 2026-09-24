@@ -93,6 +93,7 @@ fun MaxStreamPosterCard(
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
     val mutedTextColor = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.outline
+    val highResPoster = remember(posterUrl) { MaxStreamMetadataHelper.toHighResFanart(posterUrl) ?: posterUrl }
 
     Column(
         modifier = modifier
@@ -124,7 +125,6 @@ fun MaxStreamPosterCard(
                 .background(if (isDark) MaxStreamTheme.ElevatedSurface else MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
             // Poster Artwork
-            val highResPoster = MaxStreamMetadataHelper.toHighResFanart(posterUrl) ?: posterUrl
             AsyncImage(
                 model = highResPoster,
                 contentDescription = title,
