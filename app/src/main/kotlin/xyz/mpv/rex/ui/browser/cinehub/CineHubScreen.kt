@@ -641,6 +641,18 @@ object CineHubScreen : Screen {
           actions = {
             IconButton(
               onClick = {
+                backstack.add(xyz.mpv.rex.tv.ui.MaxStreamTvScreen)
+              },
+              modifier = Modifier.testTag("cinehub_tv_mode_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Default.Tv,
+                contentDescription = "MaxStream TV Mode & Hotspot Stream",
+                tint = MaterialTheme.colorScheme.primary,
+              )
+            }
+            IconButton(
+              onClick = {
                 backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
               },
               modifier = Modifier.testTag("cinehub_extensions_button"),

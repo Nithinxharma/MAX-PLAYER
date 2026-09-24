@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -155,6 +156,26 @@ fun MediaInfoSheet(uri: Uri, onDismiss: () -> Unit) {
             }
             if (!isLoading && error == null && textContent != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            val streamItem = xyz.mpv.rex.tv.model.TvStreamItem(
+                                id = uri.toString(),
+                                title = fileName,
+                                subtitle = "Local Video",
+                                uriString = uri.toString(),
+                                isLocalFile = true
+                            )
+                            onDismiss()
+                            xyz.mpv.rex.tv.MaxStreamTvManager.playOnTv(context, streamItem)
+                        },
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        ),
+                    ) {
+                        Icon(Icons.Rounded.Tv, contentDescription = "Play on TV")
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                     FilledTonalIconButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
