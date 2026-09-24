@@ -28,6 +28,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import xyz.mpv.rex.ui.browser.components.FloatingBottomNav
+import xyz.mpv.rex.ui.browser.medialibrary.MediaLibraryContent
 import xyz.mpv.rex.ui.browser.components.NavTabItem
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Icon
@@ -207,17 +208,10 @@ object MainScreen : Screen {
     ) {
       buildList {
         add(
-          VisibleTab("home", homeLabel, icon = Icons.Rounded.Folder) {
-            FolderListScreen.Content()
+          VisibleTab("library", "Local Library", icon = Icons.Rounded.Folder) {
+            MediaLibraryContent()
           }
         )
-        if (isShortsEnabled) {
-          add(
-            VisibleTab("shorts", shortsLabel, icon = Icons.Rounded.SlowMotionVideo) {
-              ShortsScreen().Content()
-            }
-          )
-        }
         if (isCineHubTabVisible) {
           add(
             VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {

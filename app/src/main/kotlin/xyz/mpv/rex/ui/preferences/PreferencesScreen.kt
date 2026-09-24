@@ -327,19 +327,6 @@ object PreferencesScreen : Screen {
             }
           }
 
-          // RexShorts Section
-          item {
-            GlassCategoryHeader(title = stringResource(R.string.pref_category_rexshorts), icon = Icons.Outlined.VideoLibrary)
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = stringResource(R.string.pref_category_rexshorts_settings),
-                subtitle = stringResource(R.string.pref_category_rexshorts_settings_desc),
-                icon = Icons.Outlined.VideoLibrary,
-                onClick = { backstack.add(ShortsPreferencesScreen) }
-              )
-            }
-          }
-
           // Integrations Section
           item {
             GlassCategoryHeader(title = "Integrations", icon = Icons.Outlined.Tv)

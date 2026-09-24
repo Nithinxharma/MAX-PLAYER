@@ -36,6 +36,14 @@ data class UserProfile(
     @set:PropertyName("premium")
     var premium: Boolean = false,
 
+    @get:PropertyName("providerAccess")
+    @set:PropertyName("providerAccess")
+    var providerAccess: List<String> = listOf("castletv"),
+
+    @get:PropertyName("installedProviders")
+    @set:PropertyName("installedProviders")
+    var installedProviders: Map<String, Long> = mapOf("castletv" to 14L),
+
     @ServerTimestamp
     @get:PropertyName("createdAt")
     @set:PropertyName("createdAt")
@@ -79,6 +87,14 @@ data class UserProfile(
                 ?: doc.getBoolean("isPremium") 
                 ?: false
 
+            @Suppress("UNCHECKED_CAST")
+            val rawAccess = doc.get("providerAccess") as? List<String> ?: listOf("castletv")
+
+            @Suppress("UNCHECKED_CAST")
+            val rawInstalled = (doc.get("installedProviders") as? Map<String, Any>)?.mapValues {
+                (it.value as? Number)?.toLong() ?: 1L
+            } ?: mapOf("castletv" to 14L)
+
             val createdAt = doc.getDate("createdAt")
             val lastLogin = doc.getDate("lastLogin")
 
@@ -89,6 +105,8 @@ data class UserProfile(
                 photo = photo,
                 role = resolvedRole,
                 premium = resolvedPremium,
+                providerAccess = rawAccess,
+                installedProviders = rawInstalled,
                 createdAt = createdAt,
                 lastLogin = lastLogin
             )

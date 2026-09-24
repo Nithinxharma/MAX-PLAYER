@@ -47,6 +47,7 @@ class App : Application(), ImageLoaderFactory {
   private val advancedPreferences: xyz.mpv.rex.preferences.AdvancedPreferences by inject()
   private val extensionManager: xyz.mpv.rex.cinehub.extension.manager.ExtensionManager by inject()
   private val serverProviderSyncService: xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService by inject()
+  private val firebaseProviderSyncService: xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService by inject()
   private val mediaStoreInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val rootInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
@@ -155,10 +156,13 @@ class App : Application(), ImageLoaderFactory {
     // Firebase Integration Verification
     verifyFirebaseIntegration()
 
-    // Trigger silent server-controlled provider synchronization (CastleTV & managed providers)
+    // Trigger silent server-controlled provider synchronization
     applicationScope.launch {
       runCatching {
         serverProviderSyncService.triggerSilentSync(force = false)
+      }
+      runCatching {
+        firebaseProviderSyncService.syncUserProviders()
       }
     }
   }
