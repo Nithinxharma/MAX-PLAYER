@@ -36,6 +36,7 @@ val domainModule = module {
     single { xyz.mpv.rex.ui.preferences.PluginExecutionTraceViewModel(androidContext(), get(), get(), get()) }
     single { xyz.mpv.rex.ui.preferences.RepositoryPresetsViewModel(androidContext(), get()) }
     single<xyz.mpv.rex.auth.AuthManager> { xyz.mpv.rex.auth.FirebaseAuthManager() }
+    single { xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService(androidContext(), get(), get(), get()) }
 }
 
 

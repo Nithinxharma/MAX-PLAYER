@@ -26,6 +26,8 @@ class AdvancedPreferences(
   val enableLuaScripts = preferenceStore.getBoolean("enable_lua_scripts", false)
   val selectedLuaScripts = preferenceStore.getStringSet("selected_lua_scripts", emptySet())
 
+  val adminDeveloperMenuUnlocked = preferenceStore.getBoolean("admin_developer_menu_unlocked", false)
+
   /**
    * Syncs the MediaInfoActivity enabled state with the preference.
    * This affects whether the activity appears in the system intent chooser.

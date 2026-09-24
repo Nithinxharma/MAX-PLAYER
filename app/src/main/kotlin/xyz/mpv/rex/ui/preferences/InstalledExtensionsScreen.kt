@@ -37,6 +37,7 @@ import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
 import xyz.mpv.rex.cinehub.extension.model.ExtensionFailureItem
 import xyz.mpv.rex.cinehub.extension.model.ExtensionTestBatchReport
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
+import xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 import xyz.mpv.rex.cinehub.extension.util.LanguageUtils
 
@@ -47,7 +48,8 @@ fun InstalledExtensionsScreen(
     onNavigateToRepositories: () -> Unit,
     extensionManager: ExtensionManager = koinInject(),
     repositoryManager: RepositoryManager = koinInject(),
-    registry: ProviderRegistry = koinInject()
+    registry: ProviderRegistry = koinInject(),
+    serverProviderSyncService: ServerProviderSyncService = koinInject()
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -115,6 +117,24 @@ fun InstalledExtensionsScreen(
                     }
                 },
                 actions = {
+                    // Sync Managed Server Providers
+                    IconButton(
+                        onClick = {
+                            scope.launch(Dispatchers.IO) {
+                                val success = serverProviderSyncService.syncProviders(force = true)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(
+                                        context,
+                                        if (success) "Server provider manifest synced successfully" else "Provider sync completed with local fallbacks",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Outlined.CloudSync, contentDescription = "Sync Server Providers")
+                    }
+
                     // Test All Installed Extensions button
                     IconButton(
                         onClick = { runBatchDiagnostics() },

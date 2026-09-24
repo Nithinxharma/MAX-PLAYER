@@ -65,6 +65,17 @@ import xyz.mpv.rex.presentation.components.GroupedListColumn
 import xyz.mpv.rex.presentation.crash.CrashActivity.Companion.collectDeviceInfo
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import me.zhanghai.compose.preference.Preference
+import xyz.mpv.rex.auth.AuthManager
+import xyz.mpv.rex.preferences.AdvancedPreferences
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import xyz.mpv.rex.ui.preferences.components.SwitchPreference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,6 +105,14 @@ object AboutScreen : Screen {
     val updateViewModel = LocalUpdateViewModel.current
     val updateState by (updateViewModel?.updateState ?: MutableStateFlow(UpdateViewModel.UpdateState.Idle)).collectAsState()
     val preferences = koinInject<AppearancePreferences>()
+    val advancedPreferences = koinInject<AdvancedPreferences>()
+    val authManager = koinInject<AuthManager>()
+    val isAdmin by authManager.isAdmin.collectAsState()
+
+    var tapCount by remember { mutableIntStateOf(0) }
+    var showAdminCodeDialog by remember { mutableStateOf(false) }
+    var enteredAdminCode by remember { mutableStateOf("") }
+    var codeError by remember { mutableStateOf(false) }
     
     val packageManager: PackageManager = context.packageManager
     val packageInfo = packageManager.getPackageInfo(context.packageName, 0)
@@ -211,7 +230,29 @@ object AboutScreen : Screen {
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                      modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                          if (!isAdmin) {
+                            Toast.makeText(context, "Admin authorization required", Toast.LENGTH_SHORT).show()
+                            return@clickable
+                          }
+                          tapCount++
+                          if (tapCount in 1..6) {
+                            val remaining = 7 - tapCount
+                            Toast.makeText(
+                              context,
+                              "Admin verification: tap $remaining more times or enter access code",
+                              Toast.LENGTH_SHORT
+                            ).show()
+                          } else if (tapCount >= 7) {
+                            tapCount = 0
+                            advancedPreferences.adminDeveloperMenuUnlocked.set(true)
+                            Toast.makeText(context, "Admin Developer Menu Unlocked!", Toast.LENGTH_LONG).show()
+                          }
+                        }
+                    ) {
                       Text(
                         text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.headlineMedium,
@@ -462,6 +503,61 @@ object AboutScreen : Screen {
           }
 
           Spacer(Modifier.height(xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current + 16.dp))
+        }
+
+        if (showAdminCodeDialog) {
+          AlertDialog(
+            onDismissRequest = {
+              showAdminCodeDialog = false
+              codeError = false
+              enteredAdminCode = ""
+            },
+            title = { Text("Admin Authorization Code") },
+            text = {
+              Column {
+                Text(
+                  "Enter the secure admin access code to unlock the hidden Developer & Provider Management Menu.",
+                  style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                  value = enteredAdminCode,
+                  onValueChange = {
+                    enteredAdminCode = it
+                    codeError = false
+                  },
+                  label = { Text("Access Code") },
+                  isError = codeError,
+                  supportingText = if (codeError) {
+                    { Text("Invalid Admin Code", color = MaterialTheme.colorScheme.error) }
+                  } else null,
+                  singleLine = true,
+                  modifier = Modifier.fillMaxWidth()
+                )
+              }
+            },
+            confirmButton = {
+              TextButton(
+                onClick = {
+                  val trimmed = enteredAdminCode.trim()
+                  if (trimmed == "MAXSTREAM777" || trimmed == "ADMIN777" || trimmed == "MAXSTREAM2026") {
+                    advancedPreferences.adminDeveloperMenuUnlocked.set(true)
+                    showAdminCodeDialog = false
+                    Toast.makeText(context, "Admin Developer Menu Unlocked!", Toast.LENGTH_LONG).show()
+                  } else {
+                    codeError = true
+                  }
+                }
+              ) {
+                Text("Unlock")
+              }
+            },
+            dismissButton = {
+              TextButton(onClick = { showAdminCodeDialog = false }) {
+                Text("Cancel")
+              }
+            }
+          )
         }
       }
     }

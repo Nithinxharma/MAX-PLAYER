@@ -1,6 +1,7 @@
 package xyz.mpv.rex.ui.preferences
 import xyz.mpv.rex.auth.AuthManager
 import xyz.mpv.rex.ui.profile.ProfileScreen
+import xyz.mpv.rex.preferences.preference.collectAsState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import org.koin.compose.koinInject
@@ -112,9 +113,12 @@ object PreferencesScreen : Screen {
     ) { padding ->
       val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
       val authManager = koinInject<AuthManager>()
+      val advancedPreferences = koinInject<xyz.mpv.rex.preferences.AdvancedPreferences>()
       val userProfile by authManager.userProfile.collectAsState()
       val userRole by authManager.userRole.collectAsState()
       val isAdmin by authManager.isAdmin.collectAsState()
+      val isDeveloperMenuUnlocked by advancedPreferences.adminDeveloperMenuUnlocked.collectAsState()
+      val canAccessAdminDeveloperMenu = isAdmin && isDeveloperMenuUnlocked
       val isPremium by authManager.isPremium.collectAsState()
       val currentUser = authManager.currentUser
 
@@ -250,17 +254,19 @@ object PreferencesScreen : Screen {
             }
           }
 
-          // Extensions Section
-          item {
-            PreferenceSection(title = "Extensions") {
-              GroupedListColumn {
-                PreferenceItem(
-                  position = GroupPosition.ONLY,
-                  title = "Plugin Extensions",
-                  summary = "Manage providers and extension repositories",
-                  icon = Icons.Outlined.Extension,
-                  onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute) },
-                )
+          // Extensions Section (Hidden from standard users, accessible only to validated Admins with unlock)
+          if (canAccessAdminDeveloperMenu) {
+            item {
+              PreferenceSection(title = "Admin: Extensions & Providers") {
+                GroupedListColumn {
+                  PreferenceItem(
+                    position = GroupPosition.ONLY,
+                    title = "Plugin Extensions & Providers",
+                    summary = "Manage repositories, installed extensions, and diagnostic suite",
+                    icon = Icons.Outlined.Extension,
+                    onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute) },
+                  )
+                }
               }
             }
           }
@@ -401,13 +407,15 @@ object PreferencesScreen : Screen {
                   icon = Icons.Outlined.Code,
                   onClick = { backstack.add(AdvancedPreferencesScreen) },
                 )
-                PreferenceItem(
-                  position = GroupPosition.MIDDLE,
-                  title = stringResource(id = R.string.pref_developer_options_title),
-                  summary = stringResource(id = R.string.pref_developer_options_summary),
-                  icon = Icons.Outlined.Build,
-                  onClick = { backstack.add(DeveloperOptionsScreen) },
-                )
+                if (canAccessAdminDeveloperMenu) {
+                  PreferenceItem(
+                    position = GroupPosition.MIDDLE,
+                    title = stringResource(id = R.string.pref_developer_options_title),
+                    summary = stringResource(id = R.string.pref_developer_options_summary),
+                    icon = Icons.Outlined.Build,
+                    onClick = { backstack.add(DeveloperOptionsScreen) },
+                  )
+                }
                 PreferenceItem(
                   position = GroupPosition.LAST,
                   title = stringResource(id = R.string.pref_about_title),

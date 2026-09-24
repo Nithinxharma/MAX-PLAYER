@@ -23,6 +23,13 @@ import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.presentation.components.GroupPosition
 import xyz.mpv.rex.presentation.components.GroupedListColumn
 import xyz.mpv.rex.ui.utils.LocalBackStack
+import xyz.mpv.rex.auth.AuthManager
+import xyz.mpv.rex.preferences.AdvancedPreferences
+import xyz.mpv.rex.preferences.preference.collectAsState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import org.koin.compose.koinInject
 
 @Serializable
 object DeveloperOptionsScreen : Screen {
@@ -31,6 +38,26 @@ object DeveloperOptionsScreen : Screen {
     @Composable
     override fun Content() {
         val backstack = LocalBackStack.current
+        val authManager = koinInject<AuthManager>()
+        val advancedPreferences = koinInject<AdvancedPreferences>()
+        val isAdmin by authManager.isAdmin.collectAsState()
+        val isDeveloperMenuUnlocked by advancedPreferences.adminDeveloperMenuUnlocked.collectAsState()
+
+        if (!isAdmin || !isDeveloperMenuUnlocked) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Access Restricted: Administrator privileges and security unlock required.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            return
+        }
 
         Scaffold(
             topBar = {

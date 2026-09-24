@@ -404,10 +404,11 @@ fun CineHubSearchScreen(
                                 .testTag("cinehub_search_results_grid")
                         ) {
                             items(searchResults, key = { "${it.apiName}_${it.url}" }) { item ->
+                                val mediaType = item.type
                                 MaxStreamPosterCard(
                                     title = item.name,
                                     posterUrl = item.posterUrl,
-                                    subtitle = item.apiName,
+                                    subtitle = mediaType?.name?.uppercase() ?: "STREAM",
                                     qualityBadge = "4K UHD",
                                     cardWidth = 140.dp,
                                     onClick = {
@@ -544,7 +545,7 @@ fun MediaDetailView(
                             color = if (isDark) MaxStreamTheme.GlassSurfaceActive else MaterialTheme.colorScheme.secondaryContainer
                         ) {
                             Text(
-                                text = details.apiName,
+                                text = "OTT HD STREAM",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                 color = if (isDark) MaxStreamTheme.ElectricCyan else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
