@@ -63,6 +63,7 @@ jobs:
       - name: Build release with Gradle
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=\"-Xmx6g -XX:MaxMetaspaceSize=1536m -XX:+UseG1GC\" -Dfile.encoding=UTF-8"
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Get tag name
