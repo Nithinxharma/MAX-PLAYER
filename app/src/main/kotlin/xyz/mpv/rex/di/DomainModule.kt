@@ -36,6 +36,9 @@ val domainModule = module {
     single { xyz.mpv.rex.ui.preferences.PluginExecutionTraceViewModel(androidContext(), get(), get(), get()) }
     single { xyz.mpv.rex.ui.preferences.RepositoryPresetsViewModel(androidContext(), get()) }
     single<xyz.mpv.rex.auth.AuthManager> { xyz.mpv.rex.auth.FirebaseAuthManager() }
+    single<xyz.mpv.rex.auth.elevation.AdminAuthorizationProvider> { xyz.mpv.rex.auth.elevation.DefaultAdminAuthorizationProvider(get()) }
+    single<xyz.mpv.rex.auth.elevation.ElevationTokenValidator> { xyz.mpv.rex.auth.elevation.DefaultElevationTokenValidator() }
+    single<xyz.mpv.rex.auth.elevation.AdminSessionManager> { xyz.mpv.rex.auth.elevation.DefaultAdminSessionManager(get(), get(), get()) }
     single { xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService(androidContext(), get(), get(), get()) }
 }
 

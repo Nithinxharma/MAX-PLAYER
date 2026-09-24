@@ -12,6 +12,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,7 @@ import xyz.mpv.rex.auth.model.UserRole
 
 /**
  * Production implementation of [AuthManager] connecting Google Sign-In, Firebase Auth,
- * Cloud Firestore Role-Based Access Control (RBAC), and user profile synchronization.
+ * Realtime Cloud Firestore Role-Based Access Control (RBAC), and user profile synchronization.
  */
 class FirebaseAuthManager(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -64,18 +65,31 @@ class FirebaseAuthManager(
     override val currentUser: FirebaseUser?
         get() = auth.currentUser
 
+    // Realtime Firestore snapshot listener for the active user's document
+    private var profileSnapshotListener: ListenerRegistration? = null
+
     init {
         auth.addAuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
             _firebaseUser.value = user
             if (user != null) {
-                Log.d(tag, "[Auth] User Authenticated")
+                Log.d(tag, "[Auth] User Authenticated (UID: ${user.uid})")
                 _authState.value = AuthState.Authenticated
+                
+                // Immediately start listening for Realtime Firestore changes on users/{uid}
+                attachRealtimeProfileListener(user.uid)
+                
+                // Perform sync in background
                 scope.launch {
-                    fetchUserProfile(user.uid)
+                    try {
+                        syncUserToFirestore(user)
+                    } catch (e: Exception) {
+                        Log.w(tag, "[Firestore] Background initial sync: ${e.message}")
+                    }
                 }
             } else {
                 Log.d(tag, "[Auth] User Unauthenticated")
+                detachRealtimeProfileListener()
                 _authState.value = AuthState.Unauthenticated
                 _userProfile.value = null
                 _userRole.value = UserRole.USER
@@ -83,6 +97,40 @@ class FirebaseAuthManager(
                 _isPremium.value = false
             }
         }
+    }
+
+    /**
+     * Attaches a real-time Firestore DocumentSnapshot listener so any update in the Firebase Console
+     * (e.g. changing name, photo, photoUrl, or role to 'admin') immediately reflects in the UI
+     * without requiring an app restart or re-login.
+     */
+    private fun attachRealtimeProfileListener(uid: String) {
+        detachRealtimeProfileListener()
+        try {
+            Log.d(tag, "[Firestore] Attaching Realtime Profile Listener for users/$uid")
+            profileSnapshotListener = firestore.collection("users").document(uid)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.e(tag, "[Firestore] Realtime profile listener error: ${error.message}", error)
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null && snapshot.exists()) {
+                        val parsedProfile = UserProfile.fromSnapshot(snapshot)
+                        Log.d(tag, "[Firestore] Realtime Update received for $uid: name=${parsedProfile.name}, role=${parsedProfile.role}, isAdmin=${UserRole.isAdmin(parsedProfile.role)}")
+                        applyProfileState(parsedProfile)
+                    } else {
+                        Log.w(tag, "[Firestore] Realtime snapshot: document does not exist for $uid")
+                    }
+                }
+        } catch (e: Exception) {
+            Log.e(tag, "[Firestore] Failed to attach snapshot listener: ${e.message}", e)
+        }
+    }
+
+    private fun detachRealtimeProfileListener() {
+        profileSnapshotListener?.remove()
+        profileSnapshotListener = null
     }
 
     override fun getGoogleSignInClient(context: Context): GoogleSignInClient {
@@ -116,7 +164,12 @@ class FirebaseAuthManager(
             _firebaseUser.value = user
             _authState.value = AuthState.Authenticated
 
-            val baseProfile = UserProfile(
+            // Attach realtime listener immediately
+            attachRealtimeProfileListener(user.uid)
+
+            // Sync user to Firestore without overwriting remote customizations
+            val syncResult = syncUserToFirestore(user)
+            val profile = syncResult.getOrNull() ?: UserProfile(
                 uid = user.uid,
                 name = user.displayName ?: "MaxStream User",
                 email = user.email ?: "",
@@ -124,78 +177,91 @@ class FirebaseAuthManager(
                 role = UserRole.USER,
                 premium = false
             )
-            applyProfileState(baseProfile)
+            applyProfileState(profile)
 
-            // Asynchronously sync profile to Firestore in background (does not block authentication)
-            scope.launch {
-                try {
-                    syncUserToFirestore(user)
-                } catch (e: Exception) {
-                    Log.w(tag, "[Firestore] Background user sync deferred: ${e.message}")
-                }
-            }
-
-            Result.success(baseProfile)
+            Result.success(profile)
         } catch (e: Exception) {
             Log.e(tag, "[Firebase Auth] Sign-in failed: ${e.message}", e)
-            _authState.value = AuthState.Error(e.localizedMessage ?: "Authentication failed")
-            Result.failure(e)
+            val errorMsg = if (e is ApiException) {
+                when (e.statusCode) {
+                    10 -> {
+                        "Google Sign-In Developer Error (Status 10). " +
+                        "The SHA-1 fingerprint of this APK must be registered in Firebase Console (Project Settings -> Your Apps). " +
+                        "Navigate to Settings -> About in this app to copy the active SHA-1 fingerprint."
+                    }
+                    12500 -> {
+                        "Google Sign-In Error (Status 12500). Please verify Google Play Services and ensure the OAuth Client ID is registered in Firebase."
+                    }
+                    7 -> "Network error during Google Sign-In. Check your internet connection."
+                    else -> "Google Sign-In failed [code: ${e.statusCode}]: ${e.localizedMessage ?: e.message}"
+                }
+            } else {
+                e.localizedMessage ?: "Authentication failed: ${e.message}"
+            }
+            _authState.value = AuthState.Error(errorMsg)
+            Result.failure(Exception(errorMsg, e))
         }
     }
 
-    override suspend fun handleGoogleSignInResult(data: Intent?): Result<UserProfile> = withContext(Dispatchers.IO) {
-        try {
-            if (data == null) {
-                Log.w(tag, "[Google Sign-In] Intent data is null")
-                return@withContext Result.failure(IllegalStateException("No sign-in response received from Google."))
-            }
+    override suspend fun handleGoogleSignInResult(data: Intent?): Result<UserProfile> {
+        return try {
             val task = GoogleSignIn.getSignedInAccountFromIntent(data)
             val account = task.getResult(ApiException::class.java)
-            val idToken = account?.idToken
-            if (idToken.isNullOrBlank()) {
-                Log.e(tag, "[Google Sign-In] ID token is null for account: ${account?.email}")
-                return@withContext Result.failure(
-                    IllegalStateException("Google ID Token is missing. Verify Google Cloud Web Client ID configuration.")
-                )
-            }
-            Log.d(tag, "[Google Sign-In] Retrieved Google ID Token for ${account.email}")
+            val idToken = account?.idToken ?: throw IllegalStateException("Google ID Token is null from account")
             signInWithGoogleToken(idToken)
         } catch (e: ApiException) {
-            val message = when (e.statusCode) {
-                12501 -> "Google Sign-In was cancelled."
-                12500 -> "Google Sign-In error (Status 12500). Please check SHA-1 certificate configuration."
-                10 -> "Google Developer Error (Status 10). Package name or SHA-1 fingerprint mismatch in Firebase."
-                7 -> "Network connection error. Please check your internet connection."
-                else -> "Google Sign-In error (${e.statusCode}): ${e.localizedMessage ?: "Unknown"}"
+            Log.e(tag, "[Firebase Auth] GoogleSignIn error code: ${e.statusCode}", e)
+            val errorMsg = when (e.statusCode) {
+                10 -> {
+                    "Google Sign-In Developer Error (Status 10). " +
+                    "The SHA-1 fingerprint of this build must be registered in Firebase Console (Project Settings -> Android Apps). " +
+                    "View and copy your active SHA-1 in Settings -> About."
+                }
+                12500 -> {
+                    "Google Sign-In Error (Status 12500). Verify SHA-1 and OAuth client settings in Firebase."
+                }
+                7 -> "Network error during Google Sign-In. Check your internet connection."
+                else -> "Google Sign-In failed [code: ${e.statusCode}]: ${e.localizedMessage ?: e.message}"
             }
-            Log.e(tag, "[Google Sign-In] ApiException (Code ${e.statusCode}): $message", e)
-            if (e.statusCode != 12501) {
-                _authState.value = AuthState.Error(message)
-            }
-            Result.failure(Exception(message, e))
+            _authState.value = AuthState.Error(errorMsg)
+            Result.failure(Exception(errorMsg, e))
         } catch (e: Exception) {
-            Log.e(tag, "[Google Sign-In] Failed to process sign-in result", e)
-            _authState.value = AuthState.Error(e.localizedMessage ?: "Google Sign-In failed")
+            Log.e(tag, "[Firebase Auth] Google Sign-In intent parsing failed: ${e.message}", e)
+            _authState.value = AuthState.Error(e.localizedMessage ?: "Sign-in parsing error")
             Result.failure(e)
         }
     }
 
+    /**
+     * Safely updates or creates the user document in Firestore.
+     * CRITICAL: Preserves existing Firestore fields (such as 'role', 'name', 'photo', 'premium')
+     * so that manual modifications made in the Firebase Console are NOT overridden by sign-in!
+     */
     override suspend fun syncUserToFirestore(user: FirebaseUser): Result<UserProfile> = withContext(Dispatchers.IO) {
         try {
             val userRef = firestore.collection("users").document(user.uid)
             val snapshot = userRef.get().await()
 
-            val existingProfile = snapshot.toObject(UserProfile::class.java)
+            val existingProfile = if (snapshot.exists()) UserProfile.fromSnapshot(snapshot) else null
             val isExisting = snapshot.exists()
 
-            val resolvedRole = existingProfile?.role ?: UserRole.USER
+            // Respect existing roles and customized names/photos from Firestore
+            val resolvedRole = existingProfile?.role?.takeIf { it.isNotBlank() } ?: UserRole.USER
             val resolvedPremium = existingProfile?.premium ?: false
+            val resolvedName = existingProfile?.name?.takeIf { it.isNotBlank() } 
+                ?: user.displayName 
+                ?: "MaxStream User"
+            val resolvedEmail = existingProfile?.email?.takeIf { it.isNotBlank() } 
+                ?: user.email 
+                ?: ""
+            val resolvedPhoto = existingProfile?.photo?.takeIf { it.isNotBlank() } 
+                ?: user.photoUrl?.toString()
 
             val updatePayload = hashMapOf<String, Any?>(
                 "uid" to user.uid,
-                "name" to (user.displayName ?: existingProfile?.name ?: "MaxStream User"),
-                "email" to (user.email ?: existingProfile?.email ?: ""),
-                "photo" to (user.photoUrl?.toString() ?: existingProfile?.photo ?: ""),
+                "name" to resolvedName,
+                "email" to resolvedEmail,
+                "photo" to resolvedPhoto,
                 "role" to resolvedRole,
                 "premium" to resolvedPremium,
                 "lastLogin" to FieldValue.serverTimestamp()
@@ -206,18 +272,22 @@ class FirebaseAuthManager(
             }
 
             userRef.set(updatePayload, SetOptions.merge()).await()
-            Log.d(tag, "[Firestore] Synchronized user record at users/${user.uid}")
+            Log.d(tag, "[Firestore] Synchronized user record at users/${user.uid} (Role: $resolvedRole)")
 
-            // Re-fetch clean document
+            // Fetch clean document with parser
             val freshDoc = userRef.get().await()
-            val finalProfile = freshDoc.toObject(UserProfile::class.java) ?: UserProfile(
-                uid = user.uid,
-                name = user.displayName,
-                email = user.email,
-                photo = user.photoUrl?.toString(),
-                role = resolvedRole,
-                premium = resolvedPremium
-            )
+            val finalProfile = if (freshDoc.exists()) {
+                UserProfile.fromSnapshot(freshDoc)
+            } else {
+                UserProfile(
+                    uid = user.uid,
+                    name = resolvedName,
+                    email = resolvedEmail,
+                    photo = resolvedPhoto,
+                    role = resolvedRole,
+                    premium = resolvedPremium
+                )
+            }
 
             applyProfileState(finalProfile)
             Result.success(finalProfile)
@@ -231,16 +301,23 @@ class FirebaseAuthManager(
         try {
             val doc = firestore.collection("users").document(uid).get().await()
             if (doc != null && doc.exists()) {
-                val profile = doc.toObject(UserProfile::class.java) ?: UserProfile(uid = uid)
+                val profile = UserProfile.fromSnapshot(doc)
                 applyProfileState(profile)
                 Log.d(tag, "[Firestore] Fetched user profile for $uid: $profile")
                 Result.success(profile)
             } else {
                 Log.d(tag, "[Firestore] User profile document missing for $uid")
                 // Create baseline profile for authenticated user
-                val baseProfile = UserProfile(uid = uid)
+                val authUser = auth.currentUser
+                val baseProfile = UserProfile(
+                    uid = uid,
+                    name = authUser?.displayName ?: "MaxStream User",
+                    email = authUser?.email ?: "",
+                    photo = authUser?.photoUrl?.toString(),
+                    role = UserRole.USER
+                )
                 applyProfileState(baseProfile)
-                Result.success(null)
+                Result.success(baseProfile)
             }
         } catch (e: Exception) {
             Log.e(tag, "[Firestore] Error fetching profile for $uid", e)
@@ -249,19 +326,39 @@ class FirebaseAuthManager(
     }
 
     private fun applyProfileState(profile: UserProfile) {
-        _userProfile.value = profile
-        
-        val role = profile.role.ifBlank { UserRole.USER }
-        _userRole.value = role
-        _isAdmin.value = UserRole.isAdmin(role)
-        _isPremium.value = profile.premium
+        // Fallback to static "MaxStream User" if name is missing or blank
+        val cleanName = profile.name?.takeIf { it.isNotBlank() } 
+            ?: auth.currentUser?.displayName?.takeIf { it.isNotBlank() } 
+            ?: "MaxStream User"
 
-        Log.d(tag, "[Auth] Role Loaded: $role")
-        Log.d(tag, "[Auth] Premium Loaded: ${profile.premium}")
+        val cleanEmail = profile.email?.takeIf { it.isNotBlank() } 
+            ?: auth.currentUser?.email 
+            ?: ""
+
+        val cleanPhoto = profile.photo?.takeIf { it.isNotBlank() } 
+            ?: auth.currentUser?.photoUrl?.toString()
+
+        val role = profile.role.trim().ifBlank { UserRole.USER }
+        val admin = UserRole.isAdmin(role)
+
+        val cleanProfile = profile.copy(
+            name = cleanName,
+            email = cleanEmail,
+            photo = cleanPhoto,
+            role = role
+        )
+
+        _userProfile.value = cleanProfile
+        _userRole.value = role
+        _isAdmin.value = admin
+        _isPremium.value = cleanProfile.premium
+
+        Log.d(tag, "[Auth] Profile Applied -> Name: $cleanName | Role: $role | IsAdmin: $admin | Premium: ${cleanProfile.premium}")
     }
 
     override suspend fun signOut(context: Context?): Unit = withContext(Dispatchers.IO) {
         try {
+            detachRealtimeProfileListener()
             auth.signOut()
             context?.let {
                 try {

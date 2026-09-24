@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
 import xyz.mpv.rex.auth.AuthManager
+import xyz.mpv.rex.auth.elevation.AdminSessionManager
 import xyz.mpv.rex.preferences.AdvancedPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
@@ -25,11 +26,11 @@ object ExtensionPreferencesScreenRoute : Screen {
     override fun Content() {
         val backstack = LocalBackStack.current
         val authManager = koinInject<AuthManager>()
-        val advancedPreferences = koinInject<AdvancedPreferences>()
+        val adminSessionManager = koinInject<AdminSessionManager>()
         val isAdmin by authManager.isAdmin.collectAsState()
-        val isDeveloperMenuUnlocked by advancedPreferences.adminDeveloperMenuUnlocked.collectAsState()
+        val isElevated by adminSessionManager.isElevated.collectAsState()
 
-        if (!isAdmin || !isDeveloperMenuUnlocked) {
+        if (!isAdmin || !isElevated) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -37,7 +38,7 @@ object ExtensionPreferencesScreenRoute : Screen {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Access Restricted: Extension and Repository management is reserved for Administrator accounts with security unlock.",
+                    text = "Access Restricted: Extension and Repository management is reserved for Administrator accounts with an active administrative elevation session.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error
                 )

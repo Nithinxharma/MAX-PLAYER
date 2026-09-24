@@ -1,5 +1,6 @@
 package xyz.mpv.rex.ui.preferences
 import xyz.mpv.rex.auth.AuthManager
+import xyz.mpv.rex.auth.elevation.AdminSessionManager
 import xyz.mpv.rex.ui.profile.ProfileScreen
 import xyz.mpv.rex.preferences.preference.collectAsState
 import androidx.compose.runtime.collectAsState
@@ -113,18 +114,23 @@ object PreferencesScreen : Screen {
     ) { padding ->
       val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
       val authManager = koinInject<AuthManager>()
-      val advancedPreferences = koinInject<xyz.mpv.rex.preferences.AdvancedPreferences>()
+      val adminSessionManager = koinInject<AdminSessionManager>()
       val userProfile by authManager.userProfile.collectAsState()
       val userRole by authManager.userRole.collectAsState()
       val isAdmin by authManager.isAdmin.collectAsState()
-      val isDeveloperMenuUnlocked by advancedPreferences.adminDeveloperMenuUnlocked.collectAsState()
-      val canAccessAdminDeveloperMenu = isAdmin && isDeveloperMenuUnlocked
+      val isElevated by adminSessionManager.isElevated.collectAsState()
+      val canAccessAdminDeveloperMenu = isAdmin && isElevated
       val isPremium by authManager.isPremium.collectAsState()
       val currentUser = authManager.currentUser
 
-      val displayName = userProfile?.name ?: currentUser?.displayName ?: "Guest User"
-      val email = userProfile?.email ?: currentUser?.email ?: "Tap to sign in or view profile"
-      val photoUrl = userProfile?.photo ?: currentUser?.photoUrl?.toString()
+      val displayName = userProfile?.name?.takeIf { it.isNotBlank() }
+          ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
+          ?: "Maxstream user"
+      val email = userProfile?.email?.takeIf { it.isNotBlank() }
+          ?: currentUser?.email?.takeIf { it.isNotBlank() }
+          ?: "Tap to sign in or view profile"
+      val photoUrl = userProfile?.photo?.takeIf { it.isNotBlank() }
+          ?: currentUser?.photoUrl?.toString()
 
       ProvidePreferenceLocals {
         LazyColumn(
@@ -407,7 +413,7 @@ object PreferencesScreen : Screen {
                   icon = Icons.Outlined.Code,
                   onClick = { backstack.add(AdvancedPreferencesScreen) },
                 )
-                if (canAccessAdminDeveloperMenu) {
+                if (isAdmin) {
                   PreferenceItem(
                     position = GroupPosition.MIDDLE,
                     title = stringResource(id = R.string.pref_developer_options_title),

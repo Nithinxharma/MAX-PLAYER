@@ -24,6 +24,7 @@ import xyz.mpv.rex.presentation.components.GroupPosition
 import xyz.mpv.rex.presentation.components.GroupedListColumn
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.auth.AuthManager
+import xyz.mpv.rex.auth.elevation.AdminSessionManager
 import xyz.mpv.rex.preferences.AdvancedPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import androidx.compose.runtime.collectAsState
@@ -39,11 +40,11 @@ object DeveloperOptionsScreen : Screen {
     override fun Content() {
         val backstack = LocalBackStack.current
         val authManager = koinInject<AuthManager>()
-        val advancedPreferences = koinInject<AdvancedPreferences>()
+        val adminSessionManager = koinInject<AdminSessionManager>()
         val isAdmin by authManager.isAdmin.collectAsState()
-        val isDeveloperMenuUnlocked by advancedPreferences.adminDeveloperMenuUnlocked.collectAsState()
+        val isElevated by adminSessionManager.isElevated.collectAsState()
 
-        if (!isAdmin || !isDeveloperMenuUnlocked) {
+        if (!isAdmin || !isElevated) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -51,7 +52,7 @@ object DeveloperOptionsScreen : Screen {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Access Restricted: Administrator privileges and security unlock required.",
+                    text = "Access Restricted: Administrator privileges and an active administrative elevation session are required.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error
                 )

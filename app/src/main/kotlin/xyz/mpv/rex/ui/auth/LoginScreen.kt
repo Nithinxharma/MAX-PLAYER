@@ -78,10 +78,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import xyz.mpv.rex.R
+import xyz.mpv.rex.auth.util.CertificateHelper
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -323,6 +326,14 @@ private fun FloatingGlassAuthCard(
 
             // Error banner if any
             if (!errorMessage.isNullOrBlank()) {
+                val context = LocalContext.current
+                val clipboardManager = LocalClipboardManager.current
+                val certInfo = remember(context) { CertificateHelper.getCertificateFingerprints(context) }
+                val isCertMismatch = errorMessage.contains("Status 10", ignoreCase = true) ||
+                        errorMessage.contains("Status 12500", ignoreCase = true) ||
+                        errorMessage.contains("SHA-1", ignoreCase = true) ||
+                        errorMessage.contains("fingerprint", ignoreCase = true)
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -331,13 +342,55 @@ private fun FloatingGlassAuthCard(
                         .border(1.dp, Color(0xFFFF4D4D).copy(alpha = 0.6f), RoundedCornerShape(12.dp))
                         .padding(12.dp)
                 ) {
-                    Text(
-                        text = errorMessage,
-                        color = Color(0xFFFFD1D1),
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = errorMessage,
+                            color = Color(0xFFFFD1D1),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        if (isCertMismatch) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.Black.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, Color(0xFFFF7A00).copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        clipboardManager.setText(AnnotatedString(certInfo.sha1))
+                                        Toast.makeText(context, "Copied SHA-1 to clipboard: ${certInfo.sha1}", Toast.LENGTH_LONG).show()
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "Active App SHA-1 (Tap to Copy):",
+                                        color = Color(0xFFFFB366),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = certInfo.sha1,
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Add this key to Firebase Console -> Project Settings -> Android Apps (xyz.mpv.rex)",
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        fontSize = 9.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }

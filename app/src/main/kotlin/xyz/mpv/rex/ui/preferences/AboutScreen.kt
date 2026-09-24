@@ -28,7 +28,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Security
+import xyz.mpv.rex.auth.util.CertificateHelper
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +69,10 @@ import xyz.mpv.rex.presentation.crash.CrashActivity.Companion.collectDeviceInfo
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import me.zhanghai.compose.preference.Preference
 import xyz.mpv.rex.auth.AuthManager
+import xyz.mpv.rex.auth.elevation.AdminSessionManager
+import xyz.mpv.rex.auth.elevation.ElevationResult
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import xyz.mpv.rex.preferences.AdvancedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.AlertDialog
@@ -107,12 +114,14 @@ object AboutScreen : Screen {
     val preferences = koinInject<AppearancePreferences>()
     val advancedPreferences = koinInject<AdvancedPreferences>()
     val authManager = koinInject<AuthManager>()
+    val adminSessionManager = koinInject<AdminSessionManager>()
     val isAdmin by authManager.isAdmin.collectAsState()
+    val isElevated by adminSessionManager.isElevated.collectAsState()
+    val sessionInfo by adminSessionManager.sessionInfo.collectAsState()
+    val scope = rememberCoroutineScope()
 
     var tapCount by remember { mutableIntStateOf(0) }
-    var showAdminCodeDialog by remember { mutableStateOf(false) }
-    var enteredAdminCode by remember { mutableStateOf("") }
-    var codeError by remember { mutableStateOf(false) }
+    var showElevationDialog by remember { mutableStateOf(false) }
     
     val packageManager: PackageManager = context.packageManager
     val packageInfo = packageManager.getPackageInfo(context.packageName, 0)
@@ -238,18 +247,28 @@ object AboutScreen : Screen {
                             Toast.makeText(context, "Admin authorization required", Toast.LENGTH_SHORT).show()
                             return@clickable
                           }
+
+                          if (isElevated) {
+                            val remainingMinutes = (sessionInfo.remainingTimeMs / 60000).coerceAtLeast(1)
+                            Toast.makeText(
+                              context,
+                              "Active Admin Session ($remainingMinutes min remaining)",
+                              Toast.LENGTH_SHORT
+                            ).show()
+                            return@clickable
+                          }
+
                           tapCount++
                           if (tapCount in 1..6) {
                             val remaining = 7 - tapCount
                             Toast.makeText(
                               context,
-                              "Admin verification: tap $remaining more times or enter access code",
+                              "Security Verification: tap $remaining more times to request elevation",
                               Toast.LENGTH_SHORT
                             ).show()
                           } else if (tapCount >= 7) {
                             tapCount = 0
-                            advancedPreferences.adminDeveloperMenuUnlocked.set(true)
-                            Toast.makeText(context, "Admin Developer Menu Unlocked!", Toast.LENGTH_LONG).show()
+                            showElevationDialog = true
                           }
                         }
                     ) {
@@ -261,7 +280,7 @@ object AboutScreen : Screen {
                       )
                       Spacer(Modifier.height(4.dp))
                       Text(
-                        text = "v$versionName $buildType",
+                        text = if (isElevated) "v$versionName $buildType • [ADMIN ELEVATED]" else "v$versionName $buildType",
                         style = MaterialTheme.typography.bodyMedium,
                         color = cs.onPrimaryContainer.copy(alpha = 0.85f),
                       )
@@ -354,6 +373,44 @@ object AboutScreen : Screen {
                     }
                     Text(
                       text = collectDeviceInfo(),
+                      style = MaterialTheme.typography.bodySmall,
+                      color = cs.onPrimaryContainer.copy(alpha = 0.85f),
+                    )
+                  }
+
+                  Spacer(modifier = Modifier.height(16.dp))
+
+                  val certInfo = remember(context) { CertificateHelper.getCertificateFingerprints(context) }
+                  Column(
+                    modifier =
+                      Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                          val copyText = "Package: ${certInfo.packageName}\nSHA-1: ${certInfo.sha1}\nSHA-256: ${certInfo.sha256}"
+                          clipboardManager.setText(AnnotatedString(copyText))
+                          Toast.makeText(context, "Certificate fingerprints copied to clipboard", Toast.LENGTH_SHORT).show()
+                        },
+                  ) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      modifier = Modifier.padding(bottom = 6.dp),
+                    ) {
+                      Icon(
+                        imageVector = Icons.Filled.Security,
+                        contentDescription = "Build Signing Fingerprint",
+                        modifier = Modifier.size(20.dp),
+                        tint = cs.onPrimaryContainer,
+                      )
+                      Spacer(modifier = Modifier.width(8.dp))
+                      Text(
+                        text = "Build Certificate Fingerprints",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = cs.onPrimaryContainer,
+                      )
+                    }
+                    Text(
+                      text = "SHA-1: ${certInfo.sha1}\nSHA-256: ${certInfo.sha256}\n(Tap to copy for Firebase Console)",
                       style = MaterialTheme.typography.bodySmall,
                       color = cs.onPrimaryContainer.copy(alpha = 0.85f),
                     )
@@ -505,55 +562,57 @@ object AboutScreen : Screen {
           Spacer(Modifier.height(xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current + 16.dp))
         }
 
-        if (showAdminCodeDialog) {
+        if (showElevationDialog) {
           AlertDialog(
             onDismissRequest = {
-              showAdminCodeDialog = false
-              codeError = false
-              enteredAdminCode = ""
+              showElevationDialog = false
             },
-            title = { Text("Admin Authorization Code") },
+            title = { Text("Request Administrative Elevation") },
             text = {
               Column {
                 Text(
-                  "Enter the secure admin access code to unlock the hidden Developer & Provider Management Menu.",
+                  "Elevate your session to access developer configurations, diagnostics, and server provider controls. Elevation is strictly time-bounded (15 minutes) and authorized remotely.",
                   style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                  value = enteredAdminCode,
-                  onValueChange = {
-                    enteredAdminCode = it
-                    codeError = false
-                  },
-                  label = { Text("Access Code") },
-                  isError = codeError,
-                  supportingText = if (codeError) {
-                    { Text("Invalid Admin Code", color = MaterialTheme.colorScheme.error) }
-                  } else null,
-                  singleLine = true,
-                  modifier = Modifier.fillMaxWidth()
+                Text(
+                  "Authenticated UID: ${authManager.currentUser?.uid ?: "Unknown"}",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.outline
                 )
               }
             },
             confirmButton = {
               TextButton(
                 onClick = {
-                  val trimmed = enteredAdminCode.trim()
-                  if (trimmed == "MAXSTREAM777" || trimmed == "ADMIN777" || trimmed == "MAXSTREAM2026") {
-                    advancedPreferences.adminDeveloperMenuUnlocked.set(true)
-                    showAdminCodeDialog = false
-                    Toast.makeText(context, "Admin Developer Menu Unlocked!", Toast.LENGTH_LONG).show()
+                  val uid = authManager.currentUser?.uid
+                  if (uid != null) {
+                    scope.launch {
+                      val result = adminSessionManager.requestElevation(uid)
+                      when (result) {
+                        is ElevationResult.Granted -> {
+                          showElevationDialog = false
+                          val minutes = result.durationMs / 60000
+                          Toast.makeText(context, "Administrative Elevation Active ($minutes min TTL)", Toast.LENGTH_LONG).show()
+                        }
+                        is ElevationResult.Denied -> {
+                          Toast.makeText(context, "Elevation Denied: ${result.reason}", Toast.LENGTH_LONG).show()
+                        }
+                        is ElevationResult.Error -> {
+                          Toast.makeText(context, "Elevation Error: ${result.throwable.localizedMessage}", Toast.LENGTH_LONG).show()
+                        }
+                      }
+                    }
                   } else {
-                    codeError = true
+                    Toast.makeText(context, "You must be signed in to elevate.", Toast.LENGTH_SHORT).show()
                   }
                 }
               ) {
-                Text("Unlock")
+                Text("Authorize Elevation")
               }
             },
             dismissButton = {
-              TextButton(onClick = { showAdminCodeDialog = false }) {
+              TextButton(onClick = { showElevationDialog = false }) {
                 Text("Cancel")
               }
             }

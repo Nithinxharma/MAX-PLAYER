@@ -117,9 +117,14 @@ object ProfileScreen : Screen {
         val isPremium by authManager.isPremium.collectAsState()
         val currentUser = authManager.currentUser
 
-        val effectiveName = userProfile?.name ?: currentUser?.displayName ?: "MaxStream User"
-        val effectiveEmail = userProfile?.email ?: currentUser?.email ?: "Guest Session"
-        val photoUrl = userProfile?.photo ?: currentUser?.photoUrl?.toString()
+        val effectiveName = userProfile?.name?.takeIf { it.isNotBlank() }
+            ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
+            ?: "Maxstream user"
+        val effectiveEmail = userProfile?.email?.takeIf { it.isNotBlank() }
+            ?: currentUser?.email?.takeIf { it.isNotBlank() }
+            ?: "Guest Session"
+        val photoUrl = userProfile?.photo?.takeIf { it.isNotBlank() }
+            ?: currentUser?.photoUrl?.toString()
 
         AnimatedMeshGradient(blurRadius = 100) {
             Scaffold(
