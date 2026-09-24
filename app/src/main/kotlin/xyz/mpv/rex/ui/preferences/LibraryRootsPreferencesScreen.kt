@@ -211,13 +211,10 @@ object LibraryRootsPreferencesScreen : Screen {
         if (!selectionState.isInSelectionMode) {
           Spacer(modifier = Modifier.height(16.dp))
 
-          Card(
+          xyz.mpv.rex.ui.components.glass.GlassCard(
             modifier = Modifier
-              .fillMaxWidth()
-              .clickable { addFolderLauncher.launch(null) },
-            colors = CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
+              .fillMaxWidth(),
+            onClick = { addFolderLauncher.launch(null) },
           ) {
             Row(
               modifier = Modifier
@@ -229,13 +226,14 @@ object LibraryRootsPreferencesScreen : Screen {
               Icon(
                 imageVector = Icons.Default.CreateNewFolder,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
               )
               Spacer(modifier = Modifier.padding(8.dp))
               Text(
                 text = stringResource(R.string.pref_add_library_root),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
               )
             }
           }
@@ -244,26 +242,34 @@ object LibraryRootsPreferencesScreen : Screen {
     }
 
     if (showClearAllDialog) {
-      AlertDialog(
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
         onDismissRequest = { showClearAllDialog = false },
-        title = { Text(stringResource(R.string.pref_library_roots_clear_all_confirm_title)) },
-        text = { Text(stringResource(R.string.pref_library_roots_clear_all_confirm_message)) },
+        title = stringResource(R.string.pref_library_roots_clear_all_confirm_title),
+        icon = Icons.Outlined.Restore,
         confirmButton = {
-          TextButton(
+          xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+            text = stringResource(R.string.generic_confirm),
+            variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
             onClick = {
               removeRoots(libraryScanRoots)
               showClearAllDialog = false
-            },
-          ) {
-            Text(stringResource(R.string.generic_confirm))
-          }
+            }
+          )
         },
         dismissButton = {
-          TextButton(onClick = { showClearAllDialog = false }) {
-            Text(stringResource(R.string.generic_cancel))
-          }
-        },
-      )
+          xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+            text = stringResource(R.string.generic_cancel),
+            variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+            onClick = { showClearAllDialog = false }
+          )
+        }
+      ) {
+        Text(
+          text = stringResource(R.string.pref_library_roots_clear_all_confirm_message),
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
     }
   }
 }

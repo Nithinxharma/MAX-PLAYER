@@ -57,36 +57,26 @@ fun PluginExecutionTraceScreen(
     val proofResult by viewModel.proofOfExecutionResult.collectAsState()
     val isRunningProofTest by viewModel.isRunningProofTest.collectAsState()
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     var showLogsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Plugin Execution Trace", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            text = if (selectedExtension != null) "Target: ${selectedExtension?.name}" else "Select an extension",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            xyz.mpv.rex.ui.components.glass.GlassTopBar(
+                title = "Plugin Execution Trace",
+                subtitle = if (selectedExtension != null) "Target: ${selectedExtension?.name}" else "Select an extension",
+                onBackClick = onNavigateBack,
                 actions = {
                     IconButton(
                         onClick = { viewModel.loadAvailableExtensions() },
                         enabled = !isTracing
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh List")
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh List", tint = MaterialTheme.colorScheme.onSurface)
                     }
                     var showMenu by remember { mutableStateOf(false) }
                     IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Options")
+                        Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = MaterialTheme.colorScheme.onSurface)
                     }
                     DropdownMenu(
                         expanded = showMenu,
@@ -276,36 +266,38 @@ fun PluginExecutionTraceScreen(
 
     if (showLogsDialog) {
         val logs = traceSession?.rawLogLines ?: emptyList()
-        AlertDialog(
+        xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
             onDismissRequest = { showLogsDialog = false },
-            title = { Text("Raw Trace Logs") },
-            text = {
-                SelectionContainer {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(350.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .padding(8.dp)
-                    ) {
-                        items(logs) { line ->
-                            Text(
-                                text = line,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                color = if (line.contains("FAIL") || line.contains("❌")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+            title = "Raw Trace Logs",
+            icon = Icons.Outlined.Terminal,
+            confirmButton = {
+                xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                    text = "Close",
+                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+                    onClick = { showLogsDialog = false }
+                )
+            }
+        ) {
+            SelectionContainer {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(350.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.GlassSurface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(12.dp)
+                ) {
+                    items(logs) { line ->
+                        Text(
+                            text = line,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = if (line.contains("FAIL") || line.contains("❌")) MaterialTheme.colorScheme.error else (if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface)
+                        )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLogsDialog = false }) {
-                    Text("Close")
-                }
             }
-        )
+        }
     }
 }
 

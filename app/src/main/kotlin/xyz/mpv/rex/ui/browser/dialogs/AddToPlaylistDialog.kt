@@ -98,16 +98,26 @@ fun AddToPlaylistDialog(
     return
   }
 
-  AlertDialog(
+  xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
     onDismissRequest = onDismiss,
-    title = {
-      Text(
-        text = stringResource(R.string.add_to_playlist),
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold,
+    title = stringResource(R.string.add_to_playlist),
+    icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
+    confirmButton = {
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+        text = stringResource(R.string.done),
+        onClick = {
+          onSuccess()
+          onDismiss()
+        },
+        isPrimary = true,
       )
     },
-    text = {
+    dismissButton = {
+      TextButton(onClick = onDismiss) {
+        Text(stringResource(R.string.generic_cancel))
+      }
+    },
+    content = {
       Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -124,22 +134,13 @@ fun AddToPlaylistDialog(
         )
 
         // Create new playlist button
-        OutlinedButton(
+        xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+          text = stringResource(R.string.create_new_playlist),
+          icon = Icons.Filled.Add,
           onClick = { showCreateDialog = true },
+          isPrimary = false,
           modifier = Modifier.fillMaxWidth(),
-          shape = MaterialTheme.shapes.extraLarge,
-        ) {
-          Icon(
-            imageVector = Icons.Filled.Add,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-          )
-          Spacer(modifier = Modifier.width(8.dp))
-          Text(
-            text = stringResource(R.string.create_new_playlist),
-            fontWeight = FontWeight.Medium,
-          )
-        }
+        )
 
         // Existing playlists
         if (playlists.isNotEmpty()) {
@@ -147,11 +148,11 @@ fun AddToPlaylistDialog(
             text = stringResource(R.string.existing_playlists),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+            color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
           )
 
           LazyColumn(
-            modifier = Modifier.height(300.dp),
+            modifier = Modifier.height(280.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
           ) {
@@ -182,31 +183,6 @@ fun AddToPlaylistDialog(
         }
       }
     },
-    confirmButton = {
-      Button(
-        onClick = {
-          onSuccess()
-          onDismiss()
-        },
-        colors = ButtonDefaults.buttonColors(
-          containerColor = MaterialTheme.colorScheme.primary,
-        ),
-        shape = MaterialTheme.shapes.extraLarge,
-      ) {
-        Text(stringResource(R.string.done), fontWeight = FontWeight.Bold)
-      }
-    },
-    dismissButton = {
-      TextButton(
-        onClick = onDismiss,
-        shape = MaterialTheme.shapes.extraLarge,
-      ) {
-        Text(stringResource(R.string.generic_cancel), fontWeight = FontWeight.Medium)
-      }
-    },
-    containerColor = MaterialTheme.colorScheme.surface,
-    tonalElevation = 6.dp,
-    shape = MaterialTheme.shapes.extraLarge,
     modifier = modifier,
   )
 }
@@ -219,14 +195,11 @@ private fun PlaylistItemCard(
 ) {
   val itemCount by repository.observePlaylistItemCount(playlist.id).collectAsState(initial = 0)
 
-  Card(
+  xyz.mpv.rex.ui.components.glass.GlassCard(
     modifier = Modifier
       .fillMaxWidth()
       .clickable(onClick = onClick),
-    shape = RoundedCornerShape(12.dp),
-    colors = CardDefaults.cardColors(
-      containerColor = MaterialTheme.colorScheme.surfaceVariant,
-    ),
+    shape = RoundedCornerShape(14.dp),
   ) {
     Row(
       modifier = Modifier
@@ -237,8 +210,8 @@ private fun PlaylistItemCard(
       Icon(
         imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
         contentDescription = null,
-        modifier = Modifier.size(40.dp),
-        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(36.dp),
+        tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
       )
       Spacer(modifier = Modifier.width(12.dp))
       Column(
@@ -264,12 +237,9 @@ private fun PlaylistItemCard(
 
 @Composable
 private fun EmptyPlaylistsMessage() {
-  Card(
+  xyz.mpv.rex.ui.components.glass.GlassCard(
     modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    colors = CardDefaults.cardColors(
-      containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-    ),
+    shape = RoundedCornerShape(14.dp),
   ) {
     Column(
       modifier = Modifier
@@ -306,49 +276,37 @@ private fun CreatePlaylistDialog(
 ) {
   var playlistName by remember { mutableStateOf("") }
 
-  AlertDialog(
+  xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
     onDismissRequest = onDismiss,
-    title = {
-      Text(
-        text = stringResource(R.string.create_new_playlist),
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
-      )
-    },
-    text = {
-      OutlinedTextField(
-        value = playlistName,
-        onValueChange = { playlistName = it },
-        label = { Text(stringResource(R.string.playlist_name)) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-      )
-    },
+    title = stringResource(R.string.create_new_playlist),
+    icon = Icons.Filled.Add,
     confirmButton = {
-      Button(
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+        text = stringResource(R.string.create),
         onClick = {
           if (playlistName.isNotBlank()) {
             onConfirm(playlistName.trim())
           }
         },
         enabled = playlistName.isNotBlank(),
-        shape = MaterialTheme.shapes.extraLarge,
-      ) {
-        Text(stringResource(R.string.create), fontWeight = FontWeight.Bold)
-      }
+        isPrimary = true,
+      )
     },
     dismissButton = {
-      TextButton(
-        onClick = onDismiss,
-        shape = MaterialTheme.shapes.extraLarge,
-      ) {
-        Text(stringResource(R.string.generic_cancel), fontWeight = FontWeight.Medium)
+      TextButton(onClick = onDismiss) {
+        Text(stringResource(R.string.generic_cancel))
       }
     },
-    containerColor = MaterialTheme.colorScheme.surface,
-    tonalElevation = 6.dp,
-    shape = MaterialTheme.shapes.extraLarge,
+    content = {
+      OutlinedTextField(
+        value = playlistName,
+        onValueChange = { playlistName = it },
+        label = { Text(stringResource(R.string.playlist_name)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+      )
+    },
   )
 }
 

@@ -10,6 +10,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,9 +89,12 @@ fun PermissionDeniedState(
     label = "icon_scale",
   )
 
-  Surface(
-    modifier = modifier.fillMaxSize(),
-    color = MaterialTheme.colorScheme.background,
+  val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
+  Box(
+    modifier = modifier
+      .fillMaxSize()
+      .background(if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background),
   ) {
     Column(
       modifier = Modifier
@@ -107,26 +111,21 @@ fun PermissionDeniedState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
       ) {
-        // Animated Icon with Surface
-        Surface(
+        // Animated Icon with Glass styling
+        Box(
           modifier = Modifier
             .size(112.dp)
-            .scale(scale),
-          shape = RoundedCornerShape(28.dp),
-          color = MaterialTheme.colorScheme.errorContainer,
-          tonalElevation = 3.dp,
+            .scale(scale)
+            .clip(RoundedCornerShape(28.dp))
+            .background(xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent.copy(alpha = 0.15f)),
+          contentAlignment = Alignment.Center,
         ) {
-          Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(
-              imageVector = Icons.Outlined.Warning,
-              contentDescription = null,
-              modifier = Modifier.size(52.dp),
-              tint = MaterialTheme.colorScheme.onErrorContainer,
-            )
-          }
+          Icon(
+            imageVector = Icons.Outlined.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(52.dp),
+            tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+          )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -137,17 +136,14 @@ fun PermissionDeniedState(
           style = MaterialTheme.typography.headlineMedium,
           fontWeight = FontWeight.Bold,
           textAlign = TextAlign.Center,
-          color = MaterialTheme.colorScheme.onSurface,
+          color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Description Card
-        Card(
+        // Description Glass Card
+        xyz.mpv.rex.ui.components.glass.GlassCard(
           modifier = Modifier.fillMaxWidth(),
-          colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-          ),
           shape = RoundedCornerShape(20.dp),
         ) {
           Column(
@@ -165,14 +161,14 @@ fun PermissionDeniedState(
                 stringResource(R.string.permission_required_all_files)
               },
               style = MaterialTheme.typography.bodyLarge,
-              color = MaterialTheme.colorScheme.onSurface,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               textAlign = TextAlign.Center,
             )
           }
         }
       }
 
-      // Pinned Bottom Section (Always above bottom navigation bar)
+      // Pinned Bottom Section
       Column(
         modifier = Modifier
           .fillMaxWidth()
@@ -180,21 +176,18 @@ fun PermissionDeniedState(
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
         // Allow Access Button
-        FilledTonalButton(
+        xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+          text = stringResource(R.string.allow_access),
+          icon = Icons.Outlined.Warning,
           onClick = {
             PermissionUtils.requestStorageAccess(context, onRequestPermission)
           },
+          isPrimary = true,
           modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(54.dp),
           shape = RoundedCornerShape(16.dp),
-        ) {
-          Text(
-            text = stringResource(R.string.allow_access),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-          )
-        }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -206,40 +199,37 @@ fun PermissionDeniedState(
             imageVector = Icons.Outlined.Info,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
+            tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
             text = stringResource(R.string.why_do_i_see_this),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
+            color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
           )
         }
       }
     }
   }
 
-  // Explanation Dialog
+  // Explanation Dialog in MaxStream Glass
   if (showExplanationDialog) {
     val uriHandler = LocalUriHandler.current
     val githubUrl = "https://github.com/MaxStreamApp/MAX-STREAM"
 
-    AlertDialog(
+    xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
       onDismissRequest = { showExplanationDialog = false },
-      icon = {
-        Icon(
-          imageVector = Icons.Outlined.Info,
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.primary,
+      title = stringResource(R.string.why_this_permission_is_needed),
+      icon = Icons.Outlined.Info,
+      confirmButton = {
+        xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+          text = stringResource(R.string.got_it),
+          onClick = { showExplanationDialog = false },
+          isPrimary = true,
         )
       },
-      title = {
-        Text(
-          text = stringResource(R.string.why_this_permission_is_needed),
-          style = MaterialTheme.typography.headlineSmall,
-          fontWeight = FontWeight.Bold,
-        )
-      },
-      text = {
+      content = {
         Column(
           modifier = Modifier
             .heightIn(max = 400.dp)
@@ -250,7 +240,7 @@ fun PermissionDeniedState(
             Text(
               text = stringResource(R.string.permission_explanation_playstore_intro),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Text(
@@ -260,51 +250,51 @@ fun PermissionDeniedState(
                 stringResource(R.string.permission_explanation_pre_tiramisu)
               },
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Text(
               text = stringResource(R.string.permission_used_exclusively_for),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              fontWeight = FontWeight.Medium,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+              fontWeight = FontWeight.SemiBold,
             )
 
             Text(
               text = stringResource(R.string.permission_usage_bullet_list),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
           } else {
             Text(
               text = stringResource(R.string.permission_explanation_standard_intro),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Text(
               text = stringResource(R.string.permission_security_policy_change),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Text(
               text = stringResource(R.string.permission_privacy_assurance_standard),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
 
           Text(
             text = stringResource(R.string.opensource_github_notice),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
           )
 
           Text(
             text = githubUrl,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
             fontWeight = FontWeight.Medium,
             textDecoration = TextDecoration.Underline,
             modifier = Modifier.clickable { uriHandler.openUri(githubUrl) },
@@ -313,20 +303,11 @@ fun PermissionDeniedState(
           Text(
             text = stringResource(R.string.privacy_assurance_final),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium,
           )
         }
       },
-      confirmButton = {
-        FilledTonalButton(
-          onClick = { showExplanationDialog = false },
-          shape = RoundedCornerShape(12.dp),
-        ) {
-          Text(stringResource(R.string.got_it))
-        }
-      },
-      shape = RoundedCornerShape(20.dp),
     )
   }
 }

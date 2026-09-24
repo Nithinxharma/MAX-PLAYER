@@ -110,17 +110,18 @@ fun SortDialog(
 
   val (ascLabel, descLabel) = getLabelForType(sortType)
 
-  AlertDialog(
+  xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
     onDismissRequest = onDismiss,
-    title = {
-      Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurface,
+    title = title,
+    icon = Icons.Filled.SwapVert,
+    confirmButton = {
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+        text = stringResource(R.string.generic_ok),
+        onClick = onDismiss,
+        isPrimary = true,
       )
     },
-    text = {
+    content = {
       Column(
         modifier =
           Modifier
@@ -196,10 +197,6 @@ fun SortDialog(
         }
       }
     },
-    confirmButton = {},
-    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    tonalElevation = 6.dp,
-    shape = MaterialTheme.shapes.extraLarge,
     modifier = modifier,
   )
 }

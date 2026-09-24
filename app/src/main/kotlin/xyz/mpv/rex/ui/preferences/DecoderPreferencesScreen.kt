@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,26 +65,14 @@ object DecoderPreferencesScreen : Screen {
     val context = LocalContext.current
     val isVulkanSupported = remember { VulkanUtils.isVulkanSupported(context) }
     var showGpuNextWarning by remember { mutableStateOf(false) }
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     Scaffold(
+      containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
       topBar = {
-        TopAppBar(
-          title = {
-            Text(
-              text = stringResource(R.string.pref_decoder),
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.ExtraBold,
-              color = MaterialTheme.colorScheme.primary,
-            )
-          },
-          navigationIcon = {
-            IconButton(onClick = backstack::removeLastOrNull) {
-              Icon(
-                Icons.AutoMirrored.Default.ArrowBack,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
-            }
-          },
+        xyz.mpv.rex.ui.components.glass.GlassTopBar(
+          title = stringResource(R.string.pref_decoder),
+          onBackClick = { backstack.removeLastOrNull() }
         )
       },
     ) { padding ->
@@ -184,48 +174,60 @@ object DecoderPreferencesScreen : Screen {
                   )
 
                   if (showGpuNextWarning) {
-                    AlertDialog(
+                    xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
                       onDismissRequest = { showGpuNextWarning = false },
-                      title = { Text(stringResource(R.string.pref_decoder_gpu_next_enable_title)) },
-                      text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                          Text(stringResource(R.string.pref_decoder_gpu_next_warning))
-                          Text(stringResource(R.string.pref_decoder_gpu_next_purple_screen_fix))
-                          
-                          Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            shape = MaterialTheme.shapes.small
-                          ) {
-                            Column(modifier = Modifier.padding(8.dp)) {
-                              Text(
-                                text = stringResource(R.string.pref_anime4k_incompatibility),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                              )
-                              Text(
-                                text = stringResource(R.string.pref_anime4k_gpu_next_error),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                              )
-                            }
-                          }
-                        }
-                      },
+                      title = stringResource(R.string.pref_decoder_gpu_next_enable_title),
+                      icon = Icons.Outlined.Warning,
                       confirmButton = {
-                        Button(onClick = {
-                          preferences.gpuNext.set(true)
-                          preferences.enableAnime4K.set(false)
-                          showGpuNextWarning = false
-                        }) {
-                          Text(stringResource(R.string.pref_decoder_gpu_next_enable_anyway))
-                        }
+                        xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                          text = stringResource(R.string.pref_decoder_gpu_next_enable_anyway),
+                          variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+                          onClick = {
+                            preferences.gpuNext.set(true)
+                            preferences.enableAnime4K.set(false)
+                            showGpuNextWarning = false
+                          }
+                        )
                       },
                       dismissButton = {
-                        TextButton(onClick = { showGpuNextWarning = false }) {
-                          Text(stringResource(R.string.generic_cancel))
+                        xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                          text = stringResource(R.string.generic_cancel),
+                          variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+                          onClick = { showGpuNextWarning = false }
+                        )
+                      }
+                    ) {
+                      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                          text = stringResource(R.string.pref_decoder_gpu_next_warning),
+                          style = MaterialTheme.typography.bodyMedium,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                          text = stringResource(R.string.pref_decoder_gpu_next_purple_screen_fix),
+                          style = MaterialTheme.typography.bodySmall,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        Surface(
+                          color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                          shape = RoundedCornerShape(12.dp)
+                        ) {
+                          Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                              text = stringResource(R.string.pref_anime4k_incompatibility),
+                              style = MaterialTheme.typography.titleSmall,
+                              color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                              text = stringResource(R.string.pref_anime4k_gpu_next_error),
+                              style = MaterialTheme.typography.bodySmall,
+                              color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                          }
                         }
                       }
-                    )
+                    }
                   }
                 }
               }

@@ -60,26 +60,14 @@ object DeveloperOptionsScreen : Screen {
             return
         }
 
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
         Scaffold(
+            containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(id = R.string.pref_developer_options_title),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = backstack::removeLastOrNull) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Default.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                    }
+                xyz.mpv.rex.ui.components.glass.GlassTopBar(
+                    title = stringResource(id = R.string.pref_developer_options_title),
+                    onBackClick = { backstack.removeLastOrNull() }
                 )
             }
         ) { paddingValues ->

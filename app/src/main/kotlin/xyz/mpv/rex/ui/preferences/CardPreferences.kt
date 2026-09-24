@@ -1,30 +1,41 @@
 package xyz.mpv.rex.ui.preferences
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import xyz.mpv.rex.presentation.components.GroupPosition
 import xyz.mpv.rex.presentation.components.GroupedListColumn
 import xyz.mpv.rex.presentation.components.GroupedListItem
 import xyz.mpv.rex.presentation.components.groupedItemShape
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 
 /**
- * Material 3 Expressive card container for grouping related preferences.
+ * MaxStream Glass card container for grouping related preferences.
  * Supports standalone (GroupPosition.ONLY) or connected positions (FIRST, MIDDLE, LAST).
  */
 @Composable
@@ -35,20 +46,23 @@ fun PreferenceCard(
   tonalElevation: Dp = 1.dp,
   content: @Composable ColumnScope.() -> Unit,
 ) {
+  val isDark = isSystemInDarkTheme()
   val shape = groupedItemShape(position)
-  Surface(
+  val defaultBg = if (isDark) MaxStreamTheme.GlassSurface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+  val defaultBorder = if (isDark) MaxStreamTheme.GlassBorder else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+
+  Box(
     modifier = modifier
       .fillMaxWidth()
       .padding(horizontal = 16.dp)
-      .clip(shape),
-    shape = shape,
-    color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-    contentColor = MaterialTheme.colorScheme.onSurface,
-    tonalElevation = tonalElevation,
-    shadowElevation = 0.dp,
+      .clip(shape)
+      .background(color ?: defaultBg)
+      .border(1.dp, defaultBorder, shape)
   ) {
     Column(
-      modifier = Modifier.padding(vertical = 4.dp),
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 4.dp),
       verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
       content()
@@ -57,7 +71,7 @@ fun PreferenceCard(
 }
 
 /**
- * Material 3 Expressive single-item preference card with connected shape geometry.
+ * MaxStream Glass single-item preference card with connected shape geometry.
  */
 @Composable
 fun GroupedPreferenceCard(
@@ -68,54 +82,77 @@ fun GroupedPreferenceCard(
   tonalElevation: Dp = 1.dp,
   content: @Composable () -> Unit,
 ) {
+  val isDark = isSystemInDarkTheme()
   val shape = groupedItemShape(position)
+  val defaultBg = if (isDark) MaxStreamTheme.GlassSurface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+  val defaultBorder = if (isDark) MaxStreamTheme.GlassBorder else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+
   val highlightModifier = if (highlightKey != null) {
     Modifier.preferenceHighlight(highlightKey, shape)
   } else {
     Modifier
   }
-  Surface(
+
+  Box(
     modifier = modifier
       .fillMaxWidth()
       .padding(horizontal = 16.dp)
       .then(highlightModifier)
-      .clip(shape),
-    shape = shape,
-    color = color ?: MaterialTheme.colorScheme.surfaceContainerHigh,
-    contentColor = MaterialTheme.colorScheme.onSurface,
-    tonalElevation = tonalElevation,
-    shadowElevation = 0.dp,
+      .clip(shape)
+      .background(color ?: defaultBg)
+      .border(1.dp, defaultBorder, shape)
   ) {
     content()
   }
 }
 
 /**
- * Material 3 Expressive divider to separate preferences within a card.
+ * MaxStream Glass subtle divider to separate preferences within a card.
  */
 @Composable
 fun PreferenceDivider(
   modifier: Modifier = Modifier,
 ) {
+  val isDark = isSystemInDarkTheme()
   HorizontalDivider(
     modifier = modifier.padding(horizontal = 20.dp),
-    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+    color = if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
   )
 }
 
 /**
- * Material 3 Expressive section header for preferences.
+ * MaxStream Glass section header for preferences.
  */
 @Composable
 fun PreferenceSectionHeader(
   title: String,
   modifier: Modifier = Modifier,
+  icon: ImageVector? = null,
 ) {
-  Text(
-    text = title,
-    style = MaterialTheme.typography.titleSmall,
-    fontWeight = FontWeight.Bold,
-    color = MaterialTheme.colorScheme.primary,
-    modifier = modifier.padding(horizontal = 22.dp, vertical = 10.dp),
-  )
+  val isDark = isSystemInDarkTheme()
+  Row(
+    modifier = modifier
+      .fillMaxWidth()
+      .padding(horizontal = 20.dp, vertical = 12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    if (icon != null) {
+      Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = MaxStreamTheme.CrimsonAccent,
+        modifier = Modifier.size(18.dp)
+      )
+    }
+    Text(
+      text = title.uppercase(),
+      style = MaterialTheme.typography.labelMedium.copy(
+        letterSpacing = 1.2.sp,
+        fontWeight = FontWeight.Bold
+      ),
+      color = if (isDark) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary,
+    )
+  }
 }
+

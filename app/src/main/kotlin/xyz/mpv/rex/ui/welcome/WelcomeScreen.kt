@@ -6,7 +6,10 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -147,25 +150,31 @@ object WelcomeScreen : Screen {
       }
     }
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     Scaffold(
       modifier = Modifier.fillMaxSize(),
-      containerColor = MaterialTheme.colorScheme.background,
+      containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
       bottomBar = {
-        // Pinned sticky bottom container that respects system navigation bars
-        Surface(
-          modifier = Modifier.fillMaxWidth(),
-          color = MaterialTheme.colorScheme.surfaceContainer,
-          tonalElevation = 8.dp,
-          shadowElevation = 8.dp,
+        // Pinned sticky bottom container with Glass styling
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .background(if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground.copy(alpha = 0.92f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
           Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .navigationBarsPadding()
-              .padding(horizontal = 24.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
           ) {
-            FilledTonalButton(
+            xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+              text = if (isGranted) {
+                stringResource(R.string.welcome_get_started)
+              } else {
+                stringResource(R.string.welcome_grant_permission)
+              },
+              icon = if (isGranted) Icons.Filled.Check else Icons.AutoMirrored.Filled.ArrowForward,
               onClick = {
                 if (isGranted) {
                   navigateToMain()
@@ -175,36 +184,12 @@ object WelcomeScreen : Screen {
                   }
                 }
               },
+              isPrimary = true,
               modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(54.dp),
               shape = RoundedCornerShape(16.dp),
-              colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-              ),
-            ) {
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-              ) {
-                Icon(
-                  imageVector = if (isGranted) Icons.Filled.Check else Icons.AutoMirrored.Filled.ArrowForward,
-                  contentDescription = null,
-                  modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                  text = if (isGranted) {
-                    stringResource(R.string.welcome_get_started)
-                  } else {
-                    stringResource(R.string.welcome_grant_permission)
-                  },
-                  style = MaterialTheme.typography.titleMedium,
-                  fontWeight = FontWeight.Bold,
-                )
-              }
-            }
+            )
 
             if (!isGranted) {
               Spacer(modifier = Modifier.height(8.dp))
@@ -215,7 +200,7 @@ object WelcomeScreen : Screen {
                 Text(
                   text = stringResource(R.string.welcome_skip_permission),
                   style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
               }
             }
@@ -239,14 +224,15 @@ object WelcomeScreen : Screen {
           // App Logo
           Box(
             modifier = Modifier
-              .size(80.dp)
-              .clip(RoundedCornerShape(20.dp)),
+              .size(88.dp)
+              .clip(RoundedCornerShape(24.dp))
+              .background(xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.GlassSurface),
             contentAlignment = Alignment.Center
           ) {
             Image(
               painter = painterResource(id = R.drawable.ic_max_stream_mark),
               contentDescription = "MAX STREAM Logo",
-              modifier = Modifier.size(72.dp),
+              modifier = Modifier.size(76.dp),
             )
           }
 
@@ -257,7 +243,7 @@ object WelcomeScreen : Screen {
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
           )
 
           Spacer(modifier = Modifier.height(8.dp))
@@ -266,7 +252,7 @@ object WelcomeScreen : Screen {
             text = stringResource(R.string.welcome_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
           )
 
           Spacer(modifier = Modifier.height(28.dp))
@@ -275,14 +261,11 @@ object WelcomeScreen : Screen {
         item {
           // Language Picker Card
           val currentLanguage = remember { LocaleHelper.getCurrentLanguage(context) }
-          Card(
+          xyz.mpv.rex.ui.components.glass.GlassCard(
             modifier = Modifier
               .fillMaxWidth()
               .clip(RoundedCornerShape(20.dp))
               .clickable { showLanguageDialog = true },
-            colors = CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
             shape = RoundedCornerShape(20.dp),
           ) {
             Row(
@@ -291,22 +274,19 @@ object WelcomeScreen : Screen {
                 .padding(16.dp),
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              Surface(
-                modifier = Modifier.size(44.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
+              Box(
+                modifier = Modifier
+                  .size(44.dp)
+                  .clip(CircleShape)
+                  .background(xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
               ) {
-                Box(
-                  modifier = Modifier.fillMaxSize(),
-                  contentAlignment = Alignment.Center,
-                ) {
-                  Icon(
-                    imageVector = Icons.Filled.Language,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                  )
-                }
+                Icon(
+                  imageVector = Icons.Filled.Language,
+                  contentDescription = null,
+                  modifier = Modifier.size(24.dp),
+                  tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                )
               }
 
               Spacer(modifier = Modifier.width(16.dp))
@@ -315,7 +295,7 @@ object WelcomeScreen : Screen {
                 Text(
                   text = stringResource(R.string.welcome_language_section_title),
                   style = MaterialTheme.typography.labelMedium,
-                  color = MaterialTheme.colorScheme.primary,
+                  color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
                   fontWeight = FontWeight.SemiBold,
                 )
                 Text(
@@ -326,7 +306,7 @@ object WelcomeScreen : Screen {
                   },
                   style = MaterialTheme.typography.titleMedium,
                   fontWeight = FontWeight.Bold,
-                  color = MaterialTheme.colorScheme.onSurface,
+                  color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
                 )
               }
 
@@ -334,6 +314,7 @@ object WelcomeScreen : Screen {
                 Text(
                   text = stringResource(R.string.browse),
                   fontWeight = FontWeight.SemiBold,
+                  color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
                 )
               }
             }
@@ -343,12 +324,9 @@ object WelcomeScreen : Screen {
         }
 
         item {
-          // Storage Permission Card (Dynamic status & descriptions)
-          Card(
+          // Redesigned Storage Permission Card (Dynamic status & descriptions)
+          xyz.mpv.rex.ui.components.glass.GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ),
             shape = RoundedCornerShape(20.dp),
           ) {
             Column(
@@ -358,44 +336,44 @@ object WelcomeScreen : Screen {
               Row(
                 verticalAlignment = Alignment.CenterVertically,
               ) {
-                Surface(
-                  modifier = Modifier.size(40.dp),
-                  shape = CircleShape,
-                  color = if (isGranted) {
-                    MaterialTheme.colorScheme.primaryContainer
-                  } else {
-                    MaterialTheme.colorScheme.secondaryContainer
-                  },
+                Box(
+                  modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                      if (isGranted) Color(0xFF22C55E).copy(alpha = 0.2f)
+                      else xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent.copy(alpha = 0.15f)
+                    ),
+                  contentAlignment = Alignment.Center,
                 ) {
-                  Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                  ) {
-                    Icon(
-                      imageVector = if (isGranted) Icons.Filled.Check else Icons.Filled.Folder,
-                      contentDescription = null,
-                      modifier = Modifier.size(22.dp),
-                      tint = if (isGranted) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                      } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                      },
-                    )
-                  }
+                  Icon(
+                    imageVector = if (isGranted) Icons.Filled.Check else Icons.Filled.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = if (isGranted) Color(0xFF22C55E) else xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                  )
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-                Text(
-                  text = if (isGranted) {
-                    stringResource(R.string.storage_access_granted)
-                  } else {
-                    stringResource(R.string.storage_access_required)
-                  },
-                  style = MaterialTheme.typography.titleMedium,
-                  fontWeight = FontWeight.Bold,
-                  color = MaterialTheme.colorScheme.onSurface,
-                )
+                Column {
+                  Text(
+                    text = if (isGranted) {
+                      stringResource(R.string.storage_access_granted)
+                    } else {
+                      stringResource(R.string.storage_access_required)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
+                  )
+                  Text(
+                    text = if (isGranted) "All local media is available" else "Required to play downloaded and local videos",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isGranted) Color(0xFF22C55E) else xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                    fontWeight = FontWeight.Medium,
+                  )
+                }
               }
 
               Text(
@@ -411,7 +389,7 @@ object WelcomeScreen : Screen {
                   stringResource(R.string.permission_required_all_files)
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               )
 
               if (!isGranted) {
@@ -424,12 +402,14 @@ object WelcomeScreen : Screen {
                     imageVector = Icons.Outlined.Info,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
+                    tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
                   )
                   Spacer(modifier = Modifier.width(6.dp))
                   Text(
                     text = stringResource(R.string.why_do_i_see_this),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
+                    color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
                   )
                 }
               }
@@ -441,29 +421,32 @@ object WelcomeScreen : Screen {
       }
     }
 
-    // Language Selection Dialog
+    // Language Selection Dialog in MaxStream Glass
     if (showLanguageDialog) {
       val currentCode = remember { LocaleHelper.getSavedLanguageCode(context) }
       var selectedCode by remember { mutableStateOf(currentCode) }
       val languages = remember { LocaleHelper.getSupportedLanguages(context) }
 
-      AlertDialog(
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
         onDismissRequest = { showLanguageDialog = false },
-        icon = {
-          Icon(
-            imageVector = Icons.Filled.Language,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+        title = stringResource(R.string.pref_appearance_language_title),
+        icon = Icons.Filled.Language,
+        confirmButton = {
+          xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+            text = stringResource(R.string.generic_confirm),
+            onClick = {
+              LocaleHelper.setAppLanguage(context, selectedCode)
+              showLanguageDialog = false
+            },
+            isPrimary = true,
           )
         },
-        title = {
-          Text(
-            text = stringResource(R.string.pref_appearance_language_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-          )
+        dismissButton = {
+          TextButton(onClick = { showLanguageDialog = false }) {
+            Text(stringResource(R.string.generic_cancel))
+          }
         },
-        text = {
+        content = {
           Column(
             modifier = Modifier
               .fillMaxWidth()
@@ -488,6 +471,9 @@ object WelcomeScreen : Screen {
                 RadioButton(
                   selected = isSelected,
                   onClick = null,
+                  colors = RadioButtonDefaults.colors(
+                    selectedColor = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                  ),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
@@ -495,13 +481,13 @@ object WelcomeScreen : Screen {
                     text = language.nativeName,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
                   )
                   if (language.code.isNotEmpty()) {
                     Text(
                       text = language.localizedName,
                       style = MaterialTheme.typography.bodySmall,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                   }
                 }
@@ -509,49 +495,27 @@ object WelcomeScreen : Screen {
             }
           }
         },
-        confirmButton = {
-          FilledTonalButton(
-            onClick = {
-              LocaleHelper.setAppLanguage(context, selectedCode)
-              showLanguageDialog = false
-            },
-            shape = RoundedCornerShape(12.dp),
-          ) {
-            Text(stringResource(R.string.generic_confirm))
-          }
-        },
-        dismissButton = {
-          TextButton(onClick = { showLanguageDialog = false }) {
-            Text(stringResource(R.string.generic_cancel))
-          }
-        },
-        shape = RoundedCornerShape(24.dp),
       )
     }
 
-    // Explanation Dialog
+    // Explanation Dialog in MaxStream Glass
     if (showExplanationDialog) {
       val uriHandler = LocalUriHandler.current
       val githubUrl = "https://github.com/MaxStreamApp/MAX-STREAM"
       val isPlayStoreBuild = BuildConfig.SCOPED_STORAGE_ONLY
 
-      AlertDialog(
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
         onDismissRequest = { showExplanationDialog = false },
-        icon = {
-          Icon(
-            imageVector = Icons.Outlined.Info,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+        title = stringResource(R.string.why_this_permission_is_needed),
+        icon = Icons.Outlined.Info,
+        confirmButton = {
+          xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+            text = stringResource(R.string.got_it),
+            onClick = { showExplanationDialog = false },
+            isPrimary = true,
           )
         },
-        title = {
-          Text(
-            text = stringResource(R.string.why_this_permission_is_needed),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-          )
-        },
-        text = {
+        content = {
           Column(
             modifier = Modifier
               .heightIn(max = 400.dp)
@@ -562,7 +526,7 @@ object WelcomeScreen : Screen {
               Text(
                 text = stringResource(R.string.permission_explanation_playstore_intro),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               )
               Text(
                 text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -571,47 +535,47 @@ object WelcomeScreen : Screen {
                   stringResource(R.string.permission_explanation_pre_tiramisu)
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               )
               Text(
                 text = stringResource(R.string.permission_used_exclusively_for),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
               )
               Text(
                 text = stringResource(R.string.permission_usage_bullet_list),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               )
             } else {
               Text(
                 text = stringResource(R.string.permission_explanation_standard_intro),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               )
               Text(
                 text = stringResource(R.string.permission_security_policy_change),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               )
               Text(
                 text = stringResource(R.string.permission_privacy_assurance_standard),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
 
             Text(
               text = stringResource(R.string.opensource_github_notice),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Text(
               text = githubUrl,
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.primary,
+              color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
               fontWeight = FontWeight.Medium,
               textDecoration = TextDecoration.Underline,
               modifier = Modifier.clickable { uriHandler.openUri(githubUrl) },
@@ -620,20 +584,11 @@ object WelcomeScreen : Screen {
             Text(
               text = stringResource(R.string.privacy_assurance_final),
               style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
               fontWeight = FontWeight.Medium,
             )
           }
         },
-        confirmButton = {
-          FilledTonalButton(
-            onClick = { showExplanationDialog = false },
-            shape = RoundedCornerShape(12.dp),
-          ) {
-            Text(stringResource(R.string.got_it))
-          }
-        },
-        shape = RoundedCornerShape(20.dp),
       )
     }
   }

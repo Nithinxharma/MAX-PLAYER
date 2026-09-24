@@ -97,34 +97,21 @@ object CloudStreamTestCenterScreen : Screen {
             "Live Logs"
         )
 
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
         Scaffold(
+            containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
             topBar = {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = "CloudStream Test Center",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Unified Diagnostic & Testing Suite",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = backstack::removeLastOrNull) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Default.ArrowBack,
-                                contentDescription = "Back"
-                            )
-                        }
-                    },
+                xyz.mpv.rex.ui.components.glass.GlassTopBar(
+                    title = "CloudStream Test Center",
+                    onBackClick = { backstack.removeLastOrNull() },
                     actions = {
                         IconButton(onClick = { viewModel.refreshEnvironmentStatus() }) {
-                            Icon(imageVector = Icons.Default.Refresh, contentDescription = "Refresh")
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 )
@@ -135,15 +122,27 @@ object CloudStreamTestCenterScreen : Screen {
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                PrimaryScrollableTabRow(
+                ScrollableTabRow(
                     selectedTabIndex = selectedTab,
                     edgePadding = 16.dp,
-                    divider = { HorizontalDivider() }
+                    containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.surface,
+                    contentColor = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                    indicator = { tabPositions ->
+                        if (selectedTab < tabPositions.size) {
+                            TabRowDefaults.SecondaryIndicator(
+                                modifier = Modifier.then(with(TabRowDefaults) { Modifier.tabIndicatorOffset(tabPositions[selectedTab]) }),
+                                color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent
+                            )
+                        }
+                    },
+                    divider = { HorizontalDivider(color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.GlassBorder else MaterialTheme.colorScheme.outlineVariant) }
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
+                            selectedContentColor = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                            unselectedContentColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
                             text = {
                                 Text(
                                     text = title,

@@ -42,6 +42,8 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,26 +84,14 @@ object ShortsPreferencesScreen : Screen {
             allFolders = xyz.mpv.rex.utils.storage.CoreMediaScanner.getFlatMediaFolders(context)
         }
 
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
         Scaffold(
+            containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(R.string.pref_category_rexshorts_settings),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = backstack::removeLastOrNull) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                            )
-                        }
-                    },
+                xyz.mpv.rex.ui.components.glass.GlassTopBar(
+                    title = "Shorts",
+                    onBackClick = { backstack.removeLastOrNull() }
                 )
             },
         ) { padding ->
@@ -241,73 +231,80 @@ object ShortsPreferencesScreen : Screen {
 
         if (showFolderSelector && allFolders.isNotEmpty()) {
             var selectedFolders by remember { mutableStateOf(shortsSourceFolders) }
-            AlertDialog(
+            xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
                 onDismissRequest = { showFolderSelector = false },
-                title = { Text(stringResource(R.string.pref_select_sourced_folders)) },
-                text = {
-                    Column {
-                        Text(
-                            text = stringResource(R.string.pref_select_sourced_folders_desc),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-                        LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                            items(allFolders) { folder ->
-                                val isChecked = selectedFolders.contains(folder.path)
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedFolders = if (isChecked) {
-                                                selectedFolders - folder.path
-                                            } else {
-                                                selectedFolders + folder.path
-                                            }
-                                        }
-                                        .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = isChecked,
-                                        onCheckedChange = { checked ->
-                                            selectedFolders = if (checked == true) {
-                                                selectedFolders + folder.path
-                                            } else {
-                                                selectedFolders - folder.path
-                                            }
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(text = folder.name, style = MaterialTheme.typography.bodyLarge)
-                                        Text(
-                                            text = folder.path,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.outline
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
+                title = stringResource(R.string.pref_select_sourced_folders),
+                icon = Icons.Outlined.Folder,
                 confirmButton = {
-                    TextButton(
+                    xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                        text = stringResource(R.string.save),
+                        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
                         onClick = {
                             browserPreferences.shortsSourceFolders.set(selectedFolders)
                             showFolderSelector = false
                         }
-                    ) {
-                        Text(stringResource(R.string.save))
-                    }
+                    )
                 },
                 dismissButton = {
-                    TextButton(onClick = { showFolderSelector = false }) {
-                        Text(stringResource(R.string.generic_cancel))
+                    xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                        text = stringResource(R.string.generic_cancel),
+                        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+                        onClick = { showFolderSelector = false }
+                    )
+                }
+            ) {
+                Column {
+                    Text(
+                        text = stringResource(R.string.pref_select_sourced_folders_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(allFolders) { folder ->
+                            val isChecked = selectedFolders.contains(folder.path)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        selectedFolders = if (isChecked) {
+                                            selectedFolders - folder.path
+                                        } else {
+                                            selectedFolders + folder.path
+                                        }
+                                    }
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        selectedFolders = if (checked == true) {
+                                            selectedFolders + folder.path
+                                        } else {
+                                            selectedFolders - folder.path
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = folder.name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = folder.path,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
-            )
+            }
         }
     }
 }

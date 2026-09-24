@@ -94,26 +94,14 @@ object MediaLibraryPreferencesScreen : Screen {
     val enableTvScraper by browserPreferences.enableTvScraper.collectAsState()
     val cacheScannedMetadata by browserPreferences.cacheScannedMetadata.collectAsState()
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     Scaffold(
+      containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
       topBar = {
-        TopAppBar(
-          title = {
-            Text(
-              text = stringResource(R.string.pref_media_library_title),
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.ExtraBold,
-              color = MaterialTheme.colorScheme.primary,
-            )
-          },
-          navigationIcon = {
-            IconButton(onClick = backstack::removeLastOrNull) {
-              Icon(
-                Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
-            }
-          },
+        xyz.mpv.rex.ui.components.glass.GlassTopBar(
+          title = stringResource(R.string.pref_media_library_title),
+          onBackClick = { backstack.removeLastOrNull() }
         )
       },
     ) { padding ->

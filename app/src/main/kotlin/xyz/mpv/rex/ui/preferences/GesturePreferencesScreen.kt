@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,26 +64,14 @@ object GesturePreferencesScreen : Screen {
     var showCustomSeekDialog by remember { mutableStateOf(false) }
     var customSeekValue by remember { mutableStateOf("") }
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     Scaffold(
+      containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
       topBar = {
-        TopAppBar(
-          title = { 
-            Text(
-              text = stringResource(R.string.pref_gesture),
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.ExtraBold,
-              color = MaterialTheme.colorScheme.primary,
-            ) 
-          },
-          navigationIcon = {
-            IconButton(onClick = backstack::removeLastOrNull) {
-              Icon(
-                Icons.AutoMirrored.Default.ArrowBack, 
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
-            }
-          },
+        xyz.mpv.rex.ui.components.glass.GlassTopBar(
+          title = stringResource(R.string.pref_gesture),
+          onBackClick = { backstack.removeLastOrNull() }
         )
       },
     ) { padding ->
@@ -399,44 +388,48 @@ object GesturePreferencesScreen : Screen {
             }
 
             if (showCustomSeekDialog) {
-              AlertDialog(
+              xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
                 onDismissRequest = { showCustomSeekDialog = false },
-                title = { Text(text = stringResource(id = R.string.pref_player_double_tap_seek_duration)) },
-                text = {
-                  Column {
-                    Text(
-                      text = stringResource(R.string.pref_gesture_custom_seek_dialog_hint),
-                      modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    OutlinedTextField(
-                      value = customSeekValue,
-                      onValueChange = { customSeekValue = it },
-                      label = { Text(stringResource(id = R.string.unit_seconds)) },
-                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                      modifier = Modifier.fillMaxWidth(),
-                      singleLine = true,
-                    )
-                  }
-                },
+                title = stringResource(id = R.string.pref_player_double_tap_seek_duration),
+                icon = Icons.Outlined.Gesture,
                 confirmButton = {
-                  TextButton(
+                  xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                    text = stringResource(R.string.generic_ok),
+                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
                     onClick = {
                       val value = customSeekValue.toIntOrNull()
                       if (value != null && value in 1..120) {
                         preferences.doubleTapToSeekDuration.set(value)
                         showCustomSeekDialog = false
                       }
-                    },
-                  ) {
-                    Text(stringResource(R.string.generic_ok))
-                  }
+                    }
+                  )
                 },
                 dismissButton = {
-                  TextButton(onClick = { showCustomSeekDialog = false }) {
-                    Text(stringResource(R.string.generic_cancel))
-                  }
-                },
-              )
+                  xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                    text = stringResource(R.string.generic_cancel),
+                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+                    onClick = { showCustomSeekDialog = false }
+                  )
+                }
+              ) {
+                Column {
+                  Text(
+                    text = stringResource(R.string.pref_gesture_custom_seek_dialog_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                  )
+                  OutlinedTextField(
+                    value = customSeekValue,
+                    onValueChange = { customSeekValue = it },
+                    label = { Text(stringResource(id = R.string.unit_seconds)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                  )
+                }
+              }
             }
           }
 

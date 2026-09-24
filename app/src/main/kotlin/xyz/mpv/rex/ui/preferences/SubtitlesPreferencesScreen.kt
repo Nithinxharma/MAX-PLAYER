@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -94,28 +96,14 @@ object SubtitlesPreferencesScreen : Screen {
     val preferences = koinInject<SubtitlesPreferences>()
     val fileManager = koinInject<FileManager>()
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     Scaffold(
+      containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
       topBar = {
-        TopAppBar(
-          title = {
-            Text(
-              text = stringResource(R.string.pref_subtitles),
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.ExtraBold,
-              color = MaterialTheme.colorScheme.primary,
-            )
-          },
-          navigationIcon = {
-            IconButton(
-              onClick = backstack::removeLastOrNull,
-            ) {
-              Icon(
-                Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
-            }
-          },
+        xyz.mpv.rex.ui.components.glass.GlassTopBar(
+          title = stringResource(R.string.pref_subtitles),
+          onBackClick = { backstack.removeLastOrNull() }
         )
       },
     ) { padding ->
@@ -828,62 +816,72 @@ fun MultiChoicePreference(
   )
 
   if (showDialog) {
-    AlertDialog(
+    xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
       onDismissRequest = { showDialog = false },
-      title = title,
-      text = {
-        LazyColumn {
-          items(values.toList().size) { index ->
-            val entry = values.toList()[index]
-            val key = entry.first
-            val checked = if (hasAllOption && tempSelection.contains("all")) {
-              true
-            } else {
-              tempSelection.contains(key)
-            }
-            
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                  val newSet = tempSelection.toMutableSet()
-                  if (hasAllOption) {
-                    if (key == "all") {
-                      if (checked) newSet.clear()
-                      else newSet.addAll(values.keys)
-                    } else {
-                      newSet.remove("all")
-                      if (checked) newSet.remove(key) else newSet.add(key)
-                    }
-                  } else {
-                    if (checked) newSet.remove(key) else newSet.add(key)
-                  }
-                  tempSelection = newSet
-                }
-                .padding(vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Checkbox(
-                checked = checked,
-                onCheckedChange = null
-              )
-              Spacer(modifier = Modifier.width(8.dp))
-              Text(text = entry.second)
-            }
-          }
-        }
+      title = stringResource(R.string.pref_subtitles),
+      icon = Icons.Outlined.Subtitles,
+      dismissButton = {
+        xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+          text = stringResource(R.string.generic_cancel),
+          variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+          onClick = { showDialog = false }
+        )
       },
       confirmButton = {
-        TextButton(
-          enabled = !tempSelection.isEmpty(),
+        xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+          text = stringResource(R.string.generic_ok),
+          variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
           onClick = {
             onValuesChange(tempSelection)
             showDialog = false
           }
-        ) {
-          Text(stringResource(android.R.string.ok))
+        )
+      }
+    ) {
+      LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
+        items(values.toList().size) { index ->
+          val entry = values.toList()[index]
+          val key = entry.first
+          val checked = if (hasAllOption && tempSelection.contains("all")) {
+            true
+          } else {
+            tempSelection.contains(key)
+          }
+          
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable {
+                val newSet = tempSelection.toMutableSet()
+                if (hasAllOption) {
+                  if (key == "all") {
+                    if (checked) newSet.clear()
+                    else newSet.addAll(values.keys)
+                  } else {
+                    newSet.remove("all")
+                    if (checked) newSet.remove(key) else newSet.add(key)
+                  }
+                } else {
+                  if (checked) newSet.remove(key) else newSet.add(key)
+                }
+                tempSelection = newSet
+              }
+              .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Checkbox(
+              checked = checked,
+              onCheckedChange = null
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = entry.second,
+              style = MaterialTheme.typography.bodyLarge,
+              color = MaterialTheme.colorScheme.onSurface
+            )
+          }
         }
       }
-    )
+    }
   }
 }

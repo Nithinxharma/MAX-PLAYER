@@ -689,16 +689,12 @@ object CineHubScreen : Screen {
             .padding(innerPadding),
         ) {
         if (isLoading && !isRefreshing) {
-          Column(
+          xyz.mpv.rex.ui.theme.maxstream.MaxStreamHomeSkeleton(
             modifier = Modifier
               .fillMaxSize()
               .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-          ) {
-            MaxStreamSkeletonBanner(height = 360.dp)
-            MaxStreamSkeletonRow(itemCount = 5)
-            MaxStreamSkeletonRow(itemCount = 5)
-          }
+            contentPadding = PaddingValues(bottom = navBarHeight + 32.dp)
+          )
         } else {
           LazyColumn(
             modifier = Modifier.fillMaxSize(),

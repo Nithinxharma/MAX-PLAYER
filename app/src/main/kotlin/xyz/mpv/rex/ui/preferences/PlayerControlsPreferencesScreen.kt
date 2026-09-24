@@ -122,26 +122,14 @@ object PlayerControlsPreferencesScreen : Screen {
             orderedOrphans + remainingOrphans
         }
 
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
         Scaffold(
+            containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
             topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(id = R.string.pref_layout_title),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = backstack::removeLastOrNull) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                            )
-                        }
-                    },
+                xyz.mpv.rex.ui.components.glass.GlassTopBar(
+                    title = stringResource(id = R.string.pref_layout_title),
+                    onBackClick = { backstack.removeLastOrNull() }
                 )
             },
         ) { padding ->

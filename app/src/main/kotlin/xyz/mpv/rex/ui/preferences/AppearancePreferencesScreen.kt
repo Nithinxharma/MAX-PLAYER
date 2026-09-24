@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -118,29 +119,11 @@ object AppearancePreferencesScreen : Screen {
         var showLanguageDialog by remember { mutableStateOf(false) }
 
         Scaffold(
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            containerColor = if (systemDarkTheme) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
             topBar = {
-                TopAppBar(
-                    colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    ),
-                    title = {
-                        Text(
-                            text = stringResource(R.string.pref_appearance_title),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = backstack::removeLastOrNull) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                            )
-                        }
-                    },
+                xyz.mpv.rex.ui.components.glass.GlassTopBar(
+                    title = stringResource(R.string.pref_appearance_title),
+                    onBackClick = { backstack.removeLastOrNull() }
                 )
             },
         ) { padding ->
@@ -743,32 +726,34 @@ object AppearancePreferencesScreen : Screen {
                                     )
 
                                     if (showNetworkWarning) {
-                                        AlertDialog(
+                                        xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
                                             onDismissRequest = { showNetworkWarning = false },
-                                            title = { Text(stringResource(R.string.pref_appearance_network_thumbnails_dialog_title)) },
-                                            text = {
-                                                Column {
-                                                    Text(
-                                                        text = stringResource(R.string.pref_appearance_network_thumbnails_dialog_message),
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
+                                            title = stringResource(R.string.pref_appearance_network_thumbnails_dialog_title),
+                                            icon = Icons.Outlined.Warning,
+                                            dismissButton = {
+                                                xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                                                    text = stringResource(R.string.generic_cancel),
+                                                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+                                                    onClick = { showNetworkWarning = false }
+                                                )
                                             },
                                             confirmButton = {
-                                                TextButton(onClick = {
-                                                    preferences.showNetworkThumbnails.set(true)
-                                                    showNetworkWarning = false
-                                                }) {
-                                                    Text(stringResource(R.string.generic_confirm))
-                                                }
-                                            },
-                                            dismissButton = {
-                                                TextButton(onClick = { showNetworkWarning = false }) {
-                                                    Text(stringResource(R.string.generic_cancel))
-                                                }
+                                                xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                                                    text = stringResource(R.string.generic_confirm),
+                                                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+                                                    onClick = {
+                                                        preferences.showNetworkThumbnails.set(true)
+                                                        showNetworkWarning = false
+                                                    }
+                                                )
                                             }
-                                        )
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.pref_appearance_network_thumbnails_dialog_message),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -784,86 +769,73 @@ object AppearancePreferencesScreen : Screen {
             var selectedCode by remember { mutableStateOf(currentCode) }
             val languages = remember { LocaleHelper.getSupportedLanguages(context) }
 
-            AlertDialog(
+            xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
                 onDismissRequest = { showLanguageDialog = false },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Filled.Language,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                icon = Icons.Filled.Language,
+                title = stringResource(R.string.pref_appearance_language_title),
+                dismissButton = {
+                    xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                        text = stringResource(R.string.generic_cancel),
+                        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+                        onClick = { showLanguageDialog = false }
                     )
                 },
-                title = {
-                    Text(
-                        text = stringResource(R.string.pref_appearance_language_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                confirmButton = {
+                    xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                        text = stringResource(R.string.generic_confirm),
+                        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+                        onClick = {
+                            LocaleHelper.setAppLanguage(context, selectedCode)
+                            showLanguageDialog = false
+                        }
                     )
-                },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 350.dp)
-                            .verticalScroll(rememberScrollState())
-                            .selectableGroup(),
-                    ) {
-                        languages.forEach { language ->
-                            val isSelected = selectedCode == language.code
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .selectable(
-                                        selected = isSelected,
-                                        onClick = { selectedCode = language.code },
-                                        role = Role.RadioButton,
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                RadioButton(
+                }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 350.dp)
+                        .verticalScroll(rememberScrollState())
+                        .selectableGroup(),
+                ) {
+                    languages.forEach { language ->
+                        val isSelected = selectedCode == language.code
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .selectable(
                                     selected = isSelected,
-                                    onClick = null,
+                                    onClick = { selectedCode = language.code },
+                                    role = Role.RadioButton,
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = null,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = language.nativeName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                if (language.code.isNotEmpty()) {
                                     Text(
-                                        text = language.nativeName,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                        text = language.localizedName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    if (language.code.isNotEmpty()) {
-                                        Text(
-                                            text = language.localizedName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
                                 }
                             }
                         }
                     }
-                },
-                confirmButton = {
-                    FilledTonalButton(
-                        onClick = {
-                            LocaleHelper.setAppLanguage(context, selectedCode)
-                            showLanguageDialog = false
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Text(stringResource(R.string.generic_confirm))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showLanguageDialog = false }) {
-                        Text(stringResource(R.string.generic_cancel))
-                    }
-                },
-                shape = RoundedCornerShape(24.dp),
-            )
+                }
+            }
         }
     }
 }

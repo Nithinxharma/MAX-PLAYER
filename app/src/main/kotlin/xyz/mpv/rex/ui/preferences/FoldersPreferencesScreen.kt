@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Folder
@@ -372,61 +375,34 @@ private fun AddFolderDialog(
     availableFolders.map { it.path }
   }
 
-  AlertDialog(
+  xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
     onDismissRequest = onDismiss,
-    title = {
-      Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable(enabled = !isLoading && availableFolders.isNotEmpty()) {
-          showDropdown = true
-        },
-      ) {
-        Text(
-          text = if (selectionState.isInSelectionMode) {
-            stringResource(R.string.selected_items, selectionState.selectedCount, availableFolders.size)
-          } else {
-            stringResource(R.string.pref_folders_select_folders)
-          },
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis,
-        )
-        if (!isLoading && availableFolders.isNotEmpty()) {
-          Icon(
-            Icons.Filled.ArrowDropDown,
-            contentDescription = stringResource(R.string.selection_options),
-            modifier = Modifier.size(24.dp),
-          )
-        }
-
-        DropdownMenu(
-          expanded = showDropdown,
-          onDismissRequest = { showDropdown = false },
-        ) {
-          DropdownMenuItem(
-            text = { Text(stringResource(R.string.select_all)) },
-            onClick = {
-              selectionState = selectionState.selectAll(availableFolderPaths)
-              showDropdown = false
-            },
-          )
-          DropdownMenuItem(
-            text = { Text(stringResource(R.string.invert_selection)) },
-            onClick = {
-              selectionState = selectionState.invertSelection(availableFolderPaths)
-              showDropdown = false
-            },
-          )
-          DropdownMenuItem(
-            text = { Text(stringResource(R.string.deselect_all)) },
-            onClick = {
-              selectionState = selectionState.clear()
-              showDropdown = false
-            },
-          )
-        }
-      }
+    title = if (selectionState.isInSelectionMode) {
+      stringResource(R.string.selected_items, selectionState.selectedCount, availableFolders.size)
+    } else {
+      stringResource(R.string.pref_folders_select_folders)
     },
-    text = {
+    icon = Icons.Outlined.Folder,
+    confirmButton = {
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+        text = stringResource(R.string.generic_ok),
+        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+        onClick = {
+          onAddFolders(selectionState.selectedIds)
+          onDismiss()
+        },
+        enabled = selectionState.isInSelectionMode && !isLoading,
+      )
+    },
+    dismissButton = {
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+        text = stringResource(R.string.generic_cancel),
+        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
+        onClick = onDismiss
+      )
+    },
+  ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
       if (isLoading) {
         Box(
           modifier = Modifier
@@ -434,24 +410,25 @@ private fun AddFolderDialog(
             .padding(32.dp),
           contentAlignment = Alignment.Center,
         ) {
-          Text(stringResource(R.string.pref_folders_loading))
+          Text(stringResource(R.string.pref_folders_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
       } else if (availableFolders.isEmpty()) {
-        Text(stringResource(R.string.pref_folders_no_folders))
+        Text(stringResource(R.string.pref_folders_no_folders), color = MaterialTheme.colorScheme.onSurfaceVariant)
       } else {
         LazyColumn(
           modifier = Modifier
             .fillMaxWidth()
-            .height(400.dp),
+            .height(350.dp),
         ) {
           items(availableFolders) { folder ->
             Row(
               modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
                 .clickable {
                   selectionState = selectionState.toggle(folder.path)
                 }
-                .padding(vertical = 8.dp),
+                .padding(vertical = 8.dp, horizontal = 4.dp),
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Checkbox(
@@ -464,35 +441,22 @@ private fun AddFolderDialog(
                 Text(
                   text = folder.name,
                   style = MaterialTheme.typography.bodyLarge,
+                  color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                   text = folder.path,
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
                 )
               }
             }
           }
         }
       }
-    },
-    confirmButton = {
-      TextButton(
-        onClick = {
-          onAddFolders(selectionState.selectedIds)
-          onDismiss()
-        },
-        enabled = selectionState.isInSelectionMode && !isLoading,
-      ) {
-        Text(stringResource(R.string.generic_ok))
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss) {
-        Text(stringResource(R.string.generic_cancel))
-      }
-    },
-  )
+    }
+  }
 }
 
 /**

@@ -136,73 +136,69 @@ object AdvancedPreferencesScreen : Screen {
         }
       }
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     // Export results dialog
     if (showExportDialog && exportStats != null) {
-      AlertDialog(
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
         onDismissRequest = { showExportDialog = false },
-        title = { Text(stringResource(R.string.export_complete)) },
-        text = {
-          Column(
-            modifier = Modifier
-              .fillMaxWidth()
-              .verticalScroll(rememberScrollState()),
-          ) {
-            Text(
-              stringResource(R.string.export_complete_details, exportStats?.totalExported ?: 0)
-            )
-          }
-        },
+        title = stringResource(R.string.export_complete),
+        icon = Icons.Outlined.FileDownload,
         confirmButton = {
-          TextButton(onClick = { showExportDialog = false }) {
-            Text(stringResource(R.string.generic_ok))
-          }
-        },
-      )
+          xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+            text = stringResource(R.string.generic_ok),
+            variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+            onClick = { showExportDialog = false }
+          )
+        }
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        ) {
+          Text(
+            text = stringResource(R.string.export_complete_details, exportStats?.totalExported ?: 0),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
     }
 
     // Import results dialog
     if (showImportDialog && importStats != null) {
-      AlertDialog(
+      xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
         onDismissRequest = { showImportDialog = false },
-        title = { Text(stringResource(R.string.import_complete)) },
-        text = {
-          Text(
-            stringResource(
-              R.string.import_complete_details,
-              importStats?.imported ?: 0,
-              importStats?.failed ?: 0,
-              importStats?.version ?: "",
-            ),
-          )
-        },
+        title = stringResource(R.string.import_complete),
+        icon = Icons.Outlined.FileUpload,
         confirmButton = {
-          TextButton(onClick = { showImportDialog = false }) {
-            Text(stringResource(R.string.generic_ok))
-          }
-        },
-      )
+          xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+            text = stringResource(R.string.generic_ok),
+            variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+            onClick = { showImportDialog = false }
+          )
+        }
+      ) {
+        Text(
+          text = stringResource(
+            R.string.import_complete_details,
+            importStats?.imported ?: 0,
+            importStats?.failed ?: 0,
+            importStats?.version ?: "",
+          ),
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
     }
 
     Scaffold(
+      containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
       topBar = {
-        TopAppBar(
-          title = { 
-            Text(
-              text = stringResource(R.string.pref_advanced),
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.ExtraBold,
-              color = MaterialTheme.colorScheme.primary,
-            )
-          },
-          navigationIcon = {
-            IconButton(onClick = backStack::removeLastOrNull) {
-              Icon(
-                Icons.AutoMirrored.Default.ArrowBack, 
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
-            }
-          },
+        xyz.mpv.rex.ui.components.glass.GlassTopBar(
+          title = stringResource(R.string.pref_advanced),
+          onBackClick = { backStack.removeLastOrNull() }
         )
       },
     ) { padding ->

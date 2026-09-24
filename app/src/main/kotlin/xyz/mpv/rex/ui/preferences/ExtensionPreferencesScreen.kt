@@ -1,12 +1,12 @@
 package xyz.mpv.rex.ui.preferences
 
 import android.widget.Toast
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,12 +18,14 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import org.koin.compose.koinInject
 import xyz.mpv.rex.cinehub.extension.manager.ExtensionManager
 import xyz.mpv.rex.cinehub.extension.manager.RepositoryManager
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
+import xyz.mpv.rex.ui.components.glass.*
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
+import xyz.mpv.rex.ui.theme.maxstream.maxStreamShimmer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +43,7 @@ fun ExtensionPreferencesScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val isDark = isSystemInDarkTheme()
 
     val installedList by extensionManager.getAllInstalledExtensions().collectAsState(initial = emptyList())
     val repos by repositoryManager.getAllRepositories().collectAsState(initial = emptyList())
@@ -49,14 +52,11 @@ fun ExtensionPreferencesScreen(
     var showDiagnostics by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text(text = "Extensions") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
+            GlassTopBar(
+                title = "Extensions",
+                onBackClick = onNavigateBack
             )
         }
     ) { paddingValues ->
@@ -66,16 +66,14 @@ fun ExtensionPreferencesScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .verticalScroll(rememberScrollState())
+                    .padding(bottom = 32.dp)
             ) {
-                // Third-Party Extension Notice Banner (Mandatory)
-                Card(
+                // Third-Party Extension Notice Banner in Glass
+                GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                    )
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(18.dp),
                 ) {
                     Row(
                         modifier = Modifier
@@ -87,7 +85,7 @@ fun ExtensionPreferencesScreen(
                         Icon(
                             Icons.Outlined.Info,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaxStreamTheme.CrimsonAccent,
                             modifier = Modifier.padding(top = 2.dp)
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -95,144 +93,133 @@ fun ExtensionPreferencesScreen(
                                 text = "Third-Party Notice",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Extensions are provided by third parties. MaxStream only provides the extension framework and does not control or verify the content, availability, or reliability of third-party sources.",
+                                text = "Extensions are provided by third parties. MaxStream provides the extension framework and does not host, control, or verify third-party media sources.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
 
-                Text(
-                    text = "Extension Management",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                GlassCategoryHeader(title = "Extension Management", icon = Icons.Outlined.Extension)
 
-                Preference(
-                    title = { Text("Installed Extensions") },
-                    summary = {
-                        val activeCount = installedList.count { it.isEnabled }
-                        Text(
-                            if (installedList.isEmpty()) "Browse & install extensions from repositories"
-                            else "$activeCount active • ${installedList.size} installed"
-                        )
-                    },
-                    icon = { Icon(Icons.Outlined.Extension, contentDescription = null) },
-                    onClick = onNavigateToInstalled
-                )
+                GlassSettingsSection {
+                    val activeCount = installedList.count { it.isEnabled }
+                    GlassPreferenceItem(
+                        title = "Installed Extensions",
+                        subtitle = if (installedList.isEmpty()) "Browse & install extensions from repositories"
+                        else "$activeCount active • ${installedList.size} installed",
+                        icon = Icons.Outlined.Extension,
+                        badge = if (installedList.isNotEmpty()) "${installedList.size}" else null,
+                        showDivider = true,
+                        onClick = onNavigateToInstalled
+                    )
 
-                Preference(
-                    title = { Text("Repository Presets & MegaRepo") },
-                    summary = { Text("One-tap setup for MegaRepo and 9 curated CloudStream repository sources") },
-                    icon = { Icon(Icons.Outlined.AllInclusive, contentDescription = null) },
-                    onClick = onNavigateToPresets
-                )
+                    GlassPreferenceItem(
+                        title = "Repository Presets & MegaRepo",
+                        subtitle = "One-tap setup for MegaRepo and 9 curated CloudStream sources",
+                        icon = Icons.Outlined.AllInclusive,
+                        showDivider = true,
+                        onClick = onNavigateToPresets
+                    )
 
-                Preference(
-                    title = { Text("Extension Repositories") },
-                    summary = {
-                        Text(
-                            if (repos.isEmpty()) "Add CloudStream or community repositories"
-                            else "${repos.size} repositories configured"
-                        )
-                    },
-                    icon = { Icon(Icons.Outlined.CloudQueue, contentDescription = null) },
-                    onClick = onNavigateToRepositories
-                )
+                    GlassPreferenceItem(
+                        title = "Extension Repositories",
+                        subtitle = if (repos.isEmpty()) "Add CloudStream or community repositories"
+                        else "${repos.size} repositories configured",
+                        icon = Icons.Outlined.CloudQueue,
+                        badge = if (repos.isNotEmpty()) "${repos.size}" else null,
+                        showDivider = false,
+                        onClick = onNavigateToRepositories
+                    )
+                }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                Spacer(modifier = Modifier.height(8.dp))
+                GlassCategoryHeader(title = "Tools & Diagnostics", icon = Icons.Outlined.Science)
 
-                Text(
-                    text = "Tools & Diagnostics",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                GlassSettingsSection {
+                    GlassPreferenceItem(
+                        title = "CloudStream Diagnostic & Test Center",
+                        subtitle = "Multi-tool test suite: provider search test, live 16-stage trace & DEX activation",
+                        icon = Icons.Outlined.Science,
+                        showDivider = true,
+                        onClick = onNavigateToTestCenter
+                    )
 
-                Preference(
-                    title = { Text("CloudStream Diagnostic & Test Center") },
-                    summary = { Text("Multi-tool test suite: provider search test, live 16-stage execution trace & DEX activation") },
-                    icon = { Icon(Icons.Outlined.Science, contentDescription = null) },
-                    onClick = onNavigateToTestCenter
-                )
-
-                Preference(
-                    title = { Text("Update All Extensions") },
-                    summary = { Text("Sync all repositories and install newer provider versions") },
-                    icon = {
-                        if (isUpdating) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Outlined.Update, contentDescription = null)
-                        }
-                    },
-                    enabled = !isUpdating,
-                    onClick = {
-                        scope.launch(Dispatchers.IO) {
-                            val updated = extensionManager.updateAll()
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(
-                                    context,
-                                    if (updated > 0) "Updated $updated extensions successfully" else "All extensions are up-to-date",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                    GlassPreferenceItem(
+                        title = "Update All Extensions",
+                        subtitle = if (isUpdating) "Syncing repositories and downloading updates…" else "Sync all repositories and install newer provider versions",
+                        icon = Icons.Outlined.Update,
+                        enabled = !isUpdating,
+                        badge = if (isUpdating) "UPDATING" else null,
+                        showDivider = true,
+                        onClick = {
+                            scope.launch(Dispatchers.IO) {
+                                val updated = extensionManager.updateAll()
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(
+                                        context,
+                                        if (updated > 0) "Updated $updated extensions successfully" else "All extensions are up-to-date",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         }
-                    }
-                )
+                    )
 
-                Preference(
-                    title = { Text("Clear Extension Cache") },
-                    summary = { Text("Clear cached provider manifests and network temporary files") },
-                    icon = { Icon(Icons.Outlined.CleaningServices, contentDescription = null) },
-                    onClick = {
-                        extensionManager.clearCache()
-                        Toast.makeText(context, "Extension cache cleared", Toast.LENGTH_SHORT).show()
-                    }
-                )
+                    GlassPreferenceItem(
+                        title = "Clear Extension Cache",
+                        subtitle = "Clear cached provider manifests and network temporary files",
+                        icon = Icons.Outlined.CleaningServices,
+                        showDivider = true,
+                        onClick = {
+                            extensionManager.clearCache()
+                            Toast.makeText(context, "Extension cache cleared", Toast.LENGTH_SHORT).show()
+                        }
+                    )
 
-                Preference(
-                    title = { Text("Framework Diagnostics") },
-                    summary = { Text("View active runtime providers and framework status") },
-                    icon = { Icon(Icons.Outlined.Assessment, contentDescription = null) },
-                    onClick = { showDiagnostics = true }
-                )
+                    GlassPreferenceItem(
+                        title = "Framework Diagnostics",
+                        subtitle = "View active runtime providers and framework status",
+                        icon = Icons.Outlined.Assessment,
+                        showDivider = false,
+                        onClick = { showDiagnostics = true }
+                    )
+                }
             }
         }
     }
 
     if (showDiagnostics) {
-        AlertDialog(
+        MaxStreamGlassDialog(
             onDismissRequest = { showDiagnostics = false },
-            title = { Text("Extension Framework Diagnostics") },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("• Active Providers: ${activeProviders.size}", fontWeight = FontWeight.SemiBold)
-                    activeProviders.forEach { p ->
-                        Text("  - ${p.name} (v${p.version}) [${p.id}]", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("• Installed Extensions: ${installedList.size}", fontWeight = FontWeight.SemiBold)
-                    Text("• Synced Repositories: ${repos.size}", fontWeight = FontWeight.SemiBold)
-                    Text("• Streaming Engine: Native MPV Integration", fontWeight = FontWeight.SemiBold)
-                    Text("• Architecture: Declarative / Bridge Architecture", fontWeight = FontWeight.SemiBold)
-                }
-            },
+            title = "Extension Framework Diagnostics",
+            icon = Icons.Outlined.Assessment,
             confirmButton = {
-                TextButton(onClick = { showDiagnostics = false }) {
-                    Text("Close")
-                }
+                xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
+                    text = "Close",
+                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
+                    onClick = { showDiagnostics = false }
+                )
             }
-        )
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("• Active Providers: ${activeProviders.size}", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                activeProviders.forEach { p ->
+                    Text("  - ${p.name} (v${p.version}) [${p.id}]", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("• Installed Extensions: ${installedList.size}", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text("• Synced Repositories: ${repos.size}", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text("• Streaming Engine: Native MPV Integration", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text("• Architecture: Declarative / Bridge Architecture", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
     }
 }
+

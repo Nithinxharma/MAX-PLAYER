@@ -48,26 +48,14 @@ object PlayerPreferencesScreen : Screen {
     val backstack = LocalBackStack.current
     val context = LocalContext.current
     val preferences = koinInject<PlayerPreferences>()
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     Scaffold(
+      containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
       topBar = {
-        TopAppBar(
-          title = { 
-            Text(
-              text = stringResource(id = R.string.pref_player),
-              style = MaterialTheme.typography.headlineSmall,
-              fontWeight = FontWeight.ExtraBold,
-              color = MaterialTheme.colorScheme.primary,
-            ) 
-          },
-          navigationIcon = {
-            IconButton(onClick = backstack::removeLastOrNull) {
-              Icon(
-                Icons.AutoMirrored.Outlined.ArrowBack, 
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-              )
-            }
-          },
+        xyz.mpv.rex.ui.components.glass.GlassTopBar(
+          title = stringResource(id = R.string.pref_player),
+          onBackClick = { backstack.removeLastOrNull() }
         )
       },
     ) { padding ->

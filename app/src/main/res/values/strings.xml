@@ -14,7 +14,7 @@
     <string name="ui_loading">Loading…</string>
     <string name="ui_loading_percent">Loading %d%%</string>
 
-    <string name="pref_preferences">Preferences</string>
+    <string name="pref_preferences">Settings</string>
 
     <string name="pref_appearance_title">Appearance</string>
     <string name="pref_appearance_category_bottom_nav">Bottom Navigation Tabs</string>
