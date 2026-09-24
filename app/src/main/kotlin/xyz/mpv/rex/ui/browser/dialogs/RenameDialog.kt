@@ -1,35 +1,39 @@
 package xyz.mpv.rex.ui.browser.dialogs
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
-import xyz.mpv.rex.R
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import xyz.mpv.rex.R
+import xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RenameDialog(
   isOpen: Boolean,
@@ -41,6 +45,7 @@ fun RenameDialog(
 ) {
   if (!isOpen) return
 
+  val isDark = isSystemInDarkTheme()
   val baseName = remember(currentName) {
     mutableStateOf(
       TextFieldValue(
@@ -53,7 +58,6 @@ fun RenameDialog(
   val errorMessage = remember { mutableStateOf("") }
   val focusRequester = remember { FocusRequester() }
 
-  // Auto-focus text field
   LaunchedEffect(Unit) {
     focusRequester.requestFocus()
   }
@@ -81,69 +85,19 @@ fun RenameDialog(
     }
   }
 
-  AlertDialog(
+  MaxStreamGlassDialog(
     onDismissRequest = onDismiss,
-    title = {
-      Text(
-        text = stringResource(R.string.rename_item, stringResource(itemTypeRes)),
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold,
-      )
-    },
-    text = {
-      Column(
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-      ) {
-        // New name input
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          OutlinedTextField(
-            value = baseName.value,
-            onValueChange = {
-              baseName.value = it
-              isError.value = false
-              errorMessage.value = ""
-            },
-            modifier =
-              Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester),
-            label = { Text(stringResource(R.string.new_name), fontWeight = FontWeight.Medium) },
-            singleLine = false,
-            maxLines = 5,
-            isError = isError.value,
-            supportingText =
-              if (isError.value) {
-                { Text(errorMessage.value) }
-              } else {
-                null
-              },
-            colors =
-              OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-              ),
-            keyboardOptions =
-              KeyboardOptions(
-                imeAction = ImeAction.Done,
-              ),
-            keyboardActions =
-              KeyboardActions(
-                onDone = { validateAndConfirm() },
-              ),
-            shape = MaterialTheme.shapes.extraLarge,
-          )
-        }
-      }
-    },
+    title = stringResource(R.string.rename_item, stringResource(itemTypeRes)),
+    icon = Icons.Outlined.Edit,
     confirmButton = {
       Button(
         onClick = { validateAndConfirm() },
         enabled = baseName.value.text.isNotBlank(),
-        colors =
-          ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-          ),
-        shape = MaterialTheme.shapes.extraLarge,
+        colors = ButtonDefaults.buttonColors(
+          containerColor = MaxStreamTheme.CrimsonAccent,
+          contentColor = Color.White
+        ),
+        shape = RoundedCornerShape(14.dp),
       ) {
         Text(
           text = stringResource(R.string.rename),
@@ -154,13 +108,46 @@ fun RenameDialog(
     dismissButton = {
       TextButton(
         onClick = onDismiss,
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = RoundedCornerShape(14.dp),
       ) {
-        Text(stringResource(R.string.generic_cancel), fontWeight = FontWeight.Medium)
+        Text(
+          text = stringResource(R.string.generic_cancel),
+          fontWeight = FontWeight.Medium,
+          color = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
       }
-    },
-    containerColor = MaterialTheme.colorScheme.surface,
-    tonalElevation = 6.dp,
-    shape = MaterialTheme.shapes.extraLarge,
-  )
+    }
+  ) {
+    Column(
+      verticalArrangement = Arrangement.spacedBy(14.dp),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      OutlinedTextField(
+        value = baseName.value,
+        onValueChange = {
+          baseName.value = it
+          isError.value = false
+          errorMessage.value = ""
+        },
+        modifier = Modifier
+          .fillMaxWidth()
+          .focusRequester(focusRequester),
+        label = { Text(stringResource(R.string.new_name), fontWeight = FontWeight.Medium) },
+        singleLine = false,
+        maxLines = 4,
+        isError = isError.value,
+        supportingText = if (isError.value) {
+          { Text(errorMessage.value, color = MaterialTheme.colorScheme.error) }
+        } else null,
+        colors = OutlinedTextFieldDefaults.colors(
+          focusedBorderColor = MaxStreamTheme.CrimsonAccent,
+          focusedLabelColor = MaxStreamTheme.CrimsonAccent,
+          unfocusedBorderColor = if (isDark) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+        ),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { validateAndConfirm() }),
+        shape = RoundedCornerShape(14.dp),
+      )
+    }
+  }
 }

@@ -1192,15 +1192,13 @@ private fun FederatedItemCard(
   searchResponse: SearchResponse,
   onClick: () -> Unit,
 ) {
-  Card(
-    shape = RoundedCornerShape(14.dp),
-    colors = CardDefaults.cardColors(
-      containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-    ),
+  val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+  xyz.mpv.rex.ui.components.glass.GlassCard(
+    shape = RoundedCornerShape(16.dp),
     modifier = Modifier
       .fillMaxWidth()
-      .padding(horizontal = 16.dp, vertical = 4.dp)
-      .clickable(onClick = onClick),
+      .padding(horizontal = 16.dp, vertical = 4.dp),
+    onClick = onClick,
   ) {
     Row(
       modifier = Modifier
@@ -1215,20 +1213,20 @@ private fun FederatedItemCard(
           contentScale = ContentScale.Crop,
           modifier = Modifier
             .size(width = 60.dp, height = 80.dp)
-            .clip(RoundedCornerShape(8.dp)),
+            .clip(RoundedCornerShape(10.dp)),
         )
       } else {
         Box(
           modifier = Modifier
             .size(width = 60.dp, height = 80.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.GlassSurface else MaterialTheme.colorScheme.surfaceVariant),
           contentAlignment = Alignment.Center,
         ) {
           Icon(
             imageVector = if (searchResponse.type == com.lagradost.cloudstream3.TvType.TvSeries) Icons.Outlined.Tv else Icons.Outlined.Movie,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
           )
         }
       }
@@ -1240,37 +1238,40 @@ private fun FederatedItemCard(
           text = searchResponse.name,
           style = MaterialTheme.typography.titleSmall,
           fontWeight = FontWeight.Bold,
+          color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
           maxLines = 2,
           overflow = TextOverflow.Ellipsis,
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Row(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-          Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .background(xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent.copy(alpha = 0.18f))
+              .padding(horizontal = 8.dp, vertical = 2.dp)
           ) {
             Text(
               text = searchResponse.apiName,
-              style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onPrimaryContainer,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
             )
           }
 
-          Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .background(if (isDark) Color(0x22FFFFFF) else MaterialTheme.colorScheme.surfaceVariant)
+              .padding(horizontal = 8.dp, vertical = 2.dp)
           ) {
             Text(
               text = searchResponse.type?.name ?: "Stream",
               style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onSecondaryContainer,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+              color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
         }
@@ -1280,7 +1281,7 @@ private fun FederatedItemCard(
         Icon(
           imageVector = Icons.Default.PlayArrow,
           contentDescription = "View Details",
-          tint = MaterialTheme.colorScheme.primary,
+          tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
         )
       }
     }
@@ -1294,35 +1295,22 @@ private fun LocalItemRow(
   onClick: () -> Unit,
   onLongClick: () -> Unit,
 ) {
-  Row(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clickable(onClick = onClick)
-      .padding(horizontal = 16.dp, vertical = 8.dp),
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Icon(
-      imageVector = if (item is FileSystemItem.Folder) Icons.Filled.Folder else Icons.Outlined.Movie,
-      contentDescription = null,
-      tint = if (item is FileSystemItem.Folder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-      modifier = Modifier.size(36.dp),
+  if (item is FileSystemItem.Folder) {
+    xyz.mpv.rex.ui.components.glass.GlassFolderCard(
+      title = item.name,
+      itemCountText = item.path,
+      path = item.path,
+      isSelected = isSelected,
+      onClick = onClick,
+      onLongClick = onLongClick
     )
-    Spacer(modifier = Modifier.width(12.dp))
-    Column(modifier = Modifier.weight(1f)) {
-      Text(
-        text = item.name,
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.Medium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-      Text(
-        text = item.path,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.outline,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-    }
+  } else {
+    xyz.mpv.rex.ui.components.glass.GlassFileCard(
+      title = item.name,
+      subtitle = item.path,
+      isSelected = isSelected,
+      onClick = onClick,
+      onLongClick = onLongClick
+    )
   }
 }
