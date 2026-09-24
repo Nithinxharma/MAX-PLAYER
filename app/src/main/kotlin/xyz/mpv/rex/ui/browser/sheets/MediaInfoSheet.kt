@@ -158,26 +158,6 @@ fun MediaInfoSheet(uri: Uri, onDismiss: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FilledTonalIconButton(
                         onClick = {
-                            val streamItem = xyz.mpv.rex.tv.model.TvStreamItem(
-                                id = uri.toString(),
-                                title = fileName,
-                                subtitle = "Local Video",
-                                uriString = uri.toString(),
-                                isLocalFile = true
-                            )
-                            onDismiss()
-                            xyz.mpv.rex.tv.MaxStreamTvManager.playOnTv(context, streamItem)
-                        },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        ),
-                    ) {
-                        Icon(Icons.Rounded.Tv, contentDescription = "Play on TV")
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    FilledTonalIconButton(
-                        onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = ClipData.newPlainText(
                                 context.getString(R.string.media_info_clipboard_label, fileName),

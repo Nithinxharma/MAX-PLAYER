@@ -532,11 +532,6 @@ object MainScreen : Screen {
       )
     }
 
-    if (xyz.mpv.rex.tv.MaxStreamTvManager.isBottomSheetVisible) {
-      xyz.mpv.rex.tv.ui.MaxStreamTvBottomSheet(
-        onDismissRequest = { xyz.mpv.rex.tv.MaxStreamTvManager.hideBottomSheet() }
-      )
-    }
   }
 }
 
