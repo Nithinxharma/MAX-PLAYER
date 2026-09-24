@@ -386,6 +386,13 @@ object PreferencesScreen : Screen {
               GroupedListColumn {
                 PreferenceItem(
                   position = GroupPosition.FIRST,
+                  title = "CineTV Live & Playlist",
+                  summary = "Manage IPTV credentials, authentication & stream mappings",
+                  icon = Icons.Outlined.Tv,
+                  onClick = { backstack.add(xyz.mpv.rex.cinetv.ui.CineTvSettingsScreen) },
+                )
+                PreferenceItem(
+                  position = GroupPosition.MIDDLE,
                   title = "Jellyfin",
                   summary = "External player sync",
                   icon = Icons.Outlined.VideoLibrary,

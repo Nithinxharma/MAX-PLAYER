@@ -183,6 +183,8 @@ android {
     named("release") {
       if (project.hasProperty("releaseKeyStore")) {
         signingConfig = signingConfigs.getByName("release")
+      } else {
+        signingConfig = signingConfigs.getByName("debugConfig")
       }
       isMinifyEnabled = true
       isShrinkResources = true
@@ -197,7 +199,7 @@ android {
 
     create("preview") {
       initWith(getByName("release"))
-      signingConfig = null
+      signingConfig = signingConfigs.getByName("debugConfig")
       applicationIdSuffix = ".preview"
       versionNameSuffix = "-0"
     }

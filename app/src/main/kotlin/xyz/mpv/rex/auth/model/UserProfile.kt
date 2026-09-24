@@ -46,6 +46,9 @@ data class UserProfile(
     @set:PropertyName("lastLogin")
     var lastLogin: Date? = null
 ) {
+    val photoUrl: String?
+        get() = photo
+
     companion object {
         /**
          * Robust parser that extracts UserProfile even if fields in Firestore use alternative keys

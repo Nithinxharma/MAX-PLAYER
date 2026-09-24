@@ -73,8 +73,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import xyz.mpv.rex.R
+import xyz.mpv.rex.auth.AuthManager
+import coil.compose.AsyncImage
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.AccountCircle
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
+import androidx.compose.runtime.collectAsState
 import xyz.mpv.rex.ui.theme.DarkMode
 import xyz.mpv.rex.ui.theme.LocalThemeTransitionState
 import xyz.mpv.rex.ui.theme.pillShape
@@ -200,6 +207,11 @@ private fun NormalTopBar(
   val coroutineScope = rememberCoroutineScope()
   val haptic = LocalHapticFeedback.current
   
+  val authManager = koinInject<AuthManager>()
+  val authUser by authManager.firebaseUser.collectAsState()
+  val userProfile by authManager.userProfile.collectAsState()
+  val photoUrl = userProfile?.photoUrl ?: authUser?.photoUrl?.toString()
+
   val isCurrentlyDark = when (darkMode) {
     DarkMode.Dark -> true
     DarkMode.Light -> false
@@ -404,14 +416,25 @@ private fun NormalTopBar(
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onSettingsClick()
           },
-          modifier = Modifier.padding(horizontal = 2.dp),
+          modifier = Modifier.padding(horizontal = 4.dp),
         ) {
-          Icon(
-            Icons.Filled.Settings,
-            contentDescription = stringResource(R.string.settings),
-            modifier = Modifier.size(24.dp),
-            tint = MaterialTheme.colorScheme.secondary,
-          )
+          if (!photoUrl.isNullOrBlank()) {
+            AsyncImage(
+              model = photoUrl,
+              contentDescription = "Profile",
+              modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .border(1.5.dp, MaxStreamTheme.CrimsonAccent, CircleShape)
+            )
+          } else {
+            Icon(
+              Icons.Filled.AccountCircle,
+              contentDescription = "Profile & Settings",
+              modifier = Modifier.size(28.dp),
+              tint = MaterialTheme.colorScheme.primary,
+            )
+          }
         }
       }
       additionalActions()

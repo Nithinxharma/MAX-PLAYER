@@ -56,6 +56,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.mpv.rex.auth.AuthManager
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.foundation.border
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
+import xyz.mpv.rex.ui.profile.ProfileScreen
 import coil.compose.AsyncImage
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.Episode
@@ -607,6 +612,11 @@ object CineHubScreen : Screen {
       (baseCategories + dynamicCategories + "Library").distinct()
     }
 
+    val authManager = koinInject<AuthManager>()
+    val authUser by authManager.firebaseUser.collectAsState()
+    val userProfile by authManager.userProfile.collectAsState()
+    val photoUrl = userProfile?.photoUrl ?: authUser?.photoUrl?.toString()
+
     Scaffold(
       topBar = {
         TopAppBar(
@@ -622,8 +632,9 @@ object CineHubScreen : Screen {
               )
               Text(
                 text = stringResource(R.string.cinehub),
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
               )
             }
           },
@@ -637,18 +648,32 @@ object CineHubScreen : Screen {
               Icon(
                 imageVector = Icons.Outlined.Extension,
                 contentDescription = "Extensions",
+                tint = MaterialTheme.colorScheme.secondary,
               )
             }
             IconButton(
               onClick = {
-                backstack.add(PreferencesScreen)
+                backstack.add(ProfileScreen)
               },
-              modifier = Modifier.testTag("cinehub_settings_button"),
+              modifier = Modifier.testTag("cinehub_profile_button"),
             ) {
-              Icon(
-                imageVector = Icons.Outlined.Settings,
-                contentDescription = "Settings",
-              )
+              if (!photoUrl.isNullOrBlank()) {
+                AsyncImage(
+                  model = photoUrl,
+                  contentDescription = "Profile",
+                  modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .border(1.5.dp, MaxStreamTheme.CrimsonAccent, CircleShape)
+                )
+              } else {
+                Icon(
+                  imageVector = Icons.Filled.AccountCircle,
+                  contentDescription = "Profile & Settings",
+                  tint = MaterialTheme.colorScheme.primary,
+                  modifier = Modifier.size(28.dp)
+                )
+              }
             }
           },
         )

@@ -432,9 +432,7 @@ fun LiveTvTabScreen(
                 onSearchClick = {
                     isSearchExpanded = !isSearchExpanded
                 },
-                onSettingsClick = {
-                    activeSubTab = if (activeSubTab == LiveTab.CHANNELS) LiveTab.JIO_LOGIN else LiveTab.CHANNELS
-                }
+                onSettingsClick = null
             )
         },
         containerColor = bgColor
