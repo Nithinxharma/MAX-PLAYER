@@ -375,7 +375,16 @@ object CineHubScreen : Screen {
 
     var localMovies by remember { mutableStateOf<List<MovieItem>>(emptyList()) }
     var localTvShows by remember { mutableStateOf<List<TvShowItem>>(emptyList()) }
+    var downloadedVideos by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.download.DownloadedVideoItem>>(emptyList()) }
     var continueWatchingItems by remember { mutableStateOf<List<xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem>>(emptyList()) }
+
+    LaunchedEffect(selectedCategory) {
+      if (selectedCategory == "Library") {
+        withContext(Dispatchers.IO) {
+          downloadedVideos = xyz.mpv.rex.cinehub.download.CineDownloadManager.getDownloadedVideos(context)
+        }
+      }
+    }
 
     var extensionSearchResults by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>>(emptyList()) }
     var isSearchingOnline by remember { mutableStateOf(false) }
@@ -1131,7 +1140,16 @@ object CineHubScreen : Screen {
                               rawPayload = item,
                               onClick = {
                                 scope.launch(Dispatchers.IO) {
-                                  val fetched = CineOnlineScraper.getOrFetchMovie(context, item.title, item.url)
+                                  var fetched: Any? = null
+                                  if (item.apiName != "tmdb" && item.apiName.isNotBlank()) {
+                                    val api = com.lagradost.cloudstream3.APIHolder.getApiFromNameNull(item.apiName)
+                                    if (api != null) {
+                                      fetched = try { api.load(item.url) } catch (e: Exception) { null }
+                                    }
+                                  }
+                                  if (fetched == null) {
+                                    fetched = CineOnlineScraper.getOrFetchMovie(context, item.title, item.url)
+                                  }
                                   withContext(Dispatchers.Main) {
                                     if (fetched != null) {
                                       selectedDetailItem = fetched
@@ -1193,6 +1211,76 @@ object CineHubScreen : Screen {
                               selectedDetailItem = show
                             },
                           )
+                        }
+                      }
+                    }
+                  }
+
+                  if (downloadedVideos.isNotEmpty()) {
+                    item {
+                      SectionHeader(title = "Downloaded Videos (${downloadedVideos.size})")
+                    }
+                    item {
+                      LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                      ) {
+                        items(downloadedVideos) { video ->
+                          Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                              .width(200.dp)
+                              .clickable {
+                                MediaUtils.playFile(
+                                  source = video.file.absolutePath,
+                                  context = context,
+                                  launchSource = "cinehub_download",
+                                  title = video.name
+                                )
+                              }
+                          ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                              Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                              ) {
+                                Icon(
+                                  imageVector = Icons.Default.PlayCircle,
+                                  contentDescription = "Play Video",
+                                  tint = MaterialTheme.colorScheme.primary,
+                                  modifier = Modifier.size(32.dp)
+                                )
+                                IconButton(
+                                  onClick = {
+                                    xyz.mpv.rex.cinehub.download.CineDownloadManager.deleteDownloadedVideo(video.file)
+                                    downloadedVideos = xyz.mpv.rex.cinehub.download.CineDownloadManager.getDownloadedVideos(context)
+                                    Toast.makeText(context, "Deleted ${video.name}", Toast.LENGTH_SHORT).show()
+                                  }
+                                ) {
+                                  Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Video",
+                                    tint = MaterialTheme.colorScheme.error
+                                  )
+                                }
+                              }
+                              Spacer(modifier = Modifier.height(8.dp))
+                              Text(
+                                text = video.name,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                              )
+                              Text(
+                                text = xyz.mpv.rex.utils.media.MediaFormatter.formatFileSize(video.sizeBytes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                              )
+                            }
+                          }
                         }
                       }
                     }
@@ -3828,6 +3916,7 @@ fun QualitySelectorBottomSheet(
   onDismiss: () -> Unit,
   onLinkSelected: (com.lagradost.cloudstream3.utils.ExtractorLink) -> Unit,
 ) {
+  val context = LocalContext.current
   val sortedLinks = links.sortedByDescending { it.quality }
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -3872,7 +3961,7 @@ fun QualitySelectorBottomSheet(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Column {
+              Column(modifier = Modifier.weight(1f)) {
                 Text(
                   text = cleanLabel,
                   fontWeight = FontWeight.Bold,
@@ -3885,9 +3974,25 @@ fun QualitySelectorBottomSheet(
                   color = Color.White.copy(alpha = 0.7f)
                 )
               }
-              if (link.isM3u8) {
-                Badge(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                  Text("M3U8", color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                if (link.isM3u8) {
+                  Badge(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+                    Text("M3U8", color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                  }
+                }
+                IconButton(
+                  onClick = {
+                    xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, title, link)
+                  }
+                ) {
+                  Icon(
+                    imageVector = Icons.Outlined.CloudDownload,
+                    contentDescription = "Download Video",
+                    tint = MaterialTheme.colorScheme.primary
+                  )
                 }
               }
             }
