@@ -162,12 +162,30 @@ android {
     }
   }
 
+  val debugKeystoreFile = file("${rootDir}/debug.keystore")
+  if (!debugKeystoreFile.exists() || debugKeystoreFile.length() == 0L) {
+    val base64File = file("${rootDir}/debug.keystore.base64")
+    if (base64File.exists()) {
+      try {
+        val base64Content = base64File.readText().trim()
+        if (base64Content.isNotEmpty()) {
+          val decodedBytes = Base64.getDecoder().decode(base64Content)
+          debugKeystoreFile.writeBytes(decodedBytes)
+        }
+      } catch (e: Exception) {
+        logger.warn("Could not decode debug.keystore from base64: ${e.message}")
+      }
+    }
+  }
+
   signingConfigs {
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
+        storeFile = debugKeystoreFile
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
     create("release") {
       if (project.hasProperty("releaseKeyStore")) {
@@ -175,6 +193,11 @@ android {
         storePassword = project.property("releaseKeyStorePassword") as String
         keyAlias = project.property("releaseKeyAlias") as String
         keyPassword = project.property("releaseKeyPassword") as String
+      } else if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
+        storeFile = debugKeystoreFile
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
       }
     }
   }
@@ -183,8 +206,10 @@ android {
     named("release") {
       if (project.hasProperty("releaseKeyStore")) {
         signingConfig = signingConfigs.getByName("release")
-      } else {
+      } else if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
         signingConfig = signingConfigs.getByName("debugConfig")
+      } else {
+        signingConfig = null
       }
       isMinifyEnabled = true
       isShrinkResources = true
@@ -199,13 +224,15 @@ android {
 
     create("preview") {
       initWith(getByName("release"))
-      signingConfig = signingConfigs.getByName("debugConfig")
+      signingConfig = if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) signingConfigs.getByName("debugConfig") else null
       applicationIdSuffix = ".preview"
       versionNameSuffix = "-0"
     }
 
     named("debug") {
-      signingConfig = signingConfigs.getByName("debugConfig")
+      if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      }
       versionNameSuffix = "-0"
     }
   }
