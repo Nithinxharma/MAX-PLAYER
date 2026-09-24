@@ -59,6 +59,10 @@ import androidx.compose.ui.unit.sp
 import xyz.mpv.rex.auth.AuthManager
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.foundation.border
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamSkeletonBanner
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamSkeletonListItem
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamSkeletonRow
+import xyz.mpv.rex.ui.theme.maxstream.maxStreamShimmer
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 import xyz.mpv.rex.ui.profile.ProfileScreen
 import coil.compose.AsyncImage
@@ -641,18 +645,6 @@ object CineHubScreen : Screen {
           actions = {
             IconButton(
               onClick = {
-                backstack.add(xyz.mpv.rex.tv.ui.MaxStreamTvScreen)
-              },
-              modifier = Modifier.testTag("cinehub_tv_mode_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Default.Tv,
-                contentDescription = "MaxStream TV Mode & Hotspot Stream",
-                tint = MaterialTheme.colorScheme.primary,
-              )
-            }
-            IconButton(
-              onClick = {
                 backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
               },
               modifier = Modifier.testTag("cinehub_extensions_button"),
@@ -697,11 +689,15 @@ object CineHubScreen : Screen {
             .padding(innerPadding),
         ) {
         if (isLoading && !isRefreshing) {
-          Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
           ) {
-            CircularProgressIndicator()
+            MaxStreamSkeletonBanner(height = 360.dp)
+            MaxStreamSkeletonRow(itemCount = 5)
+            MaxStreamSkeletonRow(itemCount = 5)
           }
         } else {
           LazyColumn(
@@ -769,14 +765,10 @@ object CineHubScreen : Screen {
 
               if (isSearchingOnline) {
                 item {
-                  Box(
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .height(120.dp),
-                    contentAlignment = Alignment.Center,
-                  ) {
-                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                  }
+                  MaxStreamSkeletonRow(
+                    itemCount = 4,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                  )
                 }
               } else if (extensionSearchResults.isEmpty()) {
                 item {
@@ -2673,7 +2665,11 @@ fun CineDetailView(
               enabled = !isScrapingMovie,
             ) {
               if (isScrapingMovie) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Box(
+                  modifier = Modifier
+                    .size(18.dp)
+                    .maxStreamShimmer(shape = CircleShape)
+                )
               } else {
                 Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
@@ -2861,7 +2857,11 @@ fun CineDetailView(
               enabled = !isScrapingTv,
             ) {
               if (isScrapingTv) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Box(
+                  modifier = Modifier
+                    .size(18.dp)
+                    .maxStreamShimmer(shape = CircleShape)
+                )
               } else {
                 Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
@@ -2901,13 +2901,15 @@ fun CineDetailView(
           }
 
           if (isLoadingEpisodes) {
-            Box(
+            Column(
               modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp),
-              contentAlignment = Alignment.Center
+                .padding(vertical = 8.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-              CircularProgressIndicator(modifier = Modifier.size(32.dp))
+              MaxStreamSkeletonListItem()
+              MaxStreamSkeletonListItem()
+              MaxStreamSkeletonListItem()
             }
           } else if (seasonEpisodes.isEmpty()) {
             Card(

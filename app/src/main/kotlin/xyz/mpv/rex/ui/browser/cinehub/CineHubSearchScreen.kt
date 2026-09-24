@@ -94,6 +94,11 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.delay
 import xyz.mpv.rex.cinehub.bridge.RexPlayerBridge
 import xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamPosterCard
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassCard
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassFilterChip
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassSearchBar
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamSkeletonCard
+import xyz.mpv.rex.ui.theme.maxstream.maxStreamShimmer
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 import xyz.mpv.rex.ui.theme.maxstream.maxStreamGlass
 
@@ -244,138 +249,55 @@ fun CineHubSearchScreen(
                 ) {
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Glass Capsule Search Input
-                    Surface(
-                        shape = MaxStreamTheme.CapsuleShape,
-                        color = glassSurface,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, glassBorder),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = null,
-                                tint = MaxStreamTheme.CrimsonAccent,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            OutlinedTextField(
-                                value = searchInput,
-                                onValueChange = { searchInput = it },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("cinehub_search_input"),
-                                placeholder = {
-                                    Text(
-                                        "Search movies, shows, anime & actors…",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                                        color = mutedTextColor
-                                    )
-                                },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(
-                                    onSearch = {
-                                        keyboardController?.hide()
-                                        viewModel.searchContent(searchInput)
-                                    }
-                                ),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent,
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    cursorColor = MaxStreamTheme.CrimsonAccent,
-                                    focusedTextColor = primaryTextColor,
-                                    unfocusedTextColor = primaryTextColor
-                                )
-                            )
-
-                            if (searchInput.isNotEmpty()) {
-                                IconButton(
-                                    onClick = {
-                                        searchInput = ""
-                                        viewModel.searchContent("")
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Clear search",
-                                        tint = primaryTextColor.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            } else {
-                                IconButton(
-                                    onClick = {
-                                        Toast.makeText(context, "Voice search active", Toast.LENGTH_SHORT).show()
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Mic,
-                                        contentDescription = "Voice search",
-                                        tint = secondaryTextColor,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                    // Unified Glass Search Bar
+                    MaxStreamGlassSearchBar(
+                        query = searchInput,
+                        onQueryChange = { searchInput = it },
+                        onSearch = { query -> viewModel.searchContent(query) },
+                        placeholder = "Search movies, shows, anime & actors…",
+                        onVoiceClick = {
+                            Toast.makeText(context, "Voice search active", Toast.LENGTH_SHORT).show()
                         }
-                    }
+                    )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Quick Suggestion Chips
+                    // Quick Suggestion Chips using GlassFilterChip
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         items(suggestions) { chip ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = elevatedSurface,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, glassBorder),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        searchInput = chip.replace("4K ", "")
-                                        viewModel.searchContent(searchInput)
-                                    }
-                            ) {
-                                Text(
-                                    text = chip,
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = secondaryTextColor,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
+                            val cleanTag = chip.replace("4K ", "")
+                            MaxStreamGlassFilterChip(
+                                text = chip,
+                                isSelected = searchInput.equals(cleanTag, ignoreCase = true),
+                                onClick = {
+                                    searchInput = cleanTag
+                                    viewModel.searchContent(searchInput)
+                                }
+                            )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
                     if (isSearching) {
-                        Box(
+                        // High Performance Skeleton Grid (replaces circular progress indicator)
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 130.dp),
+                            contentPadding = PaddingValues(bottom = 32.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            userScrollEnabled = false,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp),
-                            contentAlignment = Alignment.Center
+                                .fillMaxSize()
+                                .testTag("cinehub_search_skeleton_grid")
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(
-                                    color = MaxStreamTheme.CrimsonAccent,
-                                    modifier = Modifier.size(36.dp).testTag("cinehub_search_loader")
-                                )
-                                Spacer(modifier = Modifier.height(14.dp))
-                                Text(
-                                    text = "Searching across active providers…",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaxStreamTheme.TextSecondary
+                            items(6) {
+                                MaxStreamSkeletonCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    cardWidth = 140.dp
                                 )
                             }
                         }
@@ -421,28 +343,30 @@ fun CineHubSearchScreen(
                 }
             }
 
-            // Global Loading Indicator for Details
+            // Global Skeleton Pill Indicator for Details
             AnimatedVisibility(
                 visible = isLoadingDetails,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.Center)
             ) {
-                Surface(
+                MaxStreamGlassCard(
+                    modifier = Modifier.padding(horizontal = 24.dp),
                     shape = RoundedCornerShape(18.dp),
-                    color = MaxStreamTheme.MidnightSurface.copy(alpha = 0.95f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                    shadowElevation = 12.dp
+                    backgroundColor = MaxStreamTheme.MidnightSurface.copy(alpha = 0.95f),
+                    borderColor = Color.White.copy(alpha = 0.25f),
+                    elevation = 16.dp
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        CircularProgressIndicator(
-                            color = MaxStreamTheme.CrimsonAccent,
-                            modifier = Modifier.size(24.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .maxStreamShimmer(shape = CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
                         Text(
                             "Fetching stream metadata…",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
