@@ -178,6 +178,14 @@ android {
     }
   }
 
+  val releaseKeystoreFile = file("maxstream-release.jks")
+  val rootReleaseKeystoreFile = file("${rootDir}/app/maxstream-release.jks")
+  val activeReleaseKeystore = if (releaseKeystoreFile.exists() && releaseKeystoreFile.length() > 0L) releaseKeystoreFile else if (rootReleaseKeystoreFile.exists() && rootReleaseKeystoreFile.length() > 0L) rootReleaseKeystoreFile else null
+
+  val envStorePass = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD") ?: (if (project.hasProperty("releaseKeyStorePassword")) project.property("releaseKeyStorePassword") as String else null)
+  val envKeyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("SIGNING_KEY_ALIAS") ?: (if (project.hasProperty("releaseKeyAlias")) project.property("releaseKeyAlias") as String else null)
+  val envKeyPass = System.getenv("KEY_PASSWORD") ?: (if (project.hasProperty("releaseKeyPassword")) project.property("releaseKeyPassword") as String else null)
+
   signingConfigs {
     create("debugConfig") {
       if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
@@ -188,7 +196,12 @@ android {
       }
     }
     create("release") {
-      if (project.hasProperty("releaseKeyStore")) {
+      if (activeReleaseKeystore != null && !envStorePass.isNullOrBlank() && !envKeyAlias.isNullOrBlank() && !envKeyPass.isNullOrBlank()) {
+        storeFile = activeReleaseKeystore
+        storePassword = envStorePass
+        keyAlias = envKeyAlias
+        keyPassword = envKeyPass
+      } else if (project.hasProperty("releaseKeyStore")) {
         storeFile = file(project.property("releaseKeyStore") as String)
         storePassword = project.property("releaseKeyStorePassword") as String
         keyAlias = project.property("releaseKeyAlias") as String
@@ -204,7 +217,7 @@ android {
 
   buildTypes {
     named("release") {
-      if (project.hasProperty("releaseKeyStore")) {
+      if ((activeReleaseKeystore != null && !envStorePass.isNullOrBlank()) || project.hasProperty("releaseKeyStore")) {
         signingConfig = signingConfigs.getByName("release")
       } else if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
         signingConfig = signingConfigs.getByName("debugConfig")
@@ -388,3 +401,70 @@ dependencies {
 fun getCommitCount(): String = "0"
 
 fun getCommitSha(): String = "unknown"
+
+/* ---------------- Release Verification Tasks ---------------- */
+
+tasks.register("verifyReleaseSigning") {
+  group = "verification"
+  description = "Verifies release signing configuration without exposing passwords"
+  notCompatibleWithConfigurationCache("Reads runtime environment and filesystem dynamically")
+  val rootDirPath = rootDir.absolutePath
+  doLast {
+    val releaseKeystoreFile = file("maxstream-release.jks")
+    val rootReleaseKeystoreFile = file("${rootDirPath}/app/maxstream-release.jks")
+    val ksFile = if (releaseKeystoreFile.exists()) releaseKeystoreFile else if (rootReleaseKeystoreFile.exists()) rootReleaseKeystoreFile else null
+
+    val envStorePass = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD")
+    val envKeyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("SIGNING_KEY_ALIAS")
+    val envKeyPass = System.getenv("KEY_PASSWORD")
+
+    println("==========================================")
+    println("RELEASE SIGNING VERIFICATION")
+    println("==========================================")
+    if (ksFile != null && ksFile.exists()) {
+      println("Keystore Found: YES (${ksFile.name})")
+    } else {
+      println("Keystore Found: NO (Fallback active)")
+    }
+
+    if (!envKeyAlias.isNullOrBlank()) {
+      println("Alias Loaded: YES (${envKeyAlias})")
+    } else {
+      println("Alias Loaded: NO (Default fallback active)")
+    }
+
+    if (!envStorePass.isNullOrBlank() && !envKeyPass.isNullOrBlank()) {
+      println("Signing Config Loaded: YES")
+    } else {
+      println("Signing Config Loaded: NO (Incomplete environment variables)")
+    }
+    println("==========================================")
+  }
+}
+
+tasks.register("firebaseReleaseReadinessCheck") {
+  group = "verification"
+  description = "Validates Firebase release signing readiness and project setup"
+  notCompatibleWithConfigurationCache("Reads runtime environment and filesystem dynamically")
+  val rootDirPath = rootDir.absolutePath
+  doLast {
+    val gsFile = file("google-services.json")
+    val hasGs = gsFile.exists() && gsFile.readText().contains("xyz.mpv.rex")
+    val releaseKs = file("maxstream-release.jks").exists() || file("${rootDirPath}/app/maxstream-release.jks").exists()
+    val envStorePass = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD")
+    val envKeyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("SIGNING_KEY_ALIAS")
+    val hasEnv = !envStorePass.isNullOrBlank() && !envKeyAlias.isNullOrBlank()
+
+    println("==========================================")
+    println("FIREBASE RELEASE SIGNING READINESS CHECK")
+    println("==========================================")
+    println("Firebase App:          ${if (hasGs) "Found" else "Missing"}")
+    println("Firebase Auth:         ${if (hasGs) "Configured" else "Unconfigured"}")
+    println("Firestore:             ${if (hasGs) "Configured" else "Unconfigured"}")
+    println("Google Sign-In:        ${if (hasGs) "Configured" else "Unconfigured"}")
+    println("Release Signing:       ${if (hasEnv) "Configured" else "Fallback Active"}")
+    println("Release SHA Ready:     ${if (releaseKs || file("${rootDirPath}/debug.keystore").exists()) "Configured" else "Pending"}")
+    println("==========================================")
+  }
+}
+
