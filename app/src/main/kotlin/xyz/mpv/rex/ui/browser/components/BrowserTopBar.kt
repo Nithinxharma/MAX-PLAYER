@@ -1,5 +1,6 @@
 package xyz.mpv.rex.ui.browser.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
@@ -290,27 +292,60 @@ private fun NormalTopBar(
 
       val displayTitle = if (isAppTitleHeader && !hasHeaderAnimationPlayed) animatedTitleText else title
 
-      Text(
-        text = displayTitle,
-        style =
-          if (onBackClick == null) {
-            MaterialTheme.typography.headlineMediumEmphasized
-          } else {
-            MaterialTheme.typography.headlineSmall
-          },
-        fontWeight = FontWeight.ExtraBold,
-        color = MaterialTheme.colorScheme.primary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier =
-          titleModifier.then(
+      if (isAppTitleHeader) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          modifier = titleModifier.then(
             if (onBackClick == null) {
-              Modifier.padding(start = 8.dp)
+              Modifier.padding(start = 4.dp)
             } else {
               Modifier
+            }
+          )
+        ) {
+          Image(
+            painter = painterResource(id = R.drawable.ic_max_stream_mark),
+            contentDescription = "MAX STREAM Logo",
+            modifier = Modifier.size(28.dp)
+          )
+          Text(
+            text = displayTitle,
+            style =
+              if (onBackClick == null) {
+                MaterialTheme.typography.headlineMediumEmphasized
+              } else {
+                MaterialTheme.typography.headlineSmall
+              },
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
+      } else {
+        Text(
+          text = displayTitle,
+          style =
+            if (onBackClick == null) {
+              MaterialTheme.typography.headlineMediumEmphasized
+            } else {
+              MaterialTheme.typography.headlineSmall
             },
-          ),
-      )
+          fontWeight = FontWeight.ExtraBold,
+          color = MaterialTheme.colorScheme.primary,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier =
+            titleModifier.then(
+              if (onBackClick == null) {
+                Modifier.padding(start = 8.dp)
+              } else {
+                Modifier
+              },
+            ),
+        )
+      }
     },
     navigationIcon = {
       if (onBackClick != null) {

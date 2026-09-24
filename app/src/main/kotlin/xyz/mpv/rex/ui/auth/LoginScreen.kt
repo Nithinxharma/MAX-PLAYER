@@ -1,6 +1,7 @@
 package xyz.mpv.rex.ui.auth
 
 import android.app.Activity
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -148,6 +149,7 @@ object LoginScreen : Screen {
                 }
             } else {
                 isAuthenticating = false
+                Log.w("LoginScreen", "Google Sign-In returned null result data (resultCode: ${result.resultCode})")
             }
         }
 
@@ -252,14 +254,14 @@ private fun MaxStreamBrandLogo() {
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 12.dp)
     ) {
         Image(
-            painter = painterResource(id = R.drawable.ic_max_stream_logo),
+            painter = painterResource(id = R.drawable.ic_max_stream_mark),
             contentDescription = "MAX STREAM",
             contentScale = ContentScale.Fit,
             modifier = Modifier
-                .height(100.dp)
+                .height(96.dp)
                 .scale(pulseScale)
         )
     }
