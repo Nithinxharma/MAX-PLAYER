@@ -38,7 +38,42 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Setup Google Services
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "Restoring google-services.json from secret..."
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > app/google-services.json
+          elif [ -f "app/google-services.json" ]; then
+            echo "app/google-services.json exists."
+          else
+            echo "Warning: google-services.json missing, relying on Gradle fallback generator."
+          fi
+
+      - name: Restore & Ensure Static Keystore
+        run: |
+          if [ -f "debug.keystore.base64" ] && [ ! -s "debug.keystore" ]; then
+            echo "Restoring static debug.keystore from base64..."
+            base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || base64 --decode debug.keystore.base64 > debug.keystore 2>/dev/null || openssl base64 -d -in debug.keystore.base64 -out debug.keystore 2>/dev/null || true
+          fi
+
+          if [ ! -s "debug.keystore" ] && [ -f "$HOME/.android/debug.keystore" ]; then
+            echo "Copying from ~/.android/debug.keystore..."
+            cp "$HOME/.android/debug.keystore" debug.keystore
+          fi
+
+          if [ ! -s "debug.keystore" ]; then
+            echo "Generating static debug.keystore with keytool..."
+            keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          mkdir -p "$HOME/.android"
+          cp debug.keystore "$HOME/.android/debug.keystore" 2>/dev/null || true
+          ls -lh debug.keystore
+
       - name: Build with Gradle
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=\"-Xmx6g -XX:MaxMetaspaceSize=1536m -XX:+UseG1GC\" -Dfile.encoding=UTF-8"
         run: ./gradlew assemblePreview
 
       - name: Sign APKs
@@ -46,14 +81,41 @@ jobs:
           set -e
           RELEASE_DIR="app/build/outputs/apk/preview"
           
-          echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.keystore
+          if [ -n "${{ secrets.SIGNING_KEYSTORE }}" ]; then
+            echo "Using repository SIGNING_KEYSTORE secret..."
+            echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.keystore 2>/dev/null || base64 --decode > release.keystore
+            KEY_ALIAS="${{ secrets.SIGNING_KEY_ALIAS }}"
+            STORE_PASS="${{ secrets.SIGNING_STORE_PASSWORD }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          else
+            echo "No SIGNING_KEYSTORE secret configured. Falling back to static debug.keystore..."
+            if [ -s "debug.keystore" ]; then
+              cp debug.keystore release.keystore
+            elif [ -f "debug.keystore.base64" ]; then
+              base64 -d debug.keystore.base64 > release.keystore 2>/dev/null || base64 --decode debug.keystore.base64 > release.keystore 2>/dev/null || true
+            fi
+
+            if [ ! -s "release.keystore" ] && [ -f "$HOME/.android/debug.keystore" ]; then
+              cp "$HOME/.android/debug.keystore" release.keystore
+            fi
+
+            if [ ! -s "release.keystore" ]; then
+              keytool -genkeypair -v -keystore release.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            fi
+            KEY_ALIAS="androiddebugkey"
+            STORE_PASS="android"
+            KEY_PASS="android"
+          fi
+          
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          echo "Using apksigner: $APKSIGNER"
           
           # Find all unsigned APKs
           APK_COUNT=$(find "$RELEASE_DIR" -name "app-*-preview-unsigned.apk" -type f | wc -l)
           if [ "$APK_COUNT" -eq 0 ]; then
             echo "No unsigned APK files found"
             ls -lah "$RELEASE_DIR"
-            rm release.keystore
+            rm -f release.keystore
             exit 1
           fi
           
@@ -61,19 +123,19 @@ jobs:
             # Rename output to remove -unsigned suffix
             signed_apk="${apk/-unsigned/}"
           
-            $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
+            "$APKSIGNER" sign \
               --ks release.keystore \
-              --ks-key-alias "${{ secrets.SIGNING_KEY_ALIAS }}" \
-              --ks-pass "pass:${{ secrets.SIGNING_STORE_PASSWORD }}" \
-              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$STORE_PASS" \
+              --key-pass "pass:$KEY_PASS" \
               --out "$signed_apk" \
               "$apk"
           
-            $ANDROID_HOME/build-tools/35.0.0/apksigner verify "$signed_apk"
+            "$APKSIGNER" verify "$signed_apk"
             rm "$apk"
           done
           
-          rm release.keystore
+          rm -f release.keystore
           ls -lh "$RELEASE_DIR"/app-*-preview.apk
 
       - name: Copy build artifacts
@@ -90,7 +152,7 @@ jobs:
           
           for arch in "${apks[@]}"; do
             src="app/build/outputs/apk/preview/app-${arch}-preview.apk"
-            dest="output/REX-Player-preview-r${commit_count}-${arch}.apk"
+            dest="output/MAX-STREAM-preview-r${commit_count}-${arch}.apk"
             
             if [ ! -f "$src" ]; then
               echo "::error file=$src::Signed APK for $arch was not found"

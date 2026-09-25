@@ -4,9 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import com.lagradost.cloudstream3.searchSafe
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.AcraApplication
 import com.lagradost.cloudstream3.Episode
@@ -68,7 +65,7 @@ object CloudstreamHeadlessRunner {
             val tasks = apis.map { api ->
                 async {
                     try {
-                        val results = api.searchSafe(query)
+                        val results = api.search(query)
                         api to results
                     } catch (t: Throwable) {
                         Log.w(TAG, "Search failed for provider: ${api.name}", t)
@@ -115,36 +112,6 @@ object CloudstreamHeadlessRunner {
         } catch (t: Throwable) {
             Log.e(TAG, "Link extraction failed on ${api.name}", t)
         }
-
-        // Fallback 1: Direct loadExtractor
-        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
-            try {
-                loadExtractor(
-                    url = data,
-                    referer = null,
-                    subtitleCallback = { sub -> onSubtitleFound?.invoke(sub) },
-                    callback = { link ->
-                        synchronized(links) {
-                            links.add(link)
-                        }
-                    }
-                )
-            } catch (t: Throwable) {
-                Log.w(TAG, "Fallback loadExtractor failed for '$data' on ${api.name}: ${t.message}")
-            }
-        }
-
-        // Fallback 2: Direct URL
-        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
-            links.add(
-                newExtractorLink(
-                    name = api.name,
-                    source = api.name,
-                    url = data
-                )
-            )
-        }
-
         links
     }
 
