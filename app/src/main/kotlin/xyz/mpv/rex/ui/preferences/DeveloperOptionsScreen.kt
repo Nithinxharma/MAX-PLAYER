@@ -98,10 +98,33 @@ object DeveloperOptionsScreen : Screen {
                                     )
                                 },
                                 onClick = {
-                                    val context = backstack.toString() // reference
                                     val syncService = org.koin.core.context.GlobalContext.get().get<xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService>()
                                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                         syncService.syncUserProviders()
+                                    }
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
+                                title = { Text("Run Firebase Auto-Discovery Database Sync") },
+                                summary = {
+                                    Text(
+                                        "Scan repositories, parse manifests, and automatically mirror all metadata into Firestore",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudSync,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    val discoveryService = org.koin.core.context.GlobalContext.get().get<xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService>()
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        discoveryService.discoverAndSyncAll()
                                     }
                                 }
                             )

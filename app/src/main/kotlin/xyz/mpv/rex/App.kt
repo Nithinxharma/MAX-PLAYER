@@ -48,6 +48,7 @@ class App : Application(), ImageLoaderFactory {
   private val extensionManager: xyz.mpv.rex.cinehub.extension.manager.ExtensionManager by inject()
   private val serverProviderSyncService: xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService by inject()
   private val firebaseProviderSyncService: xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService by inject()
+  private val firebaseAutoDiscoveryService: xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService by inject()
   private val mediaStoreInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val rootInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 

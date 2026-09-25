@@ -41,6 +41,7 @@ val domainModule = module {
     single<xyz.mpv.rex.auth.elevation.AdminSessionManager> { xyz.mpv.rex.auth.elevation.DefaultAdminSessionManager(get(), get(), get()) }
     single { xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService(androidContext(), get(), get(), get()) }
     single { xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService(androidContext(), get(), get(), get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService(androidContext(), get(), get()) }
 }
 
 

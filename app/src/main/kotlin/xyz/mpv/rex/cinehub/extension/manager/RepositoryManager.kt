@@ -29,6 +29,8 @@ class RepositoryManager(
 ) {
     private val pluginCache = ConcurrentHashMap<String, List<AvailablePlugin>>()
 
+    var onRepositorySynced: (suspend (RepositorySyncResult) -> Unit)? = null
+
     companion object {
         val BUILT_IN_PRESETS = listOf(
             RepoPresetItem(
@@ -374,7 +376,13 @@ class RepositoryManager(
             )
 
             pluginCache[repoUrl] = parsedPlugins
-            RepositorySyncResult(repoUrl, repoTitle, parsedPlugins)
+            val syncResult = RepositorySyncResult(repoUrl, repoTitle, parsedPlugins)
+            try {
+                onRepositorySynced?.invoke(syncResult)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            syncResult
         } catch (e: Exception) {
             e.printStackTrace()
             RepositorySyncResult(repoUrl, "Failed Sync", emptyList(), e.localizedMessage)
