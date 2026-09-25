@@ -246,6 +246,8 @@ android {
       if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
         signingConfig = signingConfigs.getByName("debugConfig")
       }
+      isMinifyEnabled = false
+      isShrinkResources = false
       versionNameSuffix = "-0"
     }
   }
