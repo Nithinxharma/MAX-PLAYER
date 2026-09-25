@@ -316,7 +316,9 @@ configurations.all {
 }
 
 dependencies {
-  // CloudStream SDK Compatibility
+  // CloudStream SDK & CSX Runtime Compatibility
+  implementation("org.mozilla:rhino:1.8.1")
+  implementation("androidx.browser:browser:1.8.0")
   implementation("org.jsoup:jsoup:1.17.2")
   implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
   implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
