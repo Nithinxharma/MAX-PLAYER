@@ -38,12 +38,38 @@ import xyz.mpv.rex.database.MpvExDatabase
  */
 class FirebaseProviderSyncService(
     private val context: Context,
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val db: MpvExDatabase,
     private val extensionManager: ExtensionManager,
-    private val repositoryManager: RepositoryManager
+    private val repositoryManager: RepositoryManager,
+    private val firestore: FirebaseFirestore? = try {
+        if (com.google.firebase.FirebaseApp.getApps(context).isNotEmpty()) {
+            FirebaseFirestore.getInstance()
+        } else {
+            com.google.firebase.FirebaseApp.initializeApp(context)?.let { FirebaseFirestore.getInstance() }
+        }
+    } catch (e: Throwable) {
+        null
+    },
+    private val auth: FirebaseAuth? = try {
+        if (com.google.firebase.FirebaseApp.getApps(context).isNotEmpty()) {
+            FirebaseAuth.getInstance()
+        } else {
+            com.google.firebase.FirebaseApp.initializeApp(context)?.let { FirebaseAuth.getInstance() }
+        }
+    } catch (e: Throwable) {
+        null
+    }
 ) {
+    // Secondary constructor for backward compatibility
+    constructor(
+        context: Context,
+        firestore: FirebaseFirestore?,
+        auth: FirebaseAuth?,
+        db: MpvExDatabase,
+        extensionManager: ExtensionManager,
+        repositoryManager: RepositoryManager
+    ) : this(context, db, extensionManager, repositoryManager, firestore, auth)
+
     companion object {
         private const val TAG = "FirebaseProviderSync"
         private const val REPOSITORIES_COLLECTION = "repositories"
@@ -62,7 +88,7 @@ class FirebaseProviderSyncService(
     val syncStatus: StateFlow<String> = _syncStatus.asStateFlow()
 
     init {
-        auth.addAuthStateListener { firebaseAuth ->
+        auth?.addAuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
             if (user != null) {
                 scope.launch {
@@ -72,9 +98,17 @@ class FirebaseProviderSyncService(
         }
     }
 
-    suspend fun syncUserProviders(uid: String = auth.currentUser?.uid ?: ""): Boolean = withContext(Dispatchers.IO) {
+    suspend fun syncUserProviders(uid: String = auth?.currentUser?.uid ?: ""): Boolean = withContext(Dispatchers.IO) {
         if (uid.isBlank()) return@withContext false
         if (_isSyncing.value) return@withContext false
+
+        val fs = firestore
+        if (fs == null) {
+            Log.w(TAG, "ORCHESTRATION_SYNC: Firestore is unavailable (Firebase not initialized). Skipping cloud provider sync.")
+            _isSyncing.value = false
+            _syncStatus.value = "Firestore unavailable"
+            return@withContext false
+        }
 
         _isSyncing.value = true
         _syncStatus.value = "Fetching Firebase repository and provider configs..."
@@ -83,7 +117,7 @@ class FirebaseProviderSyncService(
         try {
             // STEP 1: Read user profile from users/{uid}
             val userDoc = try {
-                firestore.collection("users").document(uid).get().await()
+                fs.collection("users").document(uid).get().await()
             } catch (e: Exception) {
                 Log.w(TAG, "Offline/Error reading user doc: ${e.message}")
                 null
@@ -118,7 +152,7 @@ class FirebaseProviderSyncService(
 
             // STEP 2: Read repositories/global
             val repoDoc = try {
-                firestore.collection(REPOSITORIES_COLLECTION).document("global").get().await()
+                fs.collection(REPOSITORIES_COLLECTION).document("global").get().await()
             } catch (e: Exception) {
                 Log.w(TAG, "Offline/Error reading repositories/global: ${e.message}")
                 null
@@ -180,7 +214,7 @@ class FirebaseProviderSyncService(
 
             // STEP 4: Read providers/global
             val providerDoc = try {
-                firestore.collection(PROVIDERS_COLLECTION).document("global").get().await()
+                fs.collection(PROVIDERS_COLLECTION).document("global").get().await()
             } catch (e: Exception) {
                 Log.w(TAG, "Offline/Error reading providers/global: ${e.message}")
                 null
@@ -196,7 +230,7 @@ class FirebaseProviderSyncService(
             // Fallback to provider_manifests/global if providers/global is missing
             if (remoteProviders.isEmpty()) {
                 val manifestDoc = try {
-                    firestore.collection(MANIFEST_COLLECTION).document(MANIFEST_DOC).get().await()
+                    fs.collection(MANIFEST_COLLECTION).document(MANIFEST_DOC).get().await()
                 } catch (e: Exception) {
                     null
                 }
@@ -270,7 +304,7 @@ class FirebaseProviderSyncService(
 
             // STEP 6: Update provider_installations/{uid}
             try {
-                firestore.collection(INSTALLATIONS_COLLECTION).document(uid)
+                fs.collection(INSTALLATIONS_COLLECTION).document(uid)
                     .set(installationReport, SetOptions.merge())
                     .await()
             } catch (e: Exception) {
