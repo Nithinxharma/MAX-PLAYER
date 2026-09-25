@@ -157,8 +157,11 @@ class App : Application(), ImageLoaderFactory {
     // Firebase Integration Verification
     verifyFirebaseIntegration()
 
-    // Trigger silent server-controlled provider synchronization
+    // Trigger auto-discovery & server-controlled provider synchronization
     applicationScope.launch {
+      runCatching {
+        firebaseAutoDiscoveryService.discoverAndSyncAll()
+      }
       runCatching {
         serverProviderSyncService.triggerSilentSync(force = false)
       }

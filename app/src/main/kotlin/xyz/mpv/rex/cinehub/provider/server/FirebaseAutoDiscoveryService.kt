@@ -186,6 +186,7 @@ class FirebaseAutoDiscoveryService(
         try {
             val reposSnap = firestore.collection(REPOSITORIES_COLLECTION).get().await()
             val repoList = reposSnap.documents.mapNotNull { doc ->
+                if (doc.id == "global") return@mapNotNull null
                 val id = doc.getString("id") ?: doc.id
                 val url = doc.getString("repositoryUrl") ?: return@mapNotNull null
                 val enabled = doc.getBoolean("enabled") ?: true
@@ -202,6 +203,7 @@ class FirebaseAutoDiscoveryService(
                 .await()
 
             val providerList = providersSnap.documents.mapNotNull { doc ->
+                if (doc.id == "global") return@mapNotNull null
                 val id = doc.getString("internalName") ?: doc.id
                 val repo = doc.getString("repository") ?: "global"
                 val url = doc.getString("url") ?: return@mapNotNull null
@@ -236,8 +238,18 @@ class FirebaseAutoDiscoveryService(
 
     /**
      * Triggers Auto-Discovery for all configured repositories.
+     * Automatically ensures built-in presets are added if no repositories exist yet.
      */
     suspend fun discoverAndSyncAll(): Int = withContext(Dispatchers.IO) {
+        try {
+            val addedPresets = repositoryManager.addAllPresets()
+            if (addedPresets > 0) {
+                Log.i(TAG, "AUTO_DISCOVERY: Added $addedPresets default preset repositories.")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "AUTO_DISCOVERY: Error adding presets: ${e.message}")
+        }
+
         val results = repositoryManager.syncAllRepositories()
         var successCount = 0
         for (res in results) {

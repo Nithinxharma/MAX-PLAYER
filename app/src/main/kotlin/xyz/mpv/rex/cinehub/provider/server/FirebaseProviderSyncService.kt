@@ -131,6 +131,16 @@ class FirebaseProviderSyncService(
                 if (list != null) remoteRepos.addAll(list)
             }
 
+            if (remoteRepos.isEmpty()) {
+                Log.i(TAG, "ORCHESTRATION_SYNC: repositories/global is empty in Firestore. Triggering preset auto-discovery...")
+                try {
+                    repositoryManager.addAllPresets()
+                    repositoryManager.syncAllRepositories()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error during preset auto-discovery fallback: ${e.message}")
+                }
+            }
+
             // Ensure repositories exist in RepositoryManager / Room DB
             val extensionDao = db.extensionDao()
             var addedNewRepo = false
