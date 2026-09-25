@@ -14,6 +14,7 @@ import com.lagradost.cloudstream3.PluginManager
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.network.initClient
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -32,8 +33,19 @@ object CloudstreamHeadlessRunner {
      */
     fun init(context: Context) {
         AcraApplication.init(context)
+        try {
+            com.lagradost.cloudstream3.app.initClient(context, ignoreSSL = false)
+            com.lagradost.cloudstream3.insecureApp.initClient(context, ignoreSSL = true)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error initializing CloudstreamHttp clients", e)
+        }
+        try {
+            com.lagradost.cloudstream3.extractors.DefaultExtractors.registerAll()
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error registering default extractors", e)
+        }
         pluginManager = PluginManager(context)
-        Log.i(TAG, "Cloudstream Headless Engine initialized.")
+        Log.i(TAG, "Cloudstream Headless Engine initialized with OkHttp clients.")
     }
 
     /**
