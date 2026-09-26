@@ -324,7 +324,7 @@ dependencies {
   implementation(libs.lazycolumnscrollbar)
   implementation(libs.reorderable)
   implementation(libs.compose.markdown)
-  implementation(libs.lottie.compose)
+  implementation("com.airbnb.android:lottie-compose:6.6.2")
 
   // Firebase & Google Auth
   implementation(platform("com.google.firebase:firebase-bom:33.10.0"))
