@@ -200,18 +200,25 @@ object MainScreen : Screen {
     val playlistsLabel = stringResource(R.string.playlists)
     val networkLabel = stringResource(R.string.network)
 
-    val isCineHubTabVisible = true
+    val isCineHubTabVisible = enableTabCineHub && enableCineHubIntegration
 
     val visibleTabs = remember(
-      isShortsEnabled, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, isCineHubTabVisible, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
+      homeLabel, shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
         add(
-          VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
-            CineHubScreen.Content()
+          VisibleTab("library", "Local Library", icon = Icons.Rounded.Folder) {
+            MediaLibraryContent()
           }
         )
+        if (isCineHubTabVisible) {
+          add(
+            VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
+              CineHubScreen.Content()
+            }
+          )
+        }
         if (enableTabCineTv) {
           add(
             VisibleTab("cinetv", cineTvLabel, icon = Icons.Rounded.Tv) {
@@ -312,7 +319,7 @@ object MainScreen : Screen {
       }
     }
 
-    val isHomeTabActive = selectedTab in visibleTabs.indices && (visibleTabs[selectedTab].id == "cinehub" || visibleTabs[selectedTab].id == "home")
+    val isHomeTabActive = selectedTab in visibleTabs.indices && visibleTabs[selectedTab].id == "home"
 
     LaunchedEffect(
       isHomeTabActive,

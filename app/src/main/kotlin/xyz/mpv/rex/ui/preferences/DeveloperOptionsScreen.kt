@@ -98,15 +98,9 @@ object DeveloperOptionsScreen : Screen {
                                     )
                                 },
                                 onClick = {
-                                    try {
-                                        val syncService = org.koin.core.context.GlobalContext.get().getOrNull<xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService>()
-                                        if (syncService != null) {
-                                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                                syncService.syncUserProviders()
-                                            }
-                                        }
-                                    } catch (e: Throwable) {
-                                        android.util.Log.e("DeveloperOptions", "Failed to start FirebaseProviderSyncService", e)
+                                    val syncService = org.koin.core.context.GlobalContext.get().get<xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService>()
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        syncService.syncUserProviders()
                                     }
                                 }
                             )
@@ -128,15 +122,9 @@ object DeveloperOptionsScreen : Screen {
                                     )
                                 },
                                 onClick = {
-                                    try {
-                                        val discoveryService = org.koin.core.context.GlobalContext.get().getOrNull<xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService>()
-                                        if (discoveryService != null) {
-                                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                                discoveryService.discoverAndSyncAll()
-                                            }
-                                        }
-                                    } catch (e: Throwable) {
-                                        android.util.Log.e("DeveloperOptions", "Failed to start FirebaseAutoDiscoveryService", e)
+                                    val discoveryService = org.koin.core.context.GlobalContext.get().get<xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService>()
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                        discoveryService.discoverAndSyncAll()
                                     }
                                 }
                             )
