@@ -4,9 +4,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lagradost.cloudstream3.APIHolder
-import com.lagradost.cloudstream3.searchSafe
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -95,7 +92,7 @@ class CineHubViewModel : ViewModel() {
                 val deferredList = apis.map { provider ->
                     async {
                         try {
-                            provider.searchSafe(trimmed)
+                            provider.search(trimmed)
                         } catch (t: Throwable) {
                             Log.w(TAG, "Search error in provider '${provider.name}': ${t.message}")
                             emptyList()
@@ -224,39 +221,6 @@ class CineHubViewModel : ViewModel() {
                     )
                 } catch (t: Throwable) {
                     Log.e(TAG, "Link extraction failed on '$providerName': ${t.message}", t)
-                }
-
-                // Fallback 1: Direct loadExtractor if empty
-                if (links.isEmpty() && (episodeData.startsWith("http://") || episodeData.startsWith("https://"))) {
-                    try {
-                        loadExtractor(
-                            url = episodeData,
-                            referer = null,
-                            subtitleCallback = { sub ->
-                                synchronized(subtitles) {
-                                    subtitles.add(sub)
-                                }
-                            },
-                            callback = { link ->
-                                synchronized(links) {
-                                    links.add(link)
-                                }
-                            }
-                        )
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "Fallback loadExtractor failed for '$episodeData': ${t.message}")
-                    }
-                }
-
-                // Fallback 2: Direct URL link
-                if (links.isEmpty() && (episodeData.startsWith("http://") || episodeData.startsWith("https://"))) {
-                    links.add(
-                        newExtractorLink(
-                            name = providerName,
-                            source = providerName,
-                            url = episodeData
-                        )
-                    )
                 }
             }
 

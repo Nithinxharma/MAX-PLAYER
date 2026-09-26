@@ -1,5 +1,5 @@
-import com.android.build.api.variant.FilterConfiguration
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Base64
 
 plugins {
   alias(libs.plugins.android.application)
@@ -7,6 +7,123 @@ plugins {
   alias(libs.plugins.kotlinx.serialization)
   alias(libs.plugins.ksp)
   alias(libs.plugins.room)
+  id("com.google.gms.google-services")
+}
+
+// Ensure google-services.json exists for CI environments (e.g. GitHub Actions without secrets)
+val googleServicesFile = file("google-services.json")
+if (!googleServicesFile.exists()) {
+  val envSecret = System.getenv("GOOGLE_SERVICES_JSON")
+  if (!envSecret.isNullOrBlank()) {
+    try {
+      val decoded = Base64.getDecoder().decode(envSecret.trim())
+      googleServicesFile.writeBytes(decoded)
+    } catch (e: Exception) {
+      googleServicesFile.writeText(envSecret)
+    }
+  } else {
+    googleServicesFile.writeText(
+      """
+      {
+        "project_info": {
+          "project_number": "533471513816",
+          "project_id": "maxstream-5f77c",
+          "storage_bucket": "maxstream-5f77c.firebasestorage.app"
+        },
+        "client": [
+          {
+            "client_info": {
+              "mobilesdk_app_id": "1:533471513816:android:b5f9b8a0350e5393a75bad",
+              "android_client_info": {
+                "package_name": "xyz.mpv.rex"
+              }
+            },
+            "oauth_client": [
+              {
+                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                "client_type": 3
+              }
+            ],
+            "api_key": [
+              {
+                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
+              }
+            ],
+            "services": {
+              "appinvite_service": {
+                "other_platform_oauth_client": [
+                  {
+                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "client_info": {
+              "mobilesdk_app_id": "1:533471513816:android:a625d7a6ef25b4faa75bad",
+              "android_client_info": {
+                "package_name": "com.mpv.rex"
+              }
+            },
+            "oauth_client": [
+              {
+                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                "client_type": 3
+              }
+            ],
+            "api_key": [
+              {
+                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
+              }
+            ],
+            "services": {
+              "appinvite_service": {
+                "other_platform_oauth_client": [
+                  {
+                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "client_info": {
+              "mobilesdk_app_id": "1:533471513816:android:b5f9b8a0350e5393a75bad",
+              "android_client_info": {
+                "package_name": "xyz.mpv.rex.debug"
+              }
+            },
+            "oauth_client": [
+              {
+                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                "client_type": 3
+              }
+            ],
+            "api_key": [
+              {
+                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
+              }
+            ],
+            "services": {
+              "appinvite_service": {
+                "other_platform_oauth_client": [
+                  {
+                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "configuration_version": "1"
+      }
+      """.trimIndent()
+    )
+  }
 }
 
 android {
@@ -17,15 +134,15 @@ android {
     applicationId = "xyz.mpv.rex"
     minSdk = 26
     targetSdk = 36
-    versionCode = 213
-    versionName = "5.2.0"
+    versionCode = 212
+    versionName = "5.1.0"
 
     vectorDrawables {
       useSupportLibrary = true
     }
 
-    buildConfigField("String", "GIT_SHA", "\"${getCommitSha()}\"")
-    buildConfigField("int", "GIT_COUNT", getCommitCount())
+    buildConfigField("String", "GIT_SHA", "\"unknown\"")
+    buildConfigField("int", "GIT_COUNT", "0")
     // Enable update feature by default
     buildConfigField("boolean", "ENABLE_UPDATE_FEATURE", "true")
     buildConfigField("boolean", "SCOPED_STORAGE_ONLY", "false")
@@ -40,18 +157,47 @@ android {
     abi {
       isEnable = true
       reset()
-      include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+      include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
       isUniversalApk = true
     }
   }
 
+  val debugKeystoreFile = file("${rootDir}/debug.keystore")
+  if (!debugKeystoreFile.exists() || debugKeystoreFile.length() == 0L) {
+    val base64File = file("${rootDir}/debug.keystore.base64")
+    if (base64File.exists()) {
+      try {
+        val base64Content = base64File.readText().trim()
+        if (base64Content.isNotEmpty()) {
+          val decodedBytes = Base64.getDecoder().decode(base64Content)
+          debugKeystoreFile.writeBytes(decodedBytes)
+        }
+      } catch (e: Exception) {
+        logger.warn("Could not decode debug.keystore from base64: ${e.message}")
+      }
+    }
+  }
+
   signingConfigs {
+    create("debugConfig") {
+      if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
+        storeFile = debugKeystoreFile
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
+    }
     create("release") {
       if (project.hasProperty("releaseKeyStore")) {
         storeFile = file(project.property("releaseKeyStore") as String)
         storePassword = project.property("releaseKeyStorePassword") as String
         keyAlias = project.property("releaseKeyAlias") as String
         keyPassword = project.property("releaseKeyPassword") as String
+      } else if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
+        storeFile = debugKeystoreFile
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
       }
     }
   }
@@ -60,6 +206,10 @@ android {
     named("release") {
       if (project.hasProperty("releaseKeyStore")) {
         signingConfig = signingConfigs.getByName("release")
+      } else if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      } else {
+        signingConfig = null
       }
       isMinifyEnabled = true
       isShrinkResources = true
@@ -74,14 +224,16 @@ android {
 
     create("preview") {
       initWith(getByName("release"))
-      signingConfig = null
+      signingConfig = if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) signingConfigs.getByName("debugConfig") else null
       applicationIdSuffix = ".preview"
-      versionNameSuffix = "-${getCommitCount()}"
+      versionNameSuffix = "-0"
     }
 
     named("debug") {
-      applicationIdSuffix = ".debug"
-      versionNameSuffix = "-${getCommitCount()}"
+      if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      }
+      versionNameSuffix = "-0"
     }
   }
 
@@ -123,30 +275,12 @@ android {
   }
 }
 
-androidComponents {
-  val abiCodes = mapOf(
-    "armeabi-v7a" to 1,
-    "arm64-v8a" to 2,
-    "x86" to 3,
-    "x86_64" to 4
-  )
-
-  onVariants { variant ->
-    variant.outputs.forEach { output ->
-      val abi = output.filters
-        .find { it.filterType == FilterConfiguration.FilterType.ABI }
-        ?.identifier
-
-      output.versionCode.set(
-        (output.versionCode.orNull ?: 0) * 10 + (abiCodes[abi] ?: 0)
-      )
-    }
-  }
-}
-
 kotlin {
   compilerOptions {
     freeCompilerArgs.addAll(
+      "-Xwhen-guards",
+      "-Xcontext-parameters",
+      "-Xannotation-default-target=param-property",
       "-opt-in=com.google.accompanist.permissions.ExperimentalPermissionsApi",
       "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
     )
@@ -162,7 +296,20 @@ room {
   schemaDirectory("$projectDir/schemas")
 }
 
+configurations.all {
+  exclude(group = "org.json", module = "json")
+}
+
 dependencies {
+  // CloudStream SDK Compatibility
+  implementation("org.jsoup:jsoup:1.17.2")
+  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+  implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
+  implementation("com.github.Blatzar:NiceHttp:0.4.18") {
+    exclude(group = "org.json", module = "json")
+  }
+
+  implementation("io.coil-kt:coil-compose:2.6.0")
   implementation(libs.splashScreen)
   implementation(libs.androidx.activity.compose)
   implementation(platform(libs.androidx.compose.bom))
@@ -175,6 +322,7 @@ dependencies {
   debugImplementation(libs.androidx.ui.tooling)
   implementation(libs.bundles.compose.navigation3)
   implementation(libs.androidx.appcompat)
+  implementation("androidx.fragment:fragment-ktx:1.8.6")
   implementation(libs.androidx.compose.constraintlayout)
   implementation("androidx.preference:preference-ktx:1.2.1")
   implementation("androidx.constraintlayout:constraintlayout:2.2.0")
@@ -216,9 +364,20 @@ dependencies {
   implementation(libs.lazycolumnscrollbar)
   implementation(libs.reorderable)
   implementation(libs.compose.markdown)
+  implementation(libs.lottie.compose)
+
+  // Firebase & Google Auth
+  implementation(platform("com.google.firebase:firebase-bom:33.10.0"))
+  implementation("com.google.firebase:firebase-auth")
+  implementation("com.google.firebase:firebase-firestore")
+  implementation("com.google.android.gms:play-services-auth:21.3.0")
 
   // Unit Testing
   testImplementation(libs.junit)
+    testImplementation("androidx.compose.ui:ui-test-junit4:1.7.0")
+  testImplementation("org.robolectric:robolectric:4.11.1")
+  testImplementation("androidx.test:core-ktx:1.5.0")
+  testImplementation("androidx.test.ext:junit:1.1.5")
   testImplementation(libs.mockk)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.turbine)
@@ -226,12 +385,6 @@ dependencies {
 
 /* ---------------- Git helpers ---------------- */
 
-fun getCommitCount(): String =
-  providers.exec {
-    commandLine("git", "rev-list", "--count", "HEAD")
-  }.standardOutput.asText.get().trim().ifEmpty { "0" }
+fun getCommitCount(): String = "0"
 
-fun getCommitSha(): String =
-  providers.exec {
-    commandLine("git", "rev-parse", "--short", "HEAD")
-  }.standardOutput.asText.get().trim().ifEmpty { "unknown" }
+fun getCommitSha(): String = "unknown"
