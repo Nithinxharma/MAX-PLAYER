@@ -84,46 +84,40 @@ object MaxStreamTheme {
     val TextSecondaryLight = Color(0xFF475569)
     val TextMutedLight = Color(0xFF94A3B8)
 
-    // Theme Adaptive Colors
-    val isDark: Boolean
-        @Composable
-        get() {
-            val surface = MaterialTheme.colorScheme.surface
-            val lum = (0.299f * surface.red + 0.587f * surface.green + 0.114f * surface.blue)
-            return lum < 0.5f
-        }
+    // Dark Mode Enforced Tokens
+    val isDark: Boolean = true
 
     val primaryTextColor: Color
         @Composable
-        get() = if (isDark) TextPrimary else TextPrimaryLight
+        get() = TextPrimary
 
     val secondaryTextColor: Color
         @Composable
-        get() = if (isDark) TextSecondary else TextSecondaryLight
+        get() = TextSecondary
 
     val mutedTextColor: Color
         @Composable
-        get() = if (isDark) TextMuted else TextMutedLight
+        get() = TextMuted
 
     val backgroundColor: Color
         @Composable
-        get() = if (isDark) AbyssBackground else Color(0xFFF8FAFC)
+        get() = AbyssBackground
 
     val surfaceColor: Color
         @Composable
-        get() = if (isDark) MidnightSurface else Color(0xFFFFFFFF)
+        get() = MidnightSurface
 
     val elevatedSurfaceColor: Color
         @Composable
-        get() = if (isDark) ElevatedSurface else Color(0xFFF1F5F9)
+        get() = ElevatedSurface
 
     val glassSurfaceColor: Color
         @Composable
-        get() = if (isDark) GlassSurface else Color(0xFFF1F5F9).copy(alpha = 0.90f)
+        get() = GlassSurface
 
     val glassBorderColor: Color
         @Composable
-        get() = if (isDark) GlassBorder else Color(0x2E000000)
+        get() = GlassBorder
 
     // Common Shapes
     val CardShape = RoundedCornerShape(18.dp)

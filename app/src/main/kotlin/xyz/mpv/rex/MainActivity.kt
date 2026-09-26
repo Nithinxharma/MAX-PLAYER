@@ -12,6 +12,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -108,15 +110,10 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
 
     setContent {
       android.util.Log.d("APP_STARTUP", "APP_STAGE_2_SETCONTENT")
-      // Set up theme and edge-to-edge display
-      val dark by appearancePreferences.darkMode.collectAsState()
-      val isSystemInDarkTheme = isSystemInDarkTheme()
-      val isDarkMode = dark == DarkMode.Dark || (dark == DarkMode.System && isSystemInDarkTheme)
+      // Max Stream Dark Mode Only edge-to-edge display
       enableEdgeToEdge(
-        SystemBarStyle.auto(
-          lightScrim = Color.White.toArgb(),
-          darkScrim = Color.Transparent.toArgb(),
-        ) { isDarkMode },
+        statusBarStyle = SystemBarStyle.dark(Color.Transparent.toArgb()),
+        navigationBarStyle = SystemBarStyle.dark(Color.Transparent.toArgb()),
       )
 
       // Auto-connect to saved network connections
@@ -246,20 +243,20 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
           entryProvider = { route -> NavEntry(route) { route.Content() } },
           popTransitionSpec = {
             (
-              fadeIn(animationSpec = tween(220)) +
-                slideIn(animationSpec = tween(220)) { IntOffset(-it.width / 2, 0) }
+              fadeIn(animationSpec = tween(260, delayMillis = 40, easing = LinearOutSlowInEasing)) +
+                scaleIn(animationSpec = tween(260, delayMillis = 40, easing = LinearOutSlowInEasing), initialScale = 0.96f)
             ) togetherWith (
-                fadeOut(animationSpec = tween(220)) +
-                  slideOut(animationSpec = tween(220)) { IntOffset(it.width / 2, 0) }
+              fadeOut(animationSpec = tween(180, easing = FastOutSlowInEasing)) +
+                scaleOut(animationSpec = tween(180, easing = FastOutSlowInEasing), targetScale = 1.02f)
             )
           },
           transitionSpec = {
             (
-              fadeIn(animationSpec = tween(220)) +
-                slideIn(animationSpec = tween(220)) { IntOffset(it.width / 2, 0) }
+              fadeIn(animationSpec = tween(260, delayMillis = 40, easing = LinearOutSlowInEasing)) +
+                scaleIn(animationSpec = tween(260, delayMillis = 40, easing = LinearOutSlowInEasing), initialScale = 0.96f)
             ) togetherWith (
-                fadeOut(animationSpec = tween(220)) +
-                  slideOut(animationSpec = tween(220)) { IntOffset(-it.width / 2, 0) }
+              fadeOut(animationSpec = tween(180, easing = FastOutSlowInEasing)) +
+                scaleOut(animationSpec = tween(180, easing = FastOutSlowInEasing), targetScale = 1.02f)
             )
           },
           predictivePopTransitionSpec = {
@@ -267,14 +264,14 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
               fadeIn(animationSpec = tween(220)) +
                 scaleIn(
                   animationSpec = tween(220, delayMillis = 30),
-                  initialScale = .9f,
+                  initialScale = .92f,
                   TransformOrigin(-1f, .5f),
                 )
             ) togetherWith (
                 fadeOut(animationSpec = tween(220)) +
                   scaleOut(
                     animationSpec = tween(220, delayMillis = 30),
-                    targetScale = .9f,
+                    targetScale = .92f,
                     TransformOrigin(-1f, .5f),
                   )
             )

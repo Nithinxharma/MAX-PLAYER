@@ -204,21 +204,16 @@ object MainScreen : Screen {
 
     val visibleTabs = remember(
       isShortsEnabled, isCineHubTabVisible, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      homeLabel, shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
+      shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
+        // Max Stream is now the application's default home start destination.
+        // File Explorer is hidden from visible navigation only (all underlying code and routes preserved).
         add(
-          VisibleTab("library", "Local Library", icon = Icons.Rounded.Folder) {
-            MediaLibraryContent()
+          VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
+            CineHubScreen.Content()
           }
         )
-        if (isCineHubTabVisible) {
-          add(
-            VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
-              CineHubScreen.Content()
-            }
-          )
-        }
         if (enableTabCineTv) {
           add(
             VisibleTab("cinetv", cineTvLabel, icon = Icons.Rounded.Tv) {
@@ -261,6 +256,13 @@ object MainScreen : Screen {
           add(
             VisibleTab("network", networkLabel, icon = Icons.Rounded.Language) {
               NetworkStreamingScreen.Content()
+            }
+          )
+        }
+        if (isShortsEnabled) {
+          add(
+            VisibleTab("shorts", shortsLabel, icon = Icons.Rounded.SlowMotionVideo) {
+              ShortsScreen().Content()
             }
           )
         }
@@ -319,7 +321,7 @@ object MainScreen : Screen {
       }
     }
 
-    val isHomeTabActive = selectedTab in visibleTabs.indices && visibleTabs[selectedTab].id == "home"
+    val isHomeTabActive = selectedTab in visibleTabs.indices && visibleTabs[selectedTab].id == "cinehub"
 
     LaunchedEffect(
       isHomeTabActive,
@@ -381,67 +383,30 @@ object MainScreen : Screen {
               targetOffsetY = { fullHeight -> fullHeight }
             )
           ) {
-            if (enableModernGlassUI) {
-              FloatingBottomNav(
-                tabs = visibleTabs.map { NavTabItem(id = it.id, label = it.label, icon = it.icon, iconResId = it.iconResId) },
-                selectedTab = selectedTab,
-                onTabSelected = { index ->
-                  haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                  if (selectedTab == index) {
-                    _scrollToTopRequest.tryEmit(visibleTabs[index].id)
-                  } else {
-                    selectedTab = index
-                  }
-                },
-                modifier = Modifier
-                  .navigationBarsPadding()
-                  .padding(bottom = 12.dp)
-              )
-            } else {
-              NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 3.dp,
-                modifier = Modifier.fillMaxWidth()
-              ) {
-                visibleTabs.forEachIndexed { index, tab ->
-                  NavigationBarItem(
-                    selected = selectedTab == index,
-                    onClick = {
-                      haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                      if (selectedTab == index) {
-                        _scrollToTopRequest.tryEmit(visibleTabs[index].id)
-                      } else {
-                        selectedTab = index
-                      }
-                    },
-                    icon = {
-                      if (tab.iconResId != null) {
-                        androidx.compose.foundation.Image(
-                          painter = androidx.compose.ui.res.painterResource(tab.iconResId),
-                          contentDescription = tab.label,
-                          modifier = Modifier.size(24.dp)
-                        )
-                      } else if (tab.icon != null) {
-                        Icon(tab.icon, contentDescription = tab.label)
-                      }
-                    },
-                    label = { Text(tab.label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
-                    alwaysShowLabel = false
-                  )
+            FloatingBottomNav(
+              tabs = visibleTabs.map { NavTabItem(id = it.id, label = it.label, icon = it.icon, iconResId = it.iconResId) },
+              selectedTab = selectedTab,
+              onTabSelected = { index ->
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                if (selectedTab == index) {
+                  _scrollToTopRequest.tryEmit(visibleTabs[index].id)
+                } else {
+                  selectedTab = index
                 }
-              }
-            }
+              },
+              modifier = Modifier
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp)
+            )
           }
         }
     ) { paddingValues ->
       Box(modifier = Modifier.fillMaxSize()) {
-        val fabBottomPadding = 80.dp
-
         AnimatedContent(
           targetState = selectedTab,
           transitionSpec = {
-            val slideDistance = with(density) { 48.dp.roundToPx() }
-            val animationDuration = 250
+            val slideDistance = with(density) { 36.dp.roundToPx() }
+            val animationDuration = 220
             
             if (targetState > initialState) {
               (slideInHorizontally(
@@ -509,7 +474,7 @@ object MainScreen : Screen {
             if (targetTab in visibleTabs.indices) {
               visibleTabs[targetTab].content()
             } else {
-              FolderListScreen.Content()
+              CineHubScreen.Content()
             }
           }
         }

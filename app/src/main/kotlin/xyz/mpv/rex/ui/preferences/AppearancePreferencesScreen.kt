@@ -3,6 +3,7 @@ package xyz.mpv.rex.ui.preferences
 import android.os.Build
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,12 +22,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -197,14 +200,49 @@ object AppearancePreferencesScreen : Screen {
                                 ),
                             ) {
                                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                    MultiChoiceSegmentedButton(
-                                        choices = DarkMode.entries.map { stringResource(it.titleRes) }.toImmutableList(),
-                                        selectedIndices = persistentListOf(DarkMode.entries.indexOf(darkMode)),
-                                        onClick = { preferences.darkMode.set(DarkMode.entries[it]) },
-                                    )
+                                    // Max Stream Dark Mode Only
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.ElevatedSurface,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.GlassBorder),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = "Dark Mode",
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = Color.White
+                                                )
+                                                Text(
+                                                    text = "Premium OTT dark surfaces enforced",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary
+                                                )
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent.copy(alpha = 0.2f),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent.copy(alpha = 0.4f))
+                                            ) {
+                                                Text(
+                                                    text = "ALWAYS ON",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                     ThemePicker(
                                         currentTheme = appTheme,
-                                        isDarkMode = isDarkMode,
+                                        isDarkMode = true,
                                         onThemeSelected = { preferences.appTheme.set(it) },
                                         modifier = Modifier.padding(vertical = 8.dp),
                                     )
@@ -218,7 +256,7 @@ object AppearancePreferencesScreen : Screen {
                                                 color = MaterialTheme.colorScheme.outline,
                                             )
                                         },
-                                        enabled = darkMode != DarkMode.Light,
+                                        enabled = true,
                                     )
                                 }
                             }
@@ -355,16 +393,15 @@ object AppearancePreferencesScreen : Screen {
                         GroupedListColumn {
                             GroupedPreferenceCard(
                                 position = GroupPosition.FIRST,
-                                highlightKey = R.string.pref_appearance_tab_home_title,
+                                highlightKey = R.string.pref_appearance_tab_cinehub_title,
                             ) {
                                 SwitchPreference(
-                                    value = true,
-                                    onValueChange = {},
-                                    enabled = false,
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_home_title)) },
+                                    value = enableTabCineHub,
+                                    onValueChange = { browserPreferences.enableTabCineHub.set(it) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinehub_title)) },
                                     summary = {
                                         Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_home_summary),
+                                            text = stringResource(id = R.string.pref_appearance_tab_cinehub_summary),
                                             color = MaterialTheme.colorScheme.outline,
                                         )
                                     }
@@ -373,15 +410,15 @@ object AppearancePreferencesScreen : Screen {
 
                             GroupedPreferenceCard(
                                 position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_shorts_title,
+                                highlightKey = R.string.pref_appearance_tab_cinetv_title,
                             ) {
                                 SwitchPreference(
-                                    value = enableShorts,
-                                    onValueChange = { browserPreferences.enableShorts.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_shorts_title)) },
+                                    value = enableTabCineTv,
+                                    onValueChange = { browserPreferences.enableTabCineTv.set(it) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinetv_title)) },
                                     summary = {
                                         Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_shorts_summary),
+                                            text = stringResource(id = R.string.pref_appearance_tab_cinetv_summary),
                                             color = MaterialTheme.colorScheme.outline,
                                         )
                                     }
@@ -440,32 +477,16 @@ object AppearancePreferencesScreen : Screen {
                             }
 
                             GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_cinehub_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableTabCineHub,
-                                    onValueChange = { browserPreferences.enableTabCineHub.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinehub_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_cinehub_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-                            GroupedPreferenceCard(
                                 position = GroupPosition.LAST,
-                                highlightKey = R.string.pref_appearance_tab_cinetv_title,
+                                highlightKey = R.string.pref_appearance_tab_shorts_title,
                             ) {
                                 SwitchPreference(
-                                    value = enableTabCineTv,
-                                    onValueChange = { browserPreferences.enableTabCineTv.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinetv_title)) },
+                                    value = enableShorts,
+                                    onValueChange = { browserPreferences.enableShorts.set(it) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_shorts_title)) },
                                     summary = {
                                         Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_cinetv_summary),
+                                            text = stringResource(id = R.string.pref_appearance_tab_shorts_summary),
                                             color = MaterialTheme.colorScheme.outline,
                                         )
                                     }

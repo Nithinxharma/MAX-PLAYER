@@ -124,3 +124,22 @@ fun GlassTopBar(
         }
     }
 }
+
+/**
+ * Modern OTT Floating Glass Navigation Bar.
+ */
+@Composable
+fun GlassNavigationBar(
+    tabs: List<xyz.mpv.rex.ui.browser.components.NavTabItem>,
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    xyz.mpv.rex.ui.browser.components.FloatingBottomNav(
+        tabs = tabs,
+        selectedTab = selectedTab,
+        onTabSelected = onTabSelected,
+        modifier = modifier
+    )
+}
+

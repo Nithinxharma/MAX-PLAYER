@@ -398,20 +398,14 @@ internal var darkColorScheme = darkColorScheme()
 @Composable
 fun MpvexTheme(content: @Composable () -> Unit) {
   val preferences = koinInject<AppearancePreferences>()
-  val darkMode by preferences.darkMode.collectAsState()
   val amoledMode by preferences.amoledMode.collectAsState()
   val appTheme by preferences.appTheme.collectAsState()
   val useSystemFont by preferences.useSystemFont.collectAsState()
-  val darkTheme = isSystemInDarkTheme()
   val context = LocalContext.current
 
-    val useDarkTheme = when (darkMode) {
-        DarkMode.Dark -> true
-        DarkMode.Light -> false
-        DarkMode.System -> darkTheme
-    }
-
-    val isAmoled = useDarkTheme && amoledMode
+    // Max Stream Dark Mode Only Requirement
+    val useDarkTheme = true
+    val isAmoled = amoledMode
 
     val colorScheme = when {
         appTheme.isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
@@ -429,13 +423,11 @@ fun MpvexTheme(content: @Composable () -> Unit) {
                         surfaceContainerHighest = surfaceContainerHighestPureBlack,
                     )
                 }
-                useDarkTheme -> dynamicDarkColorScheme(context)
-                else -> dynamicLightColorScheme(context)
+                else -> dynamicDarkColorScheme(context)
             }
         }
         isAmoled -> appTheme.getAmoledColorScheme()
-        useDarkTheme -> appTheme.getDarkColorScheme()
-        else -> appTheme.getLightColorScheme()
+        else -> appTheme.getDarkColorScheme()
     }
 
     // Provide theme transition state first, OUTSIDE MaterialTheme
@@ -462,30 +454,18 @@ fun MpvexTheme(content: @Composable () -> Unit) {
 @Composable
 fun MpvexPlayerTheme(content: @Composable () -> Unit) {
     val preferences = koinInject<AppearancePreferences>()
-    val playerAlwaysDarkMode by preferences.playerAlwaysDarkMode.collectAsState()
-    val enableGlassPlayerControls by preferences.enableGlassPlayerControls.collectAsState()
-    val darkMode by preferences.darkMode.collectAsState()
     val amoledMode by preferences.amoledMode.collectAsState()
     val appTheme by preferences.appTheme.collectAsState()
     val useSystemFont by preferences.useSystemFont.collectAsState()
-    val darkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
 
-    val isPlayerAlwaysDark = playerAlwaysDarkMode || enableGlassPlayerControls
-    val useDarkTheme = if (isPlayerAlwaysDark) {
-        true
-    } else {
-        when (darkMode) {
-            DarkMode.Dark -> true
-            DarkMode.Light -> false
-            DarkMode.System -> darkTheme
-        }
-    }
+    // Player always in Dark Mode
+    val useDarkTheme = true
 
     val colorScheme = when {
         appTheme.isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             when {
-                useDarkTheme && amoledMode -> {
+                amoledMode -> {
                     dynamicDarkColorScheme(context).copy(
                         background = backgroundPureBlack,
                         surface = surfacePureBlack,
@@ -498,13 +478,11 @@ fun MpvexPlayerTheme(content: @Composable () -> Unit) {
                         surfaceContainerHighest = surfaceContainerHighestPureBlack,
                     )
                 }
-                useDarkTheme -> dynamicDarkColorScheme(context)
-                else -> dynamicLightColorScheme(context)
+                else -> dynamicDarkColorScheme(context)
             }
         }
-        useDarkTheme && amoledMode -> appTheme.getAmoledColorScheme()
-        useDarkTheme -> appTheme.getDarkColorScheme()
-        else -> appTheme.getLightColorScheme()
+        amoledMode -> appTheme.getAmoledColorScheme()
+        else -> appTheme.getDarkColorScheme()
     }
 
     // Provide theme transition state first, OUTSIDE MaterialTheme

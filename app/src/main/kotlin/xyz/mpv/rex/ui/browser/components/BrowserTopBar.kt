@@ -212,36 +212,10 @@ private fun NormalTopBar(
   val userProfile by authManager.userProfile.collectAsState()
   val photoUrl = userProfile?.photoUrl ?: authUser?.photoUrl?.toString()
 
-  val isCurrentlyDark = when (darkMode) {
-    DarkMode.Dark -> true
-    DarkMode.Light -> false
-    DarkMode.System -> darkTheme
-  }
-  val currentIsDark by rememberUpdatedState(isCurrentlyDark)
+  val currentIsDark = true
 
   // Track title bounds for animation position
   val titleBounds = remember { mutableStateOf(Rect.Zero) }
-  
-  // Helper function to toggle dark mode
-  fun toggleDarkMode() {
-    when (darkMode) {
-      DarkMode.System -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.Light)
-      } else {
-        preferences.darkMode.set(DarkMode.Dark)
-      }
-      DarkMode.Light -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.System)
-      } else {
-        preferences.darkMode.set(DarkMode.Dark)
-      }
-      DarkMode.Dark -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.Light)
-      } else {
-        preferences.darkMode.set(DarkMode.System)
-      }
-    }
-  }
 
   TopAppBar(
     colors = TopAppBarDefaults.topAppBarColors(
@@ -258,23 +232,8 @@ private fun NormalTopBar(
         }
         .pointerInput(onTitleLongPress) {
           detectTapGestures(
-            onTap = { localOffset ->
-              // Don't allow theme change if animation is in progress
-              if (themeTransition?.isAnimating == true) return@detectTapGestures
-              
-              // Calculate window position for circular reveal
-              val windowOffset = Offset(
-                titleBounds.value.left + localOffset.x,
-                titleBounds.value.top + localOffset.y
-              )
-              // If currently dark, next theme is light: expand outwards (zoom out).
-              // If currently light, next theme is dark: contract inwards (reverse / zoom in).
-              themeTransition?.startTransition(windowOffset, isReverse = !currentIsDark)
-              // Delay theme change to allow overlay to display first
-              coroutineScope.launch {
-                kotlinx.coroutines.delay(50)
-                toggleDarkMode()
-              }
+            onTap = {
+              haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             },
             onLongPress = if (onTitleLongPress != null) {
               { onTitleLongPress() }

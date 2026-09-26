@@ -159,3 +159,49 @@ fun MaxStreamGlassBottomSheet(
         )
     }
 }
+
+/**
+ * Modern Glass Dialog component for OTT alerts, confirmations, and modals.
+ */
+@Composable
+fun GlassDialog(
+    onDismissRequest: () -> Unit,
+    title: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    properties: DialogProperties = DialogProperties(usePlatformDefaultWidth = false),
+    dismissButton: @Composable (() -> Unit)? = null,
+    confirmButton: @Composable (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    MaxStreamGlassDialog(
+        onDismissRequest = onDismissRequest,
+        title = title,
+        modifier = modifier,
+        icon = icon,
+        properties = properties,
+        dismissButton = dismissButton,
+        confirmButton = confirmButton,
+        content = content
+    )
+}
+
+/**
+ * Modern Glass Bottom Sheet component.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlassBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    MaxStreamGlassBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        sheetState = sheetState,
+        content = content
+    )
+}
+

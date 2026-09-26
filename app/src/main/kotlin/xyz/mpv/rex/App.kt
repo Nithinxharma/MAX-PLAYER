@@ -86,6 +86,15 @@ class App : Application(), ImageLoaderFactory {
     super.onCreate()
     instance = this
 
+    // Safely ensure FirebaseApp is initialized before DI modules
+    try {
+      if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
+        com.google.firebase.FirebaseApp.initializeApp(this)
+      }
+    } catch (e: Throwable) {
+      android.util.Log.w("App", "Early Firebase initialization notice: ${e.message}")
+    }
+
     // Initialize Koin
     startKoin {
       androidContext(this@App)
@@ -157,8 +166,11 @@ class App : Application(), ImageLoaderFactory {
     // Firebase Integration Verification
     verifyFirebaseIntegration()
 
-    // Trigger silent server-controlled provider synchronization
+    // Trigger auto-discovery & server-controlled provider synchronization
     applicationScope.launch {
+      runCatching {
+        firebaseAutoDiscoveryService.discoverAndSyncAll()
+      }
       runCatching {
         serverProviderSyncService.triggerSilentSync(force = false)
       }

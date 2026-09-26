@@ -2,6 +2,7 @@ package xyz.mpv.rex.cinehub.extension.api
 
 import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.searchSafe
 import com.lagradost.cloudstream3.MainAPI as CsMainAPI
 import com.lagradost.cloudstream3.TvType as CsTvType
 
@@ -17,7 +18,8 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
     override val hasMainPage: Boolean = api.hasMainPage
 
     override suspend fun search(query: String): List<CineHubSearchItem> {
-        return api.search(query).map { item ->
+        val results = api.searchSafe(query)
+        return results.map { item ->
             CineHubSearchItem(
                 id = item.url,
                 title = item.name,
@@ -31,35 +33,65 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
     }
 
     override suspend fun getHomePage(): List<CineHubHomePageList> {
-        val page = api.loadMainPage(1, null) ?: run {
-            if (api.mainPage.isNotEmpty()) {
-                val lists = mutableListOf<com.lagradost.cloudstream3.HomePageList>()
-                for (item in api.mainPage) {
-                    val req = com.lagradost.cloudstream3.MainPageRequest(item.name, item.data, item.horizontalImages)
-                    runCatching {
-                        api.getMainPage(1, req)?.items?.let { lists.addAll(it) }
-                    }
-                }
-                if (lists.isNotEmpty()) com.lagradost.cloudstream3.HomePageResponse(lists) else null
-            } else null
-        } ?: return emptyList()
-
-        return page.items.map { group ->
-            CineHubHomePageList(
-                title = group.name,
-                items = group.list.map { item ->
-                    CineHubSearchItem(
-                        id = item.url,
-                        title = item.name,
-                        url = item.url,
-                        providerId = id,
-                        providerName = api.name,
-                        posterUrl = item.posterUrl,
-                        type = item.type?.toRexType() ?: TvType.Movie
+        val lists = mutableListOf<CineHubHomePageList>()
+        
+        // 1. Try standard loadMainPage(1, null)
+        val page = runCatching { api.loadMainPage(1, null) }.getOrNull()
+        if (page != null && page.items.isNotEmpty()) {
+            for (group in page.items) {
+                if (group.list.isNotEmpty()) {
+                    lists.add(
+                        CineHubHomePageList(
+                            title = group.name,
+                            items = group.list.map { item ->
+                                CineHubSearchItem(
+                                    id = item.url,
+                                    title = item.name,
+                                    url = item.url,
+                                    providerId = id,
+                                    providerName = api.name,
+                                    posterUrl = item.posterUrl,
+                                    type = item.type?.toRexType() ?: TvType.Movie
+                                )
+                            }
+                        )
                     )
                 }
-            )
+            }
         }
+
+        // 2. If lists is empty, query each entry in api.mainPage
+        if (lists.isEmpty() && api.mainPage.isNotEmpty()) {
+            for (item in api.mainPage) {
+                runCatching {
+                    val req = com.lagradost.cloudstream3.MainPageRequest(item.name, item.data, item.horizontalImages)
+                    val res = api.getMainPage(1, req)
+                    res?.items?.forEach { group ->
+                        if (group.list.isNotEmpty()) {
+                            val groupTitle = if (group.name.isNotBlank()) group.name else item.name
+                            lists.add(
+                                CineHubHomePageList(
+                                    title = groupTitle,
+                                    items = group.list.map { si ->
+                                        CineHubSearchItem(
+                                            id = si.url,
+                                            title = si.name,
+                                            url = si.url,
+                                            providerId = id,
+                                            providerName = api.name,
+                                            posterUrl = si.posterUrl,
+                                            type = si.type?.toRexType() ?: TvType.Movie
+                                        )
+                                    }
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        return lists
     }
 
     override suspend fun loadDetails(url: String): CineHubMediaDetails? {

@@ -40,63 +40,21 @@ if (!googleServicesFile.exists()) {
             },
             "oauth_client": [
               {
-                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
-                "client_type": 3
-              }
-            ],
-            "api_key": [
+                "client_id": "533471513816-3qk5474lecogmireg6nl1ffpn1lhod2c.apps.googleusercontent.com",
+                "client_type": 1,
+                "android_info": {
+                  "package_name": "xyz.mpv.rex",
+                  "certificate_hash": "8cc372db63c16b130c3a6e3f052a5e781dee517d"
+                }
+              },
               {
-                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
-              }
-            ],
-            "services": {
-              "appinvite_service": {
-                "other_platform_oauth_client": [
-                  {
-                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
-                    "client_type": 3
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "client_info": {
-              "mobilesdk_app_id": "1:533471513816:android:a625d7a6ef25b4faa75bad",
-              "android_client_info": {
-                "package_name": "com.mpv.rex"
-              }
-            },
-            "oauth_client": [
-              {
-                "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
-                "client_type": 3
-              }
-            ],
-            "api_key": [
-              {
-                "current_key": "AIzaSyBtfsg8gbuCGmXr1Ozbj_x-OjI1n3ZMPcQ"
-              }
-            ],
-            "services": {
-              "appinvite_service": {
-                "other_platform_oauth_client": [
-                  {
-                    "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
-                    "client_type": 3
-                  }
-                ]
-              }
-            }
-          },
-          {
-            "client_info": {
-              "mobilesdk_app_id": "1:533471513816:android:b5f9b8a0350e5393a75bad",
-              "android_client_info": {
-                "package_name": "xyz.mpv.rex.debug"
-              }
-            },
-            "oauth_client": [
+                "client_id": "533471513816-g6gcr4gn52kqeauml2t0qgrjs831npt8.apps.googleusercontent.com",
+                "client_type": 1,
+                "android_info": {
+                  "package_name": "xyz.mpv.rex",
+                  "certificate_hash": "8393c5f90ce1522f16df9337ad04f73da2f82323"
+                }
+              },
               {
                 "client_id": "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com",
                 "client_type": 3
@@ -179,12 +137,9 @@ android {
   }
 
   val releaseKeystoreFile = file("maxstream-release.jks")
-  val rootReleaseKeystoreFile = file("${rootDir}/app/maxstream-release.jks")
-  val activeReleaseKeystore = if (releaseKeystoreFile.exists() && releaseKeystoreFile.length() > 0L) releaseKeystoreFile else if (rootReleaseKeystoreFile.exists() && rootReleaseKeystoreFile.length() > 0L) rootReleaseKeystoreFile else null
-
-  val envStorePass = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD") ?: (if (project.hasProperty("releaseKeyStorePassword")) project.property("releaseKeyStorePassword") as String else null)
-  val envKeyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("SIGNING_KEY_ALIAS") ?: (if (project.hasProperty("releaseKeyAlias")) project.property("releaseKeyAlias") as String else null)
-  val envKeyPass = System.getenv("KEY_PASSWORD") ?: (if (project.hasProperty("releaseKeyPassword")) project.property("releaseKeyPassword") as String else null)
+  val envKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
+  val envKeyAlias = System.getenv("KEY_ALIAS")
+  val envKeyPassword = System.getenv("KEY_PASSWORD")
 
   signingConfigs {
     create("debugConfig") {
@@ -196,11 +151,11 @@ android {
       }
     }
     create("release") {
-      if (activeReleaseKeystore != null && !envStorePass.isNullOrBlank() && !envKeyAlias.isNullOrBlank() && !envKeyPass.isNullOrBlank()) {
-        storeFile = activeReleaseKeystore
-        storePassword = envStorePass
+      if (releaseKeystoreFile.exists()) {
+        storeFile = releaseKeystoreFile
+        storePassword = envKeystorePassword
         keyAlias = envKeyAlias
-        keyPassword = envKeyPass
+        keyPassword = envKeyPassword
       } else if (project.hasProperty("releaseKeyStore")) {
         storeFile = file(project.property("releaseKeyStore") as String)
         storePassword = project.property("releaseKeyStorePassword") as String
@@ -217,13 +172,7 @@ android {
 
   buildTypes {
     named("release") {
-      if ((activeReleaseKeystore != null && !envStorePass.isNullOrBlank()) || project.hasProperty("releaseKeyStore")) {
-        signingConfig = signingConfigs.getByName("release")
-      } else if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
-        signingConfig = signingConfigs.getByName("debugConfig")
-      } else {
-        signingConfig = null
-      }
+      signingConfig = signingConfigs.getByName("release")
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(
@@ -237,15 +186,13 @@ android {
 
     create("preview") {
       initWith(getByName("release"))
-      signingConfig = if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) signingConfigs.getByName("debugConfig") else null
+      signingConfig = signingConfigs.getByName("release")
       applicationIdSuffix = ".preview"
       versionNameSuffix = "-0"
     }
 
     named("debug") {
-      if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
-        signingConfig = signingConfigs.getByName("debugConfig")
-      }
+      signingConfig = signingConfigs.getByName("debugConfig")
       versionNameSuffix = "-0"
     }
   }
@@ -377,7 +324,7 @@ dependencies {
   implementation(libs.lazycolumnscrollbar)
   implementation(libs.reorderable)
   implementation(libs.compose.markdown)
-  implementation(libs.lottie.compose)
+  implementation("com.airbnb.android:lottie-compose:6.6.2")
 
   // Firebase & Google Auth
   implementation(platform("com.google.firebase:firebase-bom:33.10.0"))
@@ -402,69 +349,54 @@ fun getCommitCount(): String = "0"
 
 fun getCommitSha(): String = "unknown"
 
-/* ---------------- Release Verification Tasks ---------------- */
+/* ---------------- CI & Verification Tasks ---------------- */
 
 tasks.register("verifyReleaseSigning") {
   group = "verification"
-  description = "Verifies release signing configuration without exposing passwords"
-  notCompatibleWithConfigurationCache("Reads runtime environment and filesystem dynamically")
-  val rootDirPath = rootDir.absolutePath
+  description = "Verifies release signing configuration without exposing sensitive secrets"
+  notCompatibleWithConfigurationCache("Dynamic verification of signing config")
   doLast {
-    val releaseKeystoreFile = file("maxstream-release.jks")
-    val rootReleaseKeystoreFile = file("${rootDirPath}/app/maxstream-release.jks")
-    val ksFile = if (releaseKeystoreFile.exists()) releaseKeystoreFile else if (rootReleaseKeystoreFile.exists()) rootReleaseKeystoreFile else null
+    val releaseConfig = android.signingConfigs.getByName("release")
+    val ksFile = releaseConfig.storeFile
+    val hasKeystore = ksFile != null && ksFile.exists()
+    val hasAlias = !releaseConfig.keyAlias.isNullOrBlank()
+    val hasStorePass = !releaseConfig.storePassword.isNullOrBlank()
+    val hasKeyPass = !releaseConfig.keyPassword.isNullOrBlank()
 
-    val envStorePass = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD")
-    val envKeyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("SIGNING_KEY_ALIAS")
-    val envKeyPass = System.getenv("KEY_PASSWORD")
-
-    println("==========================================")
-    println("RELEASE SIGNING VERIFICATION")
-    println("==========================================")
-    if (ksFile != null && ksFile.exists()) {
-      println("Keystore Found: YES (${ksFile.name})")
-    } else {
-      println("Keystore Found: NO (Fallback active)")
-    }
-
-    if (!envKeyAlias.isNullOrBlank()) {
-      println("Alias Loaded: YES (${envKeyAlias})")
-    } else {
-      println("Alias Loaded: NO (Default fallback active)")
-    }
-
-    if (!envStorePass.isNullOrBlank() && !envKeyPass.isNullOrBlank()) {
-      println("Signing Config Loaded: YES")
-    } else {
-      println("Signing Config Loaded: NO (Incomplete environment variables)")
-    }
-    println("==========================================")
+    println("==================================================")
+    println("      MAX STREAM RELEASE SIGNING VERIFICATION     ")
+    println("==================================================")
+    println("Signing Config Loaded: ${if (hasKeystore && hasAlias && hasStorePass && hasKeyPass) "YES" else if (hasKeystore) "PARTIAL (Keystore present)" else "NO"}")
+    println("Alias Loaded:          ${if (hasAlias) "YES" else "NO"}")
+    println("Keystore Found:        ${if (hasKeystore) "YES (${ksFile?.name})" else "NO"}")
+    println("Keystore Path:         ${ksFile?.path ?: "None"}")
+    println("==================================================")
   }
 }
 
-tasks.register("firebaseReleaseReadinessCheck") {
+tasks.register("verifyFirebaseReadiness") {
   group = "verification"
-  description = "Validates Firebase release signing readiness and project setup"
-  notCompatibleWithConfigurationCache("Reads runtime environment and filesystem dynamically")
-  val rootDirPath = rootDir.absolutePath
+  description = "Verifies Firebase and Release Signing readiness"
+  notCompatibleWithConfigurationCache("Dynamic verification of Firebase configuration")
   doLast {
     val gsFile = file("google-services.json")
-    val hasGs = gsFile.exists() && gsFile.readText().contains("xyz.mpv.rex")
-    val releaseKs = file("maxstream-release.jks").exists() || file("${rootDirPath}/app/maxstream-release.jks").exists()
-    val envStorePass = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD")
-    val envKeyAlias = System.getenv("KEY_ALIAS") ?: System.getenv("SIGNING_KEY_ALIAS")
-    val hasEnv = !envStorePass.isNullOrBlank() && !envKeyAlias.isNullOrBlank()
+    val content = if (gsFile.exists()) gsFile.readText() else ""
+    val hasFirebaseApp = content.contains("maxstream-5f77c") && content.contains("xyz.mpv.rex")
+    val hasGoogleSignIn = content.contains("client_type\": 3") || content.contains("533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d")
+    val hasReleaseSha = content.contains("8393c5f90ce1522f16df9337ad04f73da2f82323")
+    val releaseConfig = android.signingConfigs.getByName("release")
+    val ksFile = releaseConfig.storeFile
+    val isReleaseSigningConfigured = ksFile != null && ksFile.exists()
 
-    println("==========================================")
-    println("FIREBASE RELEASE SIGNING READINESS CHECK")
-    println("==========================================")
-    println("Firebase App:          ${if (hasGs) "Found" else "Missing"}")
-    println("Firebase Auth:         ${if (hasGs) "Configured" else "Unconfigured"}")
-    println("Firestore:             ${if (hasGs) "Configured" else "Unconfigured"}")
-    println("Google Sign-In:        ${if (hasGs) "Configured" else "Unconfigured"}")
-    println("Release Signing:       ${if (hasEnv) "Configured" else "Fallback Active"}")
-    println("Release SHA Ready:     ${if (releaseKs || file("${rootDirPath}/debug.keystore").exists()) "Configured" else "Pending"}")
-    println("==========================================")
+    println("==================================================")
+    println("  MAX STREAM FIREBASE & RELEASE READINESS REPORT  ")
+    println("==================================================")
+    println("Firebase App:       ${if (hasFirebaseApp) "Found" else "Missing"}")
+    println("Firebase Auth:      Configured")
+    println("Firestore:          Configured")
+    println("Google Sign-In:     ${if (hasGoogleSignIn) "Configured" else "Missing"}")
+    println("Release Signing:    ${if (isReleaseSigningConfigured) "Configured" else "Fallback"}")
+    println("Release SHA Ready:  ${if (hasReleaseSha) "Configured" else "Missing"}")
+    println("==================================================")
   }
 }
-

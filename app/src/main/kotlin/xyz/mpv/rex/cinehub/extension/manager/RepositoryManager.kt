@@ -32,6 +32,28 @@ class RepositoryManager(
     var onRepositorySynced: (suspend (RepositorySyncResult) -> Unit)? = null
 
     companion object {
+        fun normalizeRepoUrl(raw: String): String {
+            var url = raw.trim()
+            if (url.startsWith("https://github.com/") || url.startsWith("http://github.com/")) {
+                val clean = url.removePrefix("https://github.com/").removePrefix("http://github.com/").trimEnd('/')
+                val parts = clean.split("/")
+                if (parts.size >= 2) {
+                    val user = parts[0]
+                    val repo = parts[1]
+                    if (repo.equals("CSX", ignoreCase = true)) {
+                        return "https://raw.githubusercontent.com/$user/$repo/builds/CS.json"
+                    }
+                    if (parts.size == 2) {
+                        return "https://raw.githubusercontent.com/$user/$repo/master/repo.json"
+                    }
+                }
+            }
+            if (url.contains("github.com") && url.contains("/blob/")) {
+                url = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+            }
+            return url
+        }
+
         val BUILT_IN_PRESETS = listOf(
             RepoPresetItem(
                 name = "CloudStream Providers Repo",
@@ -76,9 +98,9 @@ class RepositoryManager(
                 author = "NivinCNC"
             ),
             RepoPresetItem(
-                name = "Megix Repo (CSX)",
+                name = "Magics / Megix Repo (CSX)",
                 url = "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json",
-                description = "CSX high-performance media extractors and direct streaming providers.",
+                description = "CSX high-performance media extractors and direct streaming providers (Bollyflix, CineStream, MoviesDrive, Moviesmod, VegaMovies).",
                 author = "Saurabh Kaperwan"
             ),
             RepoPresetItem(
@@ -99,7 +121,7 @@ class RepositoryManager(
     }
 
     suspend fun addRepository(url: String, name: String? = null, description: String? = null): Boolean = withContext(Dispatchers.IO) {
-        val cleanUrl = url.trim()
+        val cleanUrl = normalizeRepoUrl(url)
         if (cleanUrl.isBlank()) return@withContext false
 
         val initialName = name?.ifBlank { null } ?: "Repository (${cleanUrl.takeLast(24)})"
@@ -398,10 +420,39 @@ class RepositoryManager(
         if (listBody.isBlank()) return emptyList()
 
         val results = mutableListOf<AvailablePlugin>()
-        val array = JSONArray(listBody)
-        for (i in 0 until array.length()) {
-            val obj = array.getJSONObject(i)
-            results.add(parsePluginJson(obj, repoUrl))
+        val trimmed = listBody.trim()
+        if (trimmed.startsWith("[")) {
+            val array = JSONArray(trimmed)
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                if (obj.optInt("status", 1) != 0) {
+                    results.add(parsePluginJson(obj, listUrl))
+                }
+            }
+        } else if (trimmed.startsWith("{")) {
+            val obj = JSONObject(trimmed)
+            if (obj.has("pluginLists")) {
+                val lists = obj.optJSONArray("pluginLists")
+                if (lists != null) {
+                    for (i in 0 until lists.length()) {
+                        val subListUrl = lists.getString(i)
+                        val fullSubUrl = if (!subListUrl.startsWith("http")) {
+                            val base = listUrl.substringBeforeLast("/") + "/"
+                            base + subListUrl.removePrefix("./").removePrefix("/")
+                        } else {
+                            subListUrl
+                        }
+                        results.addAll(fetchPluginsList(fullSubUrl, listUrl))
+                    }
+                }
+            } else if (obj.has("providers") || obj.has("plugins")) {
+                val arr = obj.optJSONArray("providers") ?: obj.optJSONArray("plugins")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        results.add(parsePluginJson(arr.getJSONObject(i), listUrl))
+                    }
+                }
+            }
         }
         return results
     }
@@ -410,7 +461,13 @@ class RepositoryManager(
         val name = obj.optString("name", "Unknown Plugin")
         val internalName = obj.optString("internalName", obj.optString("id", name.lowercase().replace(" ", "_")))
         val version = obj.optString("version", "1.0.0")
-        val versionCode = obj.optInt("versionCode", 1)
+        val versionCode = if (obj.has("versionCode")) {
+            obj.optInt("versionCode", 1)
+        } else if (obj.has("version")) {
+            obj.optInt("version", 1)
+        } else {
+            1
+        }
         val description = obj.optStringOrNull("description")
         var url = obj.optString("url", "")
         var tvUrl = obj.optStringOrNull("tvUrl")

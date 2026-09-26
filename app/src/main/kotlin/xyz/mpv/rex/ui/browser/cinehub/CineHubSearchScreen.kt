@@ -283,21 +283,31 @@ fun CineHubSearchScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     if (isSearching) {
-                        // High Performance Skeleton Grid (replaces circular progress indicator)
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 130.dp),
-                            contentPadding = PaddingValues(bottom = 32.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            userScrollEnabled = false,
+                        // Lightweight loading state for search (Search skeleton omitted per directive)
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("cinehub_search_skeleton_grid")
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            items(6) {
-                                MaxStreamSkeletonCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    cardWidth = 140.dp
+                            Row(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(MaxStreamTheme.ElevatedSurface)
+                                    .border(1.dp, MaxStreamTheme.GlassBorder, CircleShape)
+                                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaxStreamTheme.CrimsonAccent
+                                )
+                                Text(
+                                    text = "Searching across streaming providers…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaxStreamTheme.TextSecondary
                                 )
                             }
                         }

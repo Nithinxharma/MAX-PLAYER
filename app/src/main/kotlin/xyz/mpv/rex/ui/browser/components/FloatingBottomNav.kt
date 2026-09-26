@@ -64,14 +64,8 @@ fun FloatingBottomNav(
 ) {
   if (tabs.isEmpty()) return
 
-  val isDark = isSystemInDarkTheme()
-
-  // Original REX player controls glass container background
-  val containerBg = if (isDark) {
-    Color(0x3B12131D)
-  } else {
-    Color(0x45141624)
-  }
+  // Original REX player controls glass container background (Dark mode only)
+  val containerBg = Color(0x3B12131D)
 
   Box(
     modifier = modifier

@@ -10,19 +10,40 @@ class CloudStreamApp {
         inline fun <reified T> getKey(key: String): T? {
             val ctx = context ?: return null
             val prefs = ctx.getSharedPreferences("cloudstream_app_prefs", Context.MODE_PRIVATE)
-            val json = prefs.getString(key, null) ?: return null
+            val str = prefs.getString(key, null) ?: return null
+            if (T::class == String::class) {
+                if (str.startsWith("\"") && str.endsWith("\"") && str.length >= 2) {
+                    return try { mapper.readValue<T>(str) } catch (_: Throwable) { str as T }
+                }
+                return str as T
+            }
             return try {
-                mapper.readValue<T>(json)
+                mapper.readValue<T>(str)
             } catch (_: Throwable) {
-                null
+                try {
+                    val raw: Any? = when (T::class) {
+                        Boolean::class -> str.toBooleanStrictOrNull()
+                        Int::class -> str.toIntOrNull()
+                        Long::class -> str.toLongOrNull()
+                        Double::class -> str.toDoubleOrNull()
+                        Float::class -> str.toFloatOrNull()
+                        else -> null
+                    }
+                    @Suppress("UNCHECKED_CAST")
+                    raw as? T
+                } catch (_: Throwable) {
+                    null
+                }
             }
         }
+
+        inline fun <reified T> getKey(key: String, default: T): T = getKey(key) ?: default
 
         inline fun <reified T> setKey(key: String, value: T) {
             val ctx = context ?: return
             val prefs = ctx.getSharedPreferences("cloudstream_app_prefs", Context.MODE_PRIVATE)
-            val json = mapper.writeValueAsString(value)
-            prefs.edit().putString(key, json).apply()
+            val str = if (value is String) value else mapper.writeValueAsString(value)
+            prefs.edit().putString(key, str).apply()
         }
 
         inline fun <reified T> getKey(folder: String, key: String): T? = getKey("$folder/$key")
