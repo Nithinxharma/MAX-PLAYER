@@ -47,6 +47,8 @@ class App : Application(), ImageLoaderFactory {
   private val advancedPreferences: xyz.mpv.rex.preferences.AdvancedPreferences by inject()
   private val extensionManager: xyz.mpv.rex.cinehub.extension.manager.ExtensionManager by inject()
   private val serverProviderSyncService: xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService by inject()
+  private val firebaseProviderSyncService: xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService by inject()
+  private val firebaseAutoDiscoveryService: xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService by inject()
   private val mediaStoreInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
   private val rootInvalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
@@ -83,6 +85,15 @@ class App : Application(), ImageLoaderFactory {
   override fun onCreate() {
     super.onCreate()
     instance = this
+
+    // Safely ensure FirebaseApp is initialized before DI modules
+    try {
+      if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
+        com.google.firebase.FirebaseApp.initializeApp(this)
+      }
+    } catch (e: Throwable) {
+      android.util.Log.w("App", "Early Firebase initialization notice: ${e.message}")
+    }
 
     // Initialize Koin
     startKoin {
@@ -155,10 +166,16 @@ class App : Application(), ImageLoaderFactory {
     // Firebase Integration Verification
     verifyFirebaseIntegration()
 
-    // Trigger silent server-controlled provider synchronization (CastleTV & managed providers)
+    // Trigger auto-discovery & server-controlled provider synchronization
     applicationScope.launch {
       runCatching {
+        firebaseAutoDiscoveryService.discoverAndSyncAll()
+      }
+      runCatching {
         serverProviderSyncService.triggerSilentSync(force = false)
+      }
+      runCatching {
+        firebaseProviderSyncService.syncUserProviders()
       }
     }
   }

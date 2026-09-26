@@ -40,6 +40,30 @@ val domainModule = module {
     single<xyz.mpv.rex.auth.elevation.ElevationTokenValidator> { xyz.mpv.rex.auth.elevation.DefaultElevationTokenValidator() }
     single<xyz.mpv.rex.auth.elevation.AdminSessionManager> { xyz.mpv.rex.auth.elevation.DefaultAdminSessionManager(get(), get(), get()) }
     single { xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService(androidContext(), get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService(androidContext(), get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService(androidContext(), get()) }
+    single<com.google.firebase.firestore.FirebaseFirestore?> {
+        try {
+            if (com.google.firebase.FirebaseApp.getApps(androidContext()).isNotEmpty()) {
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            } else {
+                com.google.firebase.FirebaseApp.initializeApp(androidContext())?.let { com.google.firebase.firestore.FirebaseFirestore.getInstance() }
+            }
+        } catch (e: Throwable) {
+            null
+        }
+    }
+    single<com.google.firebase.auth.FirebaseAuth?> {
+        try {
+            if (com.google.firebase.FirebaseApp.getApps(androidContext()).isNotEmpty()) {
+                com.google.firebase.auth.FirebaseAuth.getInstance()
+            } else {
+                com.google.firebase.FirebaseApp.initializeApp(androidContext())?.let { com.google.firebase.auth.FirebaseAuth.getInstance() }
+            }
+        } catch (e: Throwable) {
+            null
+        }
+    }
 }
 
 

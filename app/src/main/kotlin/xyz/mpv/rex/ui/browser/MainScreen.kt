@@ -28,6 +28,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import xyz.mpv.rex.ui.browser.components.FloatingBottomNav
+import xyz.mpv.rex.ui.browser.medialibrary.MediaLibraryContent
 import xyz.mpv.rex.ui.browser.components.NavTabItem
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Icon
@@ -199,32 +200,18 @@ object MainScreen : Screen {
     val playlistsLabel = stringResource(R.string.playlists)
     val networkLabel = stringResource(R.string.network)
 
-    val isCineHubTabVisible = enableTabCineHub && enableCineHubIntegration
+    val isCineHubTabVisible = true
 
     val visibleTabs = remember(
-      isShortsEnabled, isCineHubTabVisible, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      homeLabel, shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
+      shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
         add(
-          VisibleTab("home", homeLabel, icon = Icons.Rounded.Folder) {
-            FolderListScreen.Content()
+          VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
+            CineHubScreen.Content()
           }
         )
-        if (isShortsEnabled) {
-          add(
-            VisibleTab("shorts", shortsLabel, icon = Icons.Rounded.SlowMotionVideo) {
-              ShortsScreen().Content()
-            }
-          )
-        }
-        if (isCineHubTabVisible) {
-          add(
-            VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
-              CineHubScreen.Content()
-            }
-          )
-        }
         if (enableTabCineTv) {
           add(
             VisibleTab("cinetv", cineTvLabel, icon = Icons.Rounded.Tv) {
@@ -325,7 +312,7 @@ object MainScreen : Screen {
       }
     }
 
-    val isHomeTabActive = selectedTab in visibleTabs.indices && visibleTabs[selectedTab].id == "home"
+    val isHomeTabActive = selectedTab in visibleTabs.indices && (visibleTabs[selectedTab].id == "cinehub" || visibleTabs[selectedTab].id == "home")
 
     LaunchedEffect(
       isHomeTabActive,

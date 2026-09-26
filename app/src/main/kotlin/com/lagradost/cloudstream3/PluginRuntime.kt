@@ -175,17 +175,31 @@ class PluginManager(private val context: Context) {
 
         try {
             java.util.zip.ZipFile(pluginFile).use { zip ->
-                val manifestEntry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json")
+                val manifestEntry = zip.getEntry("manifest.json") ?: zip.getEntry("make.json") ?: zip.getEntry("plugin.json")
                 if (manifestEntry != null) {
                     val rawJson = zip.getInputStream(manifestEntry).bufferedReader().readText()
                     val json = org.json.JSONObject(rawJson)
-                    val mainClass = json.optString("pluginClassName")
-                    if (!mainClass.isNullOrBlank()) classNames.add(mainClass)
+                    val mainClass = json.optString("pluginClassName",
+                        json.optString("pluginClass",
+                            json.optString("mainClass",
+                                json.optString("class",
+                                    json.optString("plugin",
+                                        json.optString("entrypoint", ""))))))
+                    if (!mainClass.isNullOrBlank() && !classNames.contains(mainClass.trim())) classNames.add(mainClass.trim())
                     val classesArr = json.optJSONArray("classes")
                     if (classesArr != null) {
                         for (i in 0 until classesArr.length()) {
-                            val c = classesArr.optString(i)
+                            val c = classesArr.optString(i).trim()
                             if (c.isNotBlank() && !classNames.contains(c)) classNames.add(c)
+                        }
+                    }
+                    val providersArr = json.optJSONArray("providers") ?: json.optJSONArray("plugins")
+                    if (providersArr != null) {
+                        for (i in 0 until providersArr.length()) {
+                            val item = providersArr.opt(i)
+                            if (item is String && item.isNotBlank() && !classNames.contains(item.trim())) {
+                                classNames.add(item.trim())
+                            }
                         }
                     }
                     requiresResources = json.optBoolean("requiresResources", false)

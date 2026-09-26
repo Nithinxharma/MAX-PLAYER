@@ -31,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import org.koin.compose.koinInject
+import kotlinx.coroutines.launch
 
 @Serializable
 object DeveloperOptionsScreen : Screen {
@@ -78,6 +79,156 @@ object DeveloperOptionsScreen : Screen {
                         .padding(paddingValues)
                         .verticalScroll(rememberScrollState())
                 ) {
+                    PreferenceSectionHeader(title = "Firebase Provider Management & Control Panel")
+                    GroupedListColumn {
+                        GroupedPreferenceCard(position = GroupPosition.FIRST) {
+                            Preference(
+                                title = { Text("Trigger Firebase Provider Sync") },
+                                summary = {
+                                    Text(
+                                        "Sync provider_manifests/global and update installed providers silently",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    try {
+                                        val syncService = org.koin.core.context.GlobalContext.get().getOrNull<xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService>()
+                                        if (syncService != null) {
+                                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                syncService.syncUserProviders()
+                                            }
+                                        }
+                                    } catch (e: Throwable) {
+                                        android.util.Log.e("DeveloperOptions", "Failed to start FirebaseProviderSyncService", e)
+                                    }
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
+                                title = { Text("Run Firebase Auto-Discovery Database Sync") },
+                                summary = {
+                                    Text(
+                                        "Scan repositories, parse manifests, and automatically mirror all metadata into Firestore",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudSync,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    try {
+                                        val discoveryService = org.koin.core.context.GlobalContext.get().getOrNull<xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService>()
+                                        if (discoveryService != null) {
+                                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                discoveryService.discoverAndSyncAll()
+                                            }
+                                        }
+                                    } catch (e: Throwable) {
+                                        android.util.Log.e("DeveloperOptions", "Failed to start FirebaseAutoDiscoveryService", e)
+                                    }
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
+                                title = { Text("Installed Providers & Extensions") },
+                                summary = {
+                                    Text(
+                                        "View and manage locally installed provider packages",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Extension,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(InstalledExtensionsScreenRoute)
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
+                                title = { Text("Repository Manager") },
+                                summary = {
+                                    Text(
+                                        "Configure remote extension repositories and feeds",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Storage,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(ExtensionRepositoriesScreenRoute)
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
+                                title = { Text("Plugin Health & Force Activation") },
+                                summary = {
+                                    Text(
+                                        "Audit provider status and force DEX plugin loading",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.FlashOn,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(ForcePluginActivationScreenRoute)
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.LAST) {
+                            Preference(
+                                title = { Text("Plugin Execution Trace & Diagnostics") },
+                                summary = {
+                                    Text(
+                                        "Inspect real-time execution trace and diagnostic logs",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.BugReport,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(PluginExecutionTraceScreenRoute)
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     PreferenceSectionHeader(title = "CloudStream Integration")
                     GroupedListColumn {
                         GroupedPreferenceCard(position = GroupPosition.FIRST) {
