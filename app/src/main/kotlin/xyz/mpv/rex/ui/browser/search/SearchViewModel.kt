@@ -21,6 +21,7 @@ import xyz.mpv.rex.utils.media.MediaLibraryEvents
 import xyz.mpv.rex.utils.media.MetadataRetrieval
 import xyz.mpv.rex.utils.permission.PermissionUtils.StorageOps
 import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.searchSafe
 import com.lagradost.cloudstream3.SearchResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -177,7 +178,7 @@ class SearchViewModel(
         val deferredList = apis.map { provider ->
           async {
             try {
-              provider.search(trimmed)
+              provider.searchSafe(trimmed)
             } catch (t: Throwable) {
               Log.w(TAG, "Search error in provider '${provider.name}': ${t.message}")
               emptyList<SearchResponse>()

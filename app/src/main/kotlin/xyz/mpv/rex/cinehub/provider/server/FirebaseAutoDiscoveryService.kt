@@ -34,9 +34,24 @@ import java.util.Locale
  */
 class FirebaseAutoDiscoveryService(
     private val context: Context,
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val repositoryManager: RepositoryManager
+    private val repositoryManager: RepositoryManager,
+    private val firestore: FirebaseFirestore? = try {
+        if (com.google.firebase.FirebaseApp.getApps(context).isNotEmpty()) {
+            FirebaseFirestore.getInstance()
+        } else {
+            com.google.firebase.FirebaseApp.initializeApp(context)?.let { FirebaseFirestore.getInstance() }
+        }
+    } catch (e: Throwable) {
+        null
+    }
 ) {
+    // Secondary constructor to maintain compatibility with alternative argument orders
+    constructor(
+        context: Context,
+        firestore: FirebaseFirestore?,
+        repositoryManager: RepositoryManager
+    ) : this(context, repositoryManager, firestore)
+
     companion object {
         private const val TAG = "FirebaseAutoDiscovery"
         private const val REPOSITORIES_COLLECTION = "repositories"
@@ -61,6 +76,12 @@ class FirebaseAutoDiscoveryService(
      * Publishes a discovered repository and its plugin catalog into Firestore.
      */
     suspend fun publishDiscoveredRepositoryData(syncResult: RepositorySyncResult): Boolean = withContext(Dispatchers.IO) {
+        val fs = firestore
+        if (fs == null) {
+            Log.w(TAG, "AUTO_DISCOVERY: Firestore is unavailable (Firebase not initialized). Skipping cloud publish.")
+            return@withContext false
+        }
+
         if (syncResult.error != null && syncResult.plugins.isEmpty()) {
             Log.w(TAG, "AUTO_DISCOVERY: Skipping sync for failed repository ${syncResult.repoUrl}: ${syncResult.error}")
             return@withContext false
@@ -81,7 +102,7 @@ class FirebaseAutoDiscoveryService(
                 "lastSync" to FieldValue.serverTimestamp()
             )
 
-            firestore.collection(REPOSITORIES_COLLECTION)
+            fs.collection(REPOSITORIES_COLLECTION)
                 .document(repositoryId)
                 .set(repoDocData, SetOptions.merge())
                 .await()
@@ -90,7 +111,7 @@ class FirebaseAutoDiscoveryService(
 
             // 2. Fetch existing Firestore provider documents for this repository to handle provider removal/disappearance
             val existingSnapshot = try {
-                firestore.collection(PROVIDERS_COLLECTION)
+                fs.collection(PROVIDERS_COLLECTION)
                     .whereEqualTo("repository", repositoryId)
                     .get()
                     .await()
@@ -127,7 +148,7 @@ class FirebaseAutoDiscoveryService(
                 )
 
                 // Write to providers/{internalName}
-                firestore.collection(PROVIDERS_COLLECTION)
+                fs.collection(PROVIDERS_COLLECTION)
                     .document(internalName)
                     .set(providerDocData, SetOptions.merge())
                     .await()
@@ -146,7 +167,7 @@ class FirebaseAutoDiscoveryService(
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
 
-                firestore.collection(EXTENSIONS_COLLECTION)
+                fs.collection(EXTENSIONS_COLLECTION)
                     .document(internalName)
                     .set(extensionDocData, SetOptions.merge())
                     .await()
@@ -156,7 +177,7 @@ class FirebaseAutoDiscoveryService(
             existingProviderIds.removeAll(currentDiscoveredIds)
             for (disappearedId in existingProviderIds) {
                 Log.w(TAG, "AUTO_DISCOVERY: Disappeared provider detected ($disappearedId). Updating status to disabled.")
-                firestore.collection(PROVIDERS_COLLECTION)
+                fs.collection(PROVIDERS_COLLECTION)
                     .document(disappearedId)
                     .update(
                         mapOf(
@@ -183,8 +204,9 @@ class FirebaseAutoDiscoveryService(
      * from active Firestore documents.
      */
     suspend fun updateGlobalIndexes() = withContext(Dispatchers.IO) {
+        val fs = firestore ?: return@withContext
         try {
-            val reposSnap = firestore.collection(REPOSITORIES_COLLECTION).get().await()
+            val reposSnap = fs.collection(REPOSITORIES_COLLECTION).get().await()
             val repoList = reposSnap.documents.mapNotNull { doc ->
                 if (doc.id == "global") return@mapNotNull null
                 val id = doc.getString("id") ?: doc.id
@@ -193,11 +215,11 @@ class FirebaseAutoDiscoveryService(
                 mapOf("id" to id, "url" to url, "enabled" to enabled)
             }
 
-            firestore.collection(REPOSITORIES_COLLECTION).document("global")
+            fs.collection(REPOSITORIES_COLLECTION).document("global")
                 .set(mapOf("repositories" to repoList), SetOptions.merge())
                 .await()
 
-            val providersSnap = firestore.collection(PROVIDERS_COLLECTION)
+            val providersSnap = fs.collection(PROVIDERS_COLLECTION)
                 .whereEqualTo("enabled", true)
                 .get()
                 .await()
@@ -222,11 +244,11 @@ class FirebaseAutoDiscoveryService(
             }
 
             val indexPayload = mapOf("providers" to providerList)
-            firestore.collection(PROVIDERS_COLLECTION).document("global")
+            fs.collection(PROVIDERS_COLLECTION).document("global")
                 .set(indexPayload, SetOptions.merge())
                 .await()
 
-            firestore.collection(MANIFEST_COLLECTION).document("global")
+            fs.collection(MANIFEST_COLLECTION).document("global")
                 .set(indexPayload, SetOptions.merge())
                 .await()
 

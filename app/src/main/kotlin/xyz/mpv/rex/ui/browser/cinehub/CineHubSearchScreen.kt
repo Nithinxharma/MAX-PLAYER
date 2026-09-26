@@ -283,21 +283,26 @@ fun CineHubSearchScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     if (isSearching) {
-                        // High Performance Skeleton Grid (replaces circular progress indicator)
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 130.dp),
-                            contentPadding = PaddingValues(bottom = 32.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            userScrollEnabled = false,
+                        // Standard Loading State replacing search skeleton
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("cinehub_search_skeleton_grid")
+                                .fillMaxWidth()
+                                .padding(top = 56.dp, bottom = 32.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            items(6) {
-                                MaxStreamSkeletonCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    cardWidth = 140.dp
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(42.dp),
+                                    color = MaxStreamTheme.NeonViolet,
+                                    strokeWidth = 3.dp
+                                )
+                                Text(
+                                    text = "Searching across streaming providers…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaxStreamTheme.TextMuted
                                 )
                             }
                         }
@@ -362,10 +367,10 @@ fun CineHubSearchScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .maxStreamShimmer(shape = CircleShape)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = MaxStreamTheme.NeonViolet,
+                            strokeWidth = 2.5.dp
                         )
                         Text(
                             "Fetching stream metadata…",

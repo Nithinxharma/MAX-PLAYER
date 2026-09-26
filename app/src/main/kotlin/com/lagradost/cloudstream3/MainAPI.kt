@@ -617,6 +617,14 @@ abstract class MainAPI {
     ): Boolean = false
 }
 
+suspend fun MainAPI.searchSafe(query: String): List<SearchResponse> {
+    val direct = runCatching { search(query) }.getOrNull()
+    if (!direct.isNullOrEmpty()) return direct
+    val paginated = runCatching { search(query, 1)?.items }.getOrNull()
+    if (!paginated.isNullOrEmpty()) return paginated
+    return direct ?: emptyList()
+}
+
 fun MainAPI.newMovieSearchResponse(name: String, url: String, type: TvType = TvType.Movie, fix: Boolean = true, initializer: MovieSearchResponse.() -> Unit = {}): MovieSearchResponse {
     val fixedUrl = if (fix) fixUrl(url) else url
     return MovieSearchResponse(name, fixedUrl, this.name, type).apply(initializer)
@@ -901,6 +909,12 @@ fun LoadResponse.addMalId(id: String?) {
 }
 fun LoadResponse.addImdbId(id: String?) {
     if (id != null) this.syncData["Imdb"] = id
+}
+fun LoadResponse.addImdbUrl(url: String?) {
+    if (url != null) {
+        val id = Regex("(tt\\d+)").find(url)?.groupValues?.getOrNull(1) ?: url
+        this.syncData["Imdb"] = id
+    }
 }
 fun LoadResponse.addTMDbId(id: String?) {
     if (id != null) this.syncData["Tmdb"] = id
