@@ -332,11 +332,24 @@ fun CineHubSearchScreen(
                                 .padding(vertical = 48.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = statusMessage ?: "No results found for \"$searchInput\"",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaxStreamTheme.TextMuted
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "No playable results found",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    ),
+                                    color = primaryTextColor
+                                )
+                                Text(
+                                    text = "Try another title or provider.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = mutedTextColor
+                                )
+                            }
                         }
                     } else {
                         // Poster Grid of Search Results

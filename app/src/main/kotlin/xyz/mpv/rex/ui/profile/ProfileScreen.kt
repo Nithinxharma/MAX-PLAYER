@@ -110,11 +110,13 @@ object ProfileScreen : Screen {
         val backstack = LocalBackStack.current
         val scope = rememberCoroutineScope()
         val authManager = koinInject<AuthManager>()
+        val syncService = koinInject<xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService>()
 
         val userProfile by authManager.userProfile.collectAsState()
         val userRole by authManager.userRole.collectAsState()
         val isAdmin by authManager.isAdmin.collectAsState()
         val isPremium by authManager.isPremium.collectAsState()
+        val userPlan by syncService.userPlan.collectAsState()
         val currentUser = authManager.currentUser
 
         val effectiveName = userProfile?.name?.takeIf { it.isNotBlank() }
@@ -174,6 +176,7 @@ object ProfileScreen : Screen {
                             email = effectiveEmail,
                             photoUrl = photoUrl,
                             role = userRole,
+                            plan = userPlan,
                             isAdmin = isAdmin,
                             isPremium = isPremium
                         )
@@ -307,7 +310,7 @@ object ProfileScreen : Screen {
 }
 
 /**
- * Profile Header Glass Card with Avatar, Name, Email, and Dynamic Role Badges
+ * Profile Header Glass Card with Large Avatar, Name, Email, and Dynamic Role/Plan Badges
  */
 @Composable
 private fun ProfileHeaderCard(
@@ -315,15 +318,25 @@ private fun ProfileHeaderCard(
     email: String,
     photoUrl: String?,
     role: String,
+    plan: String,
     isAdmin: Boolean,
     isPremium: Boolean
 ) {
     val cardShape = RoundedCornerShape(24.dp)
+    val normalizedRole = role.trim().lowercase()
+    val isVip = normalizedRole == "vip" || plan.equals("vip", true)
+
+    val glowColor = when {
+        isAdmin -> Color(0xFFFF2D55)
+        isVip -> Color(0xFFFFB800)
+        isPremium || normalizedRole == "premium" -> Color(0xFF00E676)
+        else -> Color(0xFF00C2FF)
+    }
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(16.dp, cardShape, spotColor = Color(0xFF7B61FF).copy(alpha = 0.35f)),
+            .shadow(16.dp, cardShape, spotColor = glowColor.copy(alpha = 0.35f)),
         shape = cardShape,
         color = Color(0xFF13131F).copy(alpha = 0.78f),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f))
@@ -331,23 +344,23 @@ private fun ProfileHeaderCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Large Avatar with Glass Border
+            // Large Avatar with Glass Border (96.dp)
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(88.dp)
+                modifier = Modifier.size(96.dp)
             ) {
                 // Background Soft Ambient Glow
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
-                        .blur(18.dp)
+                        .size(88.dp)
+                        .blur(20.dp)
                         .background(
                             Brush.radialGradient(
                                 listOf(
-                                    if (isAdmin) Color(0xFFFFB800) else Color(0xFF7B61FF),
+                                    glowColor.copy(alpha = 0.8f),
                                     Color.Transparent
                                 )
                             )
@@ -360,23 +373,23 @@ private fun ProfileHeaderCard(
                         contentDescription = "User Avatar",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(88.dp)
                             .clip(CircleShape)
-                            .border(2.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                            .border(2.5.dp, glowColor.copy(alpha = 0.8f), CircleShape)
                     )
                 } else {
                     Surface(
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(88.dp)
                             .clip(CircleShape),
                         color = Color(0xFF222238),
-                        border = BorderStroke(2.dp, Color.White.copy(alpha = 0.4f))
+                        border = BorderStroke(2.5.dp, glowColor.copy(alpha = 0.8f))
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = name.take(1).uppercase(),
                                 color = Color.White,
-                                fontSize = 28.sp,
+                                fontSize = 32.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -384,13 +397,13 @@ private fun ProfileHeaderCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // User Name
             Text(
                 text = name,
                 color = Color.White,
-                fontSize = 20.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -407,17 +420,22 @@ private fun ProfileHeaderCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Role & Premium Badges Row
+            // Badges Row: Role Badge + Plan Badge + Premium Badge
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                RoleBadgePill(role = role)
+                // Distinct Role Badge
+                RoleBadgePill(role = if (isAdmin) "admin" else role)
 
-                if (isPremium) {
-                    PremiumBadgePill()
+                // Plan Badge
+                PlanBadgePill(plan = plan)
+
+                // Premium / VIP Badge
+                if (isPremium || isVip) {
+                    PremiumBadgePill(isVip = isVip)
                 }
             }
         }
@@ -425,15 +443,16 @@ private fun ProfileHeaderCard(
 }
 
 /**
- * Role Badge Pill Component (user, admin, moderator, developer, super_admin)
+ * Role Badge Pill Component with distinct styling for USER, PREMIUM, VIP, and ADMIN
  */
 @Composable
 private fun RoleBadgePill(role: String) {
     val normalized = role.trim().lowercase()
 
     val (badgeText, badgeColor, badgeIcon) = when (normalized) {
-        UserRole.ADMIN -> Triple("ADMIN", Color(0xFFFFB800), Icons.Default.AdminPanelSettings)
-        UserRole.SUPER_ADMIN -> Triple("SUPER ADMIN", Color(0xFFFF2D55), Icons.Default.Security)
+        "admin", UserRole.ADMIN, UserRole.SUPER_ADMIN -> Triple("ADMIN", Color(0xFFFF2D55), Icons.Default.AdminPanelSettings)
+        "vip" -> Triple("VIP", Color(0xFFFFB800), Icons.Default.WorkspacePremium)
+        "premium" -> Triple("PREMIUM", Color(0xFF00E676), Icons.Default.Star)
         UserRole.DEVELOPER -> Triple("DEVELOPER", Color(0xFF00E676), Icons.Default.Code)
         UserRole.MODERATOR -> Triple("MODERATOR", Color(0xFF9C27B0), Icons.Default.Security)
         else -> Triple("USER", Color(0xFF00C2FF), Icons.Default.Person)
@@ -442,27 +461,56 @@ private fun RoleBadgePill(role: String) {
     Surface(
         shape = RoundedCornerShape(50),
         color = badgeColor.copy(alpha = 0.16f),
-        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.6f))
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.7f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Icon(
                 imageVector = badgeIcon,
                 contentDescription = null,
                 tint = badgeColor,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(13.dp)
             )
             Text(
                 text = badgeText,
                 color = badgeColor,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
+                letterSpacing = 0.8.sp
             )
         }
+    }
+}
+
+/**
+ * Plan Badge Pill Component
+ */
+@Composable
+private fun PlanBadgePill(plan: String) {
+    val normalized = plan.trim().lowercase()
+
+    val (badgeText, badgeColor) = when (normalized) {
+        "admin" -> "ADMIN ACCESS" to Color(0xFFFF2D55)
+        "vip" -> "VIP PLAN" to Color(0xFFFFB800)
+        "premium" -> "PREMIUM PLAN" to Color(0xFF00E676)
+        else -> "FREE PLAN" to Color(0xFF00C2FF)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = badgeColor.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
+    ) {
+        Text(
+            text = badgeText,
+            color = badgeColor,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -470,29 +518,30 @@ private fun RoleBadgePill(role: String) {
  * Premium Status Badge Pill
  */
 @Composable
-private fun PremiumBadgePill() {
+private fun PremiumBadgePill(isVip: Boolean = false) {
+    val badgeColor = if (isVip) Color(0xFFFFB800) else Color(0xFFFFD700)
     Surface(
         shape = RoundedCornerShape(50),
-        color = Color(0xFFFFD700).copy(alpha = 0.16f),
-        border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.7f))
+        color = badgeColor.copy(alpha = 0.16f),
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.7f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.Star,
+                imageVector = if (isVip) Icons.Default.WorkspacePremium else Icons.Default.Star,
                 contentDescription = null,
-                tint = Color(0xFFFFD700),
-                modifier = Modifier.size(14.dp)
+                tint = badgeColor,
+                modifier = Modifier.size(13.dp)
             )
             Text(
-                text = "VIP PRO",
-                color = Color(0xFFFFD700),
+                text = if (isVip) "VIP PRO" else "PREMIUM",
+                color = badgeColor,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
+                letterSpacing = 0.8.sp
             )
         }
     }

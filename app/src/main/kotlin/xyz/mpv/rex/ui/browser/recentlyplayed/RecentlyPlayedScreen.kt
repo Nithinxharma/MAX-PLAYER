@@ -86,7 +86,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
 import xyz.mpv.rex.R
+import xyz.mpv.rex.cinehub.bridge.RexPlayerBridge
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
+import xyz.mpv.rex.cinehub.extension.model.LibraryItem
+import xyz.mpv.rex.database.MpvExDatabase
 import xyz.mpv.rex.database.repository.PlaylistRepository
 import xyz.mpv.rex.domain.media.model.Video
 import xyz.mpv.rex.preferences.AdvancedPreferences
@@ -94,6 +97,7 @@ import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.presentation.components.ConfirmDialog
 import xyz.mpv.rex.presentation.components.pullrefresh.PullRefreshBox
+import xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamWatchlistSection
 import xyz.mpv.rex.ui.browser.components.BrowserTopBar
 import xyz.mpv.rex.ui.browser.playlist.PlaylistDetailScreen
 import xyz.mpv.rex.ui.browser.selection.SelectionManager
@@ -101,6 +105,10 @@ import xyz.mpv.rex.ui.browser.selection.rememberSelectionManager
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.utils.media.MediaInfoParser
 import xyz.mpv.rex.utils.media.MediaUtils
+import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.utils.ExtractorLink
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -252,6 +260,9 @@ object RecentlyPlayedScreen : Screen {
 
     val recentItems by viewModel.recentItems.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val database = koinInject<MpvExDatabase>()
+    val libraryDao = remember { database.cineLibraryDao() }
+    val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
     val deleteDialogOpen = rememberSaveable { mutableStateOf(false) }
     val deleteFilesCheckbox = rememberSaveable { mutableStateOf(false) }
     val advancedPreferences = koinInject<AdvancedPreferences>()
@@ -370,7 +381,7 @@ object RecentlyPlayedScreen : Screen {
           }
         }
 
-        recentItems.isEmpty() && !isLoading -> {
+        recentItems.isEmpty() && libraryItems.isEmpty() && !isLoading -> {
           Box(
             modifier = Modifier
               .fillMaxSize()
@@ -388,12 +399,63 @@ object RecentlyPlayedScreen : Screen {
         else -> {
           OttContinueWatchingContent(
             recentItems = recentItems,
+            libraryItems = libraryItems,
             selectionManager = selectionManager,
             onVideoClick = { video ->
               MediaUtils.playFile(video, context, "recently_played")
             },
             onPlaylistClick = { playlistItem ->
               backStack.add(PlaylistDetailScreen(playlistItem.playlist.id))
+            },
+            onWatchlistItemClick = { libraryItem ->
+              coroutineScope.launch(Dispatchers.IO) {
+                val api = APIHolder.apis.firstOrNull { it.name.equals(libraryItem.apiName, true) }
+                  ?: APIHolder.getApi(libraryItem.apiName)
+                if (api != null) {
+                  val response = runCatching { api.load(libraryItem.url) }.getOrNull()
+                  if (response != null) {
+                    val (dataUrl, epTitle) = when (response) {
+                      is MovieLoadResponse -> response.dataUrl to response.name
+                      is TvSeriesLoadResponse -> {
+                        val firstEp = response.episodes.firstOrNull()
+                        (firstEp?.data ?: response.url) to (firstEp?.name ?: response.name)
+                      }
+                      else -> response.url to response.name
+                    }
+                    val links = mutableListOf<ExtractorLink>()
+                    runCatching {
+                      api.loadLinks(dataUrl, isCasting = false, subtitleCallback = {}) { link ->
+                        links.add(link)
+                      }
+                    }
+                    withContext(Dispatchers.Main) {
+                      if (links.isNotEmpty()) {
+                        val bestLink = links.maxByOrNull { it.quality } ?: links.first()
+                        RexPlayerBridge.playStream(
+                          context = context,
+                          link = bestLink,
+                          title = epTitle,
+                          posterUrl = response.posterUrl ?: libraryItem.posterUrl,
+                          overview = response.plot,
+                          year = response.year?.toString(),
+                          providerName = libraryItem.apiName,
+                          allLinks = links
+                        )
+                      } else {
+                        android.widget.Toast.makeText(context, "No stream links found for ${libraryItem.title}", android.widget.Toast.LENGTH_SHORT).show()
+                      }
+                    }
+                  } else {
+                    withContext(Dispatchers.Main) {
+                      android.widget.Toast.makeText(context, "Could not load stream details for ${libraryItem.title}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                  }
+                } else {
+                  withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Provider '${libraryItem.apiName}' not active", android.widget.Toast.LENGTH_SHORT).show()
+                  }
+                }
+              }
             },
             listState = listState,
             onRefresh = { viewModel.refresh() },
@@ -462,9 +524,11 @@ object RecentlyPlayedScreen : Screen {
 @Composable
 private fun OttContinueWatchingContent(
   recentItems: List<RecentlyPlayedItem>,
+  libraryItems: List<LibraryItem>,
   selectionManager: SelectionManager<RecentlyPlayedItem, String>,
   onVideoClick: (Video) -> Unit,
   onPlaylistClick: (RecentlyPlayedItem.PlaylistItem) -> Unit,
+  onWatchlistItemClick: (LibraryItem) -> Unit,
   listState: LazyListState,
   onRefresh: suspend () -> Unit,
   modifier: Modifier = Modifier,
@@ -486,6 +550,11 @@ private fun OttContinueWatchingContent(
     }
   }
 
+  val watchlistItems = remember(libraryItems) {
+    val filtered = libraryItems.filter { it.watchStatus == 0 }
+    if (filtered.isNotEmpty()) filtered else libraryItems
+  }
+
   PullRefreshBox(
     isRefreshing = isRefreshing,
     onRefresh = onRefresh,
@@ -497,7 +566,7 @@ private fun OttContinueWatchingContent(
       modifier = Modifier.fillMaxSize(),
       verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-      // 1. Featured Continue Watching OTT Carousel / Row
+      // 1. TOP SECTION: Featured Continue Watching OTT Carousel / Row
       if (continueWatchingItems.isNotEmpty() && !selectionManager.isInSelectionMode) {
         item(key = "continue_watching_section_header") {
           Column(modifier = Modifier.fillMaxWidth()) {
@@ -550,7 +619,17 @@ private fun OttContinueWatchingContent(
         }
       }
 
-      // 2. All Watch History / Mosaic Grid Header
+      // 2. MIDDLE SECTION: Watchlist (Saved movies & Saved TV shows)
+      if (!selectionManager.isInSelectionMode) {
+        item(key = "watchlist_middle_section") {
+          MaxStreamWatchlistSection(
+            items = watchlistItems,
+            onItemClick = onWatchlistItemClick
+          )
+        }
+      }
+
+      // 3. BOTTOM SECTION: All Watch History / Mosaic Grid Header
       item(key = "all_history_section_header") {
         Row(
           modifier = Modifier

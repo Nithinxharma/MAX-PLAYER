@@ -108,7 +108,7 @@ class CineHubViewModel : ViewModel() {
             _searchResults.value = aggregatedResults
             _isSearching.value = false
             if (aggregatedResults.isEmpty()) {
-                _statusMessage.value = "No results found for \"$trimmed\""
+                _statusMessage.value = "No playable results found\n\nTry another title or provider."
             }
         }
     }

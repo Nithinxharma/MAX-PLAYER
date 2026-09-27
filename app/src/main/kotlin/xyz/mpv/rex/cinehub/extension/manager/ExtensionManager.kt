@@ -1000,22 +1000,32 @@ class ExtensionManager(
             var discoveredClasses: List<String> = emptyList()
             if (plugin.url.isNotBlank()) {
                 val targetFile = File(extensionDir, "${plugin.internalName}.cs3")
-                if (targetFile.exists()) {
-                    runCatching { targetFile.setWritable(true) }
-                }
-                val request = Request.Builder().url(plugin.url).build()
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful && response.body != null) {
-                        response.body!!.byteStream().use { input ->
-                            targetFile.outputStream().use { output ->
-                                input.copyTo(output)
+                val existing = db.extensionDao().getExtension(plugin.internalName)
+                if (targetFile.exists() && targetFile.length() > 0 && existing != null && existing.versionCode >= plugin.versionCode) {
+                    localPath = targetFile.absolutePath
+                    discoveredClasses = extractClassNamesFromZip(targetFile)
+                    if (discoveredClasses.isEmpty()) {
+                        val optDir = File(context.codeCacheDir, "opt_${plugin.internalName}").apply { mkdirs() }
+                        discoveredClasses = extractClassesFromDex(targetFile, optDir)
+                    }
+                } else {
+                    if (targetFile.exists()) {
+                        runCatching { targetFile.setWritable(true) }
+                    }
+                    val request = Request.Builder().url(plugin.url).build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful && response.body != null) {
+                            response.body!!.byteStream().use { input ->
+                                targetFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
                             }
-                        }
-                        localPath = targetFile.absolutePath
-                        discoveredClasses = extractClassNamesFromZip(targetFile)
-                        if (discoveredClasses.isEmpty()) {
-                            val optDir = File(context.codeCacheDir, "opt_${plugin.internalName}").apply { mkdirs() }
-                            discoveredClasses = extractClassesFromDex(targetFile, optDir)
+                            localPath = targetFile.absolutePath
+                            discoveredClasses = extractClassNamesFromZip(targetFile)
+                            if (discoveredClasses.isEmpty()) {
+                                val optDir = File(context.codeCacheDir, "opt_${plugin.internalName}").apply { mkdirs() }
+                                discoveredClasses = extractClassesFromDex(targetFile, optDir)
+                            }
                         }
                     }
                 }
