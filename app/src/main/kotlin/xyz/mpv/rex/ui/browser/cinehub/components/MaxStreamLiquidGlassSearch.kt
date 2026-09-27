@@ -91,6 +91,24 @@ fun MaxStreamLiquidGlassSearch(
         MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
     }
 
+    val activeBorderBrush = if (isDark) {
+        Brush.horizontalGradient(
+            listOf(
+                MaxStreamTheme.CrimsonAccent,
+                MaxStreamTheme.ElectricCyan.copy(alpha = 0.8f),
+                MaxStreamTheme.CrimsonAccent
+            )
+        )
+    } else {
+        Brush.horizontalGradient(
+            listOf(
+                MaterialTheme.colorScheme.primary,
+                MaterialTheme.colorScheme.tertiary,
+                MaterialTheme.colorScheme.primary
+            )
+        )
+    }
+
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
             focusRequester.requestFocus()
@@ -115,10 +133,10 @@ fun MaxStreamLiquidGlassSearch(
                 shape = RoundedCornerShape(24.dp),
                 color = glassBg,
                 border = androidx.compose.foundation.BorderStroke(1.dp, glassBorder),
-                shadowElevation = if (isDark) 4.dp else 2.dp,
+                shadowElevation = if (isDark) 6.dp else 2.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(46.dp)
+                    .height(48.dp)
                     .testTag("liquid_glass_search_btn")
             ) {
                 Row(
@@ -146,22 +164,22 @@ fun MaxStreamLiquidGlassSearch(
                     // Glass Accent Glow Dot
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(9.dp)
                             .clip(CircleShape)
                             .background(MaxStreamTheme.CrimsonAccent)
                     )
                 }
             }
         } else {
-            // Expanded Full Liquid Glass Search Input
+            // Expanded Full Liquid Glass Search Input with glowing border
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = if (isDark) Color(0x551E2840) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, if (isDark) MaxStreamTheme.CrimsonAccentGlow else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
-                shadowElevation = 8.dp,
+                color = if (isDark) Color(0x66161B2E) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.90f),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, activeBorderBrush),
+                shadowElevation = 12.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(50.dp)
                     .testTag("liquid_glass_search_input_container")
             ) {
                 Row(

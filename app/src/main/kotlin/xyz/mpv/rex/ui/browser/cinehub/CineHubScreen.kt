@@ -85,6 +85,8 @@ import org.koin.compose.koinInject
 import xyz.mpv.rex.R
 import xyz.mpv.rex.cinehub.data.CineFolderMetadataManager
 import xyz.mpv.rex.cinehub.data.CineOnlineScraper
+import xyz.mpv.rex.cinehub.data.TMDBMovieNode
+import xyz.mpv.rex.cinehub.data.TMDBTvNode
 import xyz.mpv.rex.cinehub.data.KodiMediaScraper
 import xyz.mpv.rex.cinehub.data.NfoScanner
 import xyz.mpv.rex.cinehub.model.EpisodeItem
@@ -360,8 +362,13 @@ object CineHubScreen : Screen {
     val enableArtworkDownloads by browserPreferences.enableArtworkDownloads.collectAsState()
 
     var selectedCategory by remember { mutableStateOf("All") }
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
+    val searchQuery = CineHubSearchStateHolder.searchQuery
+    val isSearchActive = CineHubSearchStateHolder.isSearchActive
+
+    // Intercept Back button when Search is active to collapse Search and return to Home
+    androidx.activity.compose.BackHandler(enabled = isSearchActive) {
+      CineHubSearchStateHolder.isSearchActive = false
+    }
 
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -712,43 +719,75 @@ object CineHubScreen : Screen {
             // Liquid Glass Search Input Field (Expandable)
             item {
               xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamLiquidGlassSearch(
-                query = searchQuery,
+                query = CineHubSearchStateHolder.searchQuery,
                 onQueryChange = { query ->
-                  searchQuery = query
+                  CineHubSearchStateHolder.searchQuery = query
                   if (query.length >= 2) {
-                    isSearchActive = true
+                    CineHubSearchStateHolder.isSearchActive = true
+                    CineHubSearchStateHolder.isSearching = true
                     isSearchingOnline = true
                     scope.launch(Dispatchers.IO) {
+                      CineHubSearchStateHolder.addRecentSearch(query)
                       val activeProviders = providerRegistry.getEnabledProviders()
-                      android.util.Log.i("CineHubSearch", "Searching across ${activeProviders.size} enabled providers for: $query")
                       val extDeferreds = activeProviders.map { provider ->
                         async {
                           try {
                             provider.search(query)
                           } catch (t: Throwable) {
-                            android.util.Log.e("CineHubSearch", "Error in provider ${provider.name} search: ${t.message}", t)
                             emptyList()
                           }
                         }
                       }
+                      val tmdbMoviesDeferred = async {
+                        try {
+                          xyz.mpv.rex.cinehub.data.CineOnlineScraper.executeManualMovieSearch(query, context)
+                        } catch (t: Throwable) {
+                          emptyList()
+                        }
+                      }
+                      val tmdbTvDeferred = async {
+                        try {
+                          xyz.mpv.rex.cinehub.data.CineOnlineScraper.executeManualTvSearch(query, context)
+                        } catch (t: Throwable) {
+                          emptyList()
+                        }
+                      }
                       val extRes = extDeferreds.awaitAll().flatten()
+                      val tmdbMovies = tmdbMoviesDeferred.await()
+                      val tmdbTv = tmdbTvDeferred.await()
                       withContext(Dispatchers.Main) {
+                        CineHubSearchStateHolder.providerResults.clear()
+                        CineHubSearchStateHolder.providerResults.addAll(extRes)
+                        CineHubSearchStateHolder.tmdbMovieResults.clear()
+                        CineHubSearchStateHolder.tmdbMovieResults.addAll(tmdbMovies)
+                        CineHubSearchStateHolder.tmdbTvResults.clear()
+                        CineHubSearchStateHolder.tmdbTvResults.addAll(tmdbTv)
                         extensionSearchResults = extRes
                         isSearchingOnline = false
+                        CineHubSearchStateHolder.isSearching = false
+                        CineHubSearchStateHolder.hasSearched = true
                       }
                     }
                   } else {
                     if (query.isEmpty()) {
                       extensionSearchResults = emptyList()
+                      CineHubSearchStateHolder.providerResults.clear()
+                      CineHubSearchStateHolder.tmdbMovieResults.clear()
+                      CineHubSearchStateHolder.tmdbTvResults.clear()
+                      CineHubSearchStateHolder.hasSearched = false
                     }
                   }
                 },
-                isExpanded = isSearchActive,
+                isExpanded = CineHubSearchStateHolder.isSearchActive,
                 onExpandedChange = { expanded ->
-                  isSearchActive = expanded
+                  CineHubSearchStateHolder.isSearchActive = expanded
                   if (!expanded) {
-                    searchQuery = ""
+                    CineHubSearchStateHolder.searchQuery = ""
                     extensionSearchResults = emptyList()
+                    CineHubSearchStateHolder.providerResults.clear()
+                    CineHubSearchStateHolder.tmdbMovieResults.clear()
+                    CineHubSearchStateHolder.tmdbTvResults.clear()
+                    CineHubSearchStateHolder.hasSearched = false
                   }
                 },
                 modifier = Modifier
@@ -757,61 +796,255 @@ object CineHubScreen : Screen {
               )
             }
 
-            // If Search is Active, display Search Results
-            if (isSearchActive) {
-              item {
-                Text(
-                  text = "Search Results",
-                  style = MaterialTheme.typography.titleMedium,
-                  fontWeight = FontWeight.Bold,
-                  modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-              }
-
-              if (isSearchingOnline) {
+            // If Search is Active, display Search Discovery & Results
+            if (CineHubSearchStateHolder.isSearchActive) {
+              if (CineHubSearchStateHolder.searchQuery.isBlank()) {
+                item {
+                  xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamSearchSuggestions(
+                    selectedCategory = CineHubSearchStateHolder.selectedFilterCategory,
+                    onCategorySelect = { cat ->
+                      CineHubSearchStateHolder.selectedFilterCategory = cat
+                      if (cat != "All") {
+                        CineHubSearchStateHolder.searchQuery = cat
+                        CineHubSearchStateHolder.isSearching = true
+                        isSearchingOnline = true
+                        scope.launch(Dispatchers.IO) {
+                          val activeProviders = providerRegistry.getEnabledProviders()
+                          val extRes = activeProviders.map { provider ->
+                            async { runCatching { provider.search(cat) }.getOrDefault(emptyList()) }
+                          }.awaitAll().flatten()
+                          val tmdbM = runCatching { xyz.mpv.rex.cinehub.data.CineOnlineScraper.executeManualMovieSearch(cat, context) }.getOrDefault(emptyList())
+                          withContext(Dispatchers.Main) {
+                            CineHubSearchStateHolder.providerResults.clear()
+                            CineHubSearchStateHolder.providerResults.addAll(extRes)
+                            CineHubSearchStateHolder.tmdbMovieResults.clear()
+                            CineHubSearchStateHolder.tmdbMovieResults.addAll(tmdbM)
+                            extensionSearchResults = extRes
+                            isSearchingOnline = false
+                            CineHubSearchStateHolder.isSearching = false
+                            CineHubSearchStateHolder.hasSearched = true
+                          }
+                        }
+                      }
+                    },
+                    onQuerySelect = { query ->
+                      CineHubSearchStateHolder.searchQuery = query
+                      CineHubSearchStateHolder.isSearching = true
+                      isSearchingOnline = true
+                      scope.launch(Dispatchers.IO) {
+                        CineHubSearchStateHolder.addRecentSearch(query)
+                        val activeProviders = providerRegistry.getEnabledProviders()
+                        val extRes = activeProviders.map { provider ->
+                          async { runCatching { provider.search(query) }.getOrDefault(emptyList()) }
+                        }.awaitAll().flatten()
+                        val tmdbM = runCatching { xyz.mpv.rex.cinehub.data.CineOnlineScraper.executeManualMovieSearch(query, context) }.getOrDefault(emptyList())
+                        val tmdbT = runCatching { xyz.mpv.rex.cinehub.data.CineOnlineScraper.executeManualTvSearch(query, context) }.getOrDefault(emptyList())
+                        withContext(Dispatchers.Main) {
+                          CineHubSearchStateHolder.providerResults.clear()
+                          CineHubSearchStateHolder.providerResults.addAll(extRes)
+                          CineHubSearchStateHolder.tmdbMovieResults.clear()
+                          CineHubSearchStateHolder.tmdbMovieResults.addAll(tmdbM)
+                          CineHubSearchStateHolder.tmdbTvResults.clear()
+                          CineHubSearchStateHolder.tmdbTvResults.addAll(tmdbT)
+                          extensionSearchResults = extRes
+                          isSearchingOnline = false
+                          CineHubSearchStateHolder.isSearching = false
+                          CineHubSearchStateHolder.hasSearched = true
+                        }
+                      }
+                    },
+                    modifier = Modifier.padding(top = 8.dp)
+                  )
+                }
+              } else if (CineHubSearchStateHolder.isSearching || isSearchingOnline) {
                 item {
                   MaxStreamSkeletonRow(
                     itemCount = 4,
                     modifier = Modifier.padding(vertical = 12.dp)
                   )
                 }
-              } else if (extensionSearchResults.isEmpty()) {
-                item {
-                  Text(
-                    text = "No results found for \"$searchQuery\"",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
-                  )
-                }
               } else {
-                item {
-                  Text(
-                    text = "Extension Results",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                  )
+                // Build Unified Discovery Items (TMDB Movies + TMDB TV + Provider items)
+                val allDiscoveryItems = buildList {
+                  // TMDB Movies
+                  CineHubSearchStateHolder.tmdbMovieResults.forEach { movie ->
+                    add(
+                      xyz.mpv.rex.ui.browser.cinehub.components.DiscoveryMediaItem(
+                        id = "tmdb_m_${movie.id}",
+                        title = movie.title ?: "Untitled",
+                        posterUrl = movie.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                        backdropUrl = movie.backdrop_path?.let { "https://image.tmdb.org/t/p/original$it" },
+                        year = movie.release_date?.take(4),
+                        rating = movie.vote_average,
+                        mediaType = "MOVIE",
+                        providerName = "TMDB",
+                        rawItem = movie
+                      )
+                    )
+                  }
+                  // TMDB TV Shows
+                  CineHubSearchStateHolder.tmdbTvResults.forEach { tv ->
+                    add(
+                      xyz.mpv.rex.ui.browser.cinehub.components.DiscoveryMediaItem(
+                        id = "tmdb_tv_${tv.id}",
+                        title = tv.name ?: "Untitled",
+                        posterUrl = tv.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                        backdropUrl = tv.backdrop_path?.let { "https://image.tmdb.org/t/p/original$it" },
+                        year = tv.first_air_date?.take(4),
+                        rating = tv.vote_average,
+                        mediaType = "TV",
+                        providerName = "TMDB",
+                        rawItem = tv
+                      )
+                    )
+                  }
+                  // Provider Items
+                  extensionSearchResults.forEach { ext ->
+                    add(
+                      xyz.mpv.rex.ui.browser.cinehub.components.DiscoveryMediaItem(
+                        id = "ext_${ext.providerId}_${ext.url}",
+                        title = ext.title,
+                        posterUrl = ext.posterUrl,
+                        year = ext.year?.toString(),
+                        rating = 8.0,
+                        mediaType = if (ext.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) "TV" else if (ext.type == xyz.mpv.rex.cinehub.extension.api.TvType.Anime) "ANIME" else "MOVIE",
+                        providerName = ext.providerName,
+                        rawItem = ext
+                      )
+                    )
+                  }
                 }
-                items(extensionSearchResults) { extItem ->
-                  ExtensionSearchResultRow(
-                    item = extItem,
-                    onClick = {
-                      loadExtensionItemDetails(
-                        providerId = extItem.providerId,
-                        providerName = extItem.providerName,
-                        url = extItem.url,
-                        scope = scope,
-                        fallbackTitle = extItem.title,
-                        fallbackPoster = extItem.posterUrl,
-                        fallbackYear = extItem.year,
-                        fallbackType = if (extItem.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
-                      ) { details ->
-                        selectedDetailItem = details
+
+                if (allDiscoveryItems.isEmpty()) {
+                  item {
+                    Text(
+                      text = "No results found for \"${CineHubSearchStateHolder.searchQuery}\"",
+                      style = MaterialTheme.typography.bodyMedium,
+                      color = MaterialTheme.colorScheme.outline,
+                      modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                    )
+                  }
+                } else {
+                  item {
+                    Row(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                      Text(
+                        text = "Results (${allDiscoveryItems.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                      )
+                      Text(
+                        text = "TMDB & Streams",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                          fontWeight = FontWeight.SemiBold,
+                          fontSize = 11.sp
+                        ),
+                        color = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.ElectricCyan
+                      )
+                    }
+                  }
+
+                  // OTT Discovery Cards Horizontal Scrollable Rail
+                  item {
+                    LazyRow(
+                      contentPadding = PaddingValues(horizontal = 16.dp),
+                      horizontalArrangement = Arrangement.spacedBy(14.dp),
+                      modifier = Modifier.fillMaxWidth()
+                    ) {
+                      items(allDiscoveryItems, key = { it.id }) { discoveryItem ->
+                        xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamDiscoveryCard(
+                          item = discoveryItem,
+                          onClick = {
+                            val raw = discoveryItem.rawItem
+                            if (raw is CineHubSearchItem) {
+                              loadExtensionItemDetails(
+                                providerId = raw.providerId,
+                                providerName = raw.providerName,
+                                url = raw.url,
+                                scope = scope,
+                                fallbackTitle = raw.title,
+                                fallbackPoster = raw.posterUrl,
+                                fallbackYear = raw.year,
+                                fallbackType = if (raw.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
+                              ) { details ->
+                                selectedDetailItem = details
+                              }
+                            } else if (raw is xyz.mpv.rex.cinehub.data.TMDBMovieNode) {
+                              // Load TMDB movie item
+                              scope.launch(Dispatchers.IO) {
+                                val movieItem = xyz.mpv.rex.cinehub.data.CineOnlineScraper.getOrFetchMovie(
+                                  context = context,
+                                  fileName = raw.title ?: "Movie",
+                                  fallbackTmdbId = raw.id.toString()
+                                )
+                                withContext(Dispatchers.Main) {
+                                  if (movieItem != null) {
+                                    selectedDetailItem = movieItem
+                                  } else {
+                                    selectedDetailItem = raw
+                                  }
+                                }
+                              }
+                            } else if (raw is xyz.mpv.rex.cinehub.data.TMDBTvNode) {
+                              // Load TMDB TV item
+                              scope.launch(Dispatchers.IO) {
+                                val tvItem = xyz.mpv.rex.cinehub.data.CineOnlineScraper.getOrFetchTvShow(
+                                  context = context,
+                                  folderName = raw.name ?: "Series",
+                                  fallbackTmdbId = raw.id.toString()
+                                )
+                                withContext(Dispatchers.Main) {
+                                  if (tvItem != null) {
+                                    selectedDetailItem = tvItem
+                                  } else {
+                                    selectedDetailItem = raw
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        )
                       }
                     }
-                  )
+                  }
+
+                  // Extension detailed list rows for instant direct playback
+                  if (extensionSearchResults.isNotEmpty()) {
+                    item {
+                      Spacer(modifier = Modifier.height(12.dp))
+                      Text(
+                        text = "Instant Streams",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                      )
+                    }
+                    items(extensionSearchResults) { extItem ->
+                      ExtensionSearchResultRow(
+                        item = extItem,
+                        onClick = {
+                          loadExtensionItemDetails(
+                            providerId = extItem.providerId,
+                            providerName = extItem.providerName,
+                            url = extItem.url,
+                            scope = scope,
+                            fallbackTitle = extItem.title,
+                            fallbackPoster = extItem.posterUrl,
+                            fallbackYear = extItem.year,
+                            fallbackType = if (extItem.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
+                          ) { details ->
+                            selectedDetailItem = details
+                          }
+                        }
+                      )
+                    }
+                  }
                 }
               }
             } else {
@@ -907,6 +1140,31 @@ object CineHubScreen : Screen {
                           launchSource = "cinehub",
                           title = cwItem.title
                         )
+                      }
+                    }
+                  )
+                }
+              }
+
+              // My Watchlist Section (Below Continue Watching)
+              if (selectedCategory == "All" || selectedCategory == "Library") {
+                item {
+                  val watchlistItems = libraryItems.filter { it.watchStatus == 0 }
+                  val displayItems = if (watchlistItems.isNotEmpty()) watchlistItems else libraryItems
+                  xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamWatchlistSection(
+                    items = displayItems,
+                    onItemClick = { libraryItem ->
+                      loadExtensionItemDetails(
+                        providerId = libraryItem.apiName,
+                        providerName = libraryItem.apiName,
+                        url = libraryItem.url,
+                        scope = scope,
+                        fallbackTitle = libraryItem.title,
+                        fallbackPoster = libraryItem.posterUrl,
+                        fallbackYear = null,
+                        fallbackType = if (libraryItem.type == 1) TvType.TvSeries else TvType.Movie
+                      ) { details ->
+                        selectedDetailItem = details
                       }
                     }
                   )
@@ -1914,6 +2172,8 @@ fun CineDetailView(
   val tmdbId = when (item) {
     is MovieItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
     is TvShowItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
+    is TMDBMovieNode -> item.id.toString()
+    is TMDBTvNode -> item.id.toString()
     is ExtensionMediaDetails -> item.loadResponse.url
     is LoadResponse -> item.url
     is SearchResponse -> item.url
@@ -1923,6 +2183,8 @@ fun CineDetailView(
   }
   val isMovie = when (item) {
     is MovieItem -> true
+    is TMDBMovieNode -> true
+    is TMDBTvNode -> false
     is ExtensionMediaDetails -> item.loadResponse is MovieLoadResponse
     is MovieLoadResponse -> true
     is TvShowItem -> false
@@ -1939,6 +2201,8 @@ fun CineDetailView(
   val rawTitle = when (item) {
     is MovieItem -> item.title
     is TvShowItem -> item.title
+    is TMDBMovieNode -> item.title ?: ""
+    is TMDBTvNode -> item.name ?: ""
     is ExtensionMediaDetails -> item.loadResponse.name
     is LoadResponse -> item.name
     is SearchResponse -> item.name
@@ -1979,6 +2243,8 @@ fun CineDetailView(
   val rawPlot = when (item) {
     is MovieItem -> item.plot
     is TvShowItem -> item.plot
+    is TMDBMovieNode -> item.overview ?: ""
+    is TMDBTvNode -> item.overview ?: ""
     is ExtensionMediaDetails -> item.loadResponse.plot ?: ""
     is LoadResponse -> item.plot ?: ""
     is CineHubMediaDetails -> item.overview ?: ""
@@ -1987,6 +2253,8 @@ fun CineDetailView(
   val rawPosterPath = when (item) {
     is MovieItem -> item.posterPath
     is TvShowItem -> item.posterPath
+    is TMDBMovieNode -> item.poster_path?.let { "${CineOnlineScraper.THUMB_BASE_URL}$it" }
+    is TMDBTvNode -> item.poster_path?.let { "${CineOnlineScraper.THUMB_BASE_URL}$it" }
     is ExtensionMediaDetails -> item.loadResponse.posterUrl
     is LoadResponse -> item.posterUrl
     is SearchResponse -> item.posterUrl
@@ -1997,6 +2265,8 @@ fun CineDetailView(
   val rawBackdropPath = when (item) {
     is MovieItem -> item.backdropPath ?: item.posterPath
     is TvShowItem -> item.backdropPath ?: item.posterPath
+    is TMDBMovieNode -> (item.backdrop_path ?: item.poster_path)?.let { "${CineOnlineScraper.IMAGE_BASE_URL}$it" }
+    is TMDBTvNode -> (item.backdrop_path ?: item.poster_path)?.let { "${CineOnlineScraper.IMAGE_BASE_URL}$it" }
     is ExtensionMediaDetails -> item.loadResponse.backgroundPosterUrl ?: item.loadResponse.posterUrl
     is LoadResponse -> item.backgroundPosterUrl ?: item.posterUrl
     is CineHubMediaDetails -> item.backdropUrl ?: item.posterUrl
@@ -2006,6 +2276,8 @@ fun CineDetailView(
   val rawRating = when (item) {
     is MovieItem -> item.userRating
     is TvShowItem -> item.userRating
+    is TMDBMovieNode -> item.vote_average
+    is TMDBTvNode -> item.vote_average
     is ExtensionMediaDetails -> item.loadResponse.score?.score ?: 0.0
     is LoadResponse -> item.score?.score ?: 0.0
     is SearchResponse -> item.score?.score ?: 0.0
@@ -2014,6 +2286,8 @@ fun CineDetailView(
   val rawYear = when (item) {
     is MovieItem -> item.premiered.take(4)
     is TvShowItem -> item.premiered.take(4)
+    is TMDBMovieNode -> item.release_date?.take(4) ?: ""
+    is TMDBTvNode -> item.first_air_date?.take(4) ?: ""
     is ExtensionMediaDetails -> item.loadResponse.year?.toString() ?: ""
     is LoadResponse -> item.year?.toString() ?: ""
     is CineHubMediaDetails -> item.year?.toString() ?: ""
@@ -2022,6 +2296,8 @@ fun CineDetailView(
   val rawGenre = when (item) {
     is MovieItem -> item.genre
     is TvShowItem -> item.genre
+    is TMDBMovieNode -> "Movie"
+    is TMDBTvNode -> "Series"
     is ExtensionMediaDetails -> item.loadResponse.tags?.firstOrNull() ?: item.loadResponse.type.name
     is LoadResponse -> item.tags?.firstOrNull() ?: item.type.name
     is SearchResponse -> item.type?.name ?: ""
@@ -2038,6 +2314,8 @@ fun CineDetailView(
         val tmdbIdDigit = when {
           item is MovieItem && item.tmdbId.isNotBlank() && item.tmdbId.all { it.isDigit() } -> item.tmdbId
           item is TvShowItem && item.tmdbId.isNotBlank() && item.tmdbId.all { it.isDigit() } -> item.tmdbId
+          item is TMDBMovieNode -> item.id.toString()
+          item is TMDBTvNode -> item.id.toString()
           tmdbId.isNotBlank() && tmdbId.all { it.isDigit() } -> tmdbId
           else -> null
         }

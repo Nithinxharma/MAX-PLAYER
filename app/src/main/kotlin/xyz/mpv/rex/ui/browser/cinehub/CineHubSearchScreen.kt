@@ -119,7 +119,7 @@ fun CineHubSearchScreen(
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    var searchInput by remember { mutableStateOf("") }
+    var searchInput by remember { mutableStateOf(CineHubSearchStateHolder.searchQuery) }
     val searchResults by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val selectedDetails by viewModel.selectedMediaDetails.collectAsState()
@@ -129,16 +129,23 @@ fun CineHubSearchScreen(
 
     var activeEpisodeName by remember { mutableStateOf<String?>(null) }
 
+    // Intercept Back button when MediaDetailView is open to return to search results
+    androidx.activity.compose.BackHandler(enabled = selectedDetails != null) {
+        viewModel.clearSelection()
+    }
+
     // Quick suggestion genres
     val suggestions = listOf("Trending", "4K Action", "Sci-Fi", "Anime", "Drama", "Comedy", "Thriller", "Horror")
 
     // Automatically perform search with debounce as the user types
     LaunchedEffect(searchInput) {
+        CineHubSearchStateHolder.searchQuery = searchInput
         val query = searchInput.trim()
         if (query.isEmpty()) {
             viewModel.searchContent("")
         } else {
             delay(350)
+            CineHubSearchStateHolder.addRecentSearch(query)
             viewModel.searchContent(query)
         }
     }
@@ -282,7 +289,24 @@ fun CineHubSearchScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    if (isSearching) {
+                    if (searchInput.isBlank()) {
+                        // Rich OTT Search Suggestions (Recent, Trending, Popular, Filters)
+                        xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamSearchSuggestions(
+                            selectedCategory = CineHubSearchStateHolder.selectedFilterCategory,
+                            onCategorySelect = { cat ->
+                                CineHubSearchStateHolder.selectedFilterCategory = cat
+                                if (cat != "All") {
+                                    searchInput = cat
+                                    viewModel.searchContent(cat)
+                                }
+                            },
+                            onQuerySelect = { q ->
+                                searchInput = q
+                                CineHubSearchStateHolder.addRecentSearch(q)
+                                viewModel.searchContent(q)
+                            }
+                        )
+                    } else if (isSearching) {
                         // High Performance Skeleton Grid (replaces circular progress indicator)
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 130.dp),
