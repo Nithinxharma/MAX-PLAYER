@@ -735,11 +735,21 @@ object PreferencesScreen : Screen {
         title = "Provider Runtime Diagnostics",
         icon = Icons.Outlined.Assessment,
         confirmButton = {
-          MaxStreamGlassButton(
-            text = "Close",
-            variant = GlassButtonVariant.Primary,
-            onClick = { showProviderDiagnosticsDialog = false }
-          )
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MaxStreamGlassButton(
+              text = "Full Audit Center",
+              variant = GlassButtonVariant.Secondary,
+              onClick = {
+                showProviderDiagnosticsDialog = false
+                backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen)
+              }
+            )
+            MaxStreamGlassButton(
+              text = "Close",
+              variant = GlassButtonVariant.Primary,
+              onClick = { showProviderDiagnosticsDialog = false }
+            )
+          }
         }
       ) {
         Column(
