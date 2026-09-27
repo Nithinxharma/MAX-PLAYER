@@ -109,8 +109,9 @@ fun BaseMediaCard(
         label = "cardScale"
     )
     val cardBackground by animateColorAsState(
-        targetValue = if (isSelected) (if (isDark) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
-                      else if (isRecentlyPlayed) Color(0xFF141420).copy(alpha = 0.65f)
+        targetValue = if (isSelected) (if (isDark) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.24f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
+                      else if (isRecentlyPlayed) Color(0x35141424)
+                      else if (isDark) Color(0x18FFFFFF)
                       else Color.Transparent,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "cardBackground"
@@ -136,12 +137,13 @@ fun BaseMediaCard(
             }
             .clip(cardShape)
             .background(cardBackground)
-            .then(
-                if (isRecentlyPlayed && !isSelected) Modifier.border(
-                    1.dp,
-                    Color.White.copy(alpha = 0.10f),
-                    cardShape
-                ) else Modifier
+            .border(
+                width = if (isSelected) 1.5.dp else 1.dp,
+                color = if (isSelected) MaxStreamTheme.CrimsonAccent
+                        else if (isRecentlyPlayed) Color.White.copy(alpha = 0.14f)
+                        else if (isDark) Color.White.copy(alpha = 0.08f)
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.10f),
+                shape = cardShape
             )
             .combinedClickable(
                 onClick = onClick,

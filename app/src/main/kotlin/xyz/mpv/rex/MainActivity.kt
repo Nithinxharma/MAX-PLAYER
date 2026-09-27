@@ -109,12 +109,11 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
     setContent {
       android.util.Log.d("APP_STARTUP", "APP_STAGE_2_SETCONTENT")
       // Set up theme and edge-to-edge display
-      val dark by appearancePreferences.darkMode.collectAsState()
-      val isSystemInDarkTheme = isSystemInDarkTheme()
-      val isDarkMode = dark == DarkMode.Dark || (dark == DarkMode.System && isSystemInDarkTheme)
+      // Enforce Dark Mode edge-to-edge display
+      val isDarkMode = true
       enableEdgeToEdge(
         SystemBarStyle.auto(
-          lightScrim = Color.White.toArgb(),
+          lightScrim = Color.Transparent.toArgb(),
           darkScrim = Color.Transparent.toArgb(),
         ) { isDarkMode },
       )

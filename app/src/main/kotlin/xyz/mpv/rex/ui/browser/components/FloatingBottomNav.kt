@@ -64,14 +64,8 @@ fun FloatingBottomNav(
 ) {
   if (tabs.isEmpty()) return
 
-  val isDark = isSystemInDarkTheme()
-
-  // Original REX player controls glass container background
-  val containerBg = if (isDark) {
-    Color(0x3B12131D)
-  } else {
-    Color(0x45141624)
-  }
+  // Forced Dark Mode glass container background with high-depth translucency
+  val containerBg = Color(0x6610121E)
 
   Box(
     modifier = modifier
@@ -82,17 +76,17 @@ fun FloatingBottomNav(
     Box(
       modifier = Modifier
         .widthIn(max = 440.dp)
-        .height(62.dp)
+        .height(64.dp)
         .glassSurface(
-          shape = RoundedCornerShape(31.dp),
+          shape = RoundedCornerShape(32.dp),
           backgroundColor = containerBg,
-          borderColor = Color.White.copy(alpha = 0.16f),
+          borderColor = Color.White.copy(alpha = 0.18f),
           borderWidth = 1.dp,
-          innerHighlightColor = Color.White.copy(alpha = 0.30f),
+          innerHighlightColor = Color.White.copy(alpha = 0.35f),
           innerHighlightBlur = 6.dp,
           innerHighlightOffsetX = (-2).dp,
           innerHighlightOffsetY = (-2).dp,
-          innerShadowColor = Color.Black.copy(alpha = 0.35f),
+          innerShadowColor = Color.Black.copy(alpha = 0.45f),
           innerShadowBlur = 6.dp,
           innerShadowOffsetX = 2.dp,
           innerShadowOffsetY = 2.dp
@@ -102,7 +96,7 @@ fun FloatingBottomNav(
       Row(
         modifier = Modifier
           .fillMaxSize()
-          .padding(horizontal = 6.dp),
+          .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
       ) {
@@ -134,14 +128,14 @@ fun FloatingBottomNav(
           val tabGlassModifier = if (isSelected) {
             Modifier.glassSurface(
               shape = CircleShape,
-              backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
-              borderColor = Color.White.copy(alpha = 0.35f),
+              backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+              borderColor = Color.White.copy(alpha = 0.40f),
               borderWidth = 1.dp,
-              innerHighlightColor = Color.White.copy(alpha = 0.45f),
+              innerHighlightColor = Color.White.copy(alpha = 0.50f),
               innerHighlightBlur = 4.dp,
               innerHighlightOffsetX = (-1.5).dp,
               innerHighlightOffsetY = (-1.5).dp,
-              innerShadowColor = Color.Black.copy(alpha = 0.30f),
+              innerShadowColor = Color.Black.copy(alpha = 0.35f),
               innerShadowBlur = 4.dp,
               innerShadowOffsetX = 1.5.dp,
               innerShadowOffsetY = 1.5.dp
@@ -154,7 +148,7 @@ fun FloatingBottomNav(
 
           Box(
             modifier = Modifier
-              .size(46.dp)
+              .size(48.dp)
               .then(tabGlassModifier)
               .clip(CircleShape)
               .clickable(

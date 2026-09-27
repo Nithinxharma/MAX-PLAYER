@@ -217,3 +217,31 @@
     java.lang.Object writeReplace();
     java.lang.Object readResolve();
 }
+
+# ==============================================================================
+# R8 / ProGuard Missing Class Rules (fixes :app:minifyReleaseWithR8)
+# ==============================================================================
+# Jsoup optional Re2j regex dependency (referenced by Re2jRegex helper but optional at runtime)
+-dontwarn com.google.re2j.**
+
+# Jackson databind optional java.beans annotations (not present in Android standard runtime)
+-dontwarn java.beans.**
+
+# ==============================================================================
+# CloudStream Compatibility & Plugin Runtime Preservation
+# ==============================================================================
+# Preserve all CloudStream SDK classes, interfaces, plugins, providers, and extractors
+-keep class com.lagradost.cloudstream3.** { *; }
+-keep interface com.lagradost.cloudstream3.** { *; }
+
+# Preserve CineHub provider extensions and interfaces
+-keep class xyz.mpv.rex.cinehub.extension.** { *; }
+-keep interface xyz.mpv.rex.cinehub.extension.** { *; }
+
+# Preserve Jackson JSON databind and Kotlin serialization classes for plugin responses
+-keep class com.fasterxml.jackson.** { *; }
+-dontwarn com.fasterxml.jackson.**
+
+# Preserve Jsoup HTML parsing classes used by scrapers and providers
+-keep class org.jsoup.** { *; }
+-dontwarn org.jsoup.**

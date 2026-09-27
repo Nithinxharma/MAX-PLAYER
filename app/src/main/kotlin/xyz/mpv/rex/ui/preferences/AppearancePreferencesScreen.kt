@@ -197,14 +197,33 @@ object AppearancePreferencesScreen : Screen {
                                 ),
                             ) {
                                 Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                    MultiChoiceSegmentedButton(
-                                        choices = DarkMode.entries.map { stringResource(it.titleRes) }.toImmutableList(),
-                                        selectedIndices = persistentListOf(DarkMode.entries.indexOf(darkMode)),
-                                        onClick = { preferences.darkMode.set(DarkMode.entries[it]) },
-                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_darkmode_dark),
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        androidx.compose.material3.Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                        ) {
+                                            Text(
+                                                text = "Forced Dark",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
                                     ThemePicker(
                                         currentTheme = appTheme,
-                                        isDarkMode = isDarkMode,
+                                        isDarkMode = true,
                                         onThemeSelected = { preferences.appTheme.set(it) },
                                         modifier = Modifier.padding(vertical = 8.dp),
                                     )
@@ -218,7 +237,7 @@ object AppearancePreferencesScreen : Screen {
                                                 color = MaterialTheme.colorScheme.outline,
                                             )
                                         },
-                                        enabled = darkMode != DarkMode.Light,
+                                        enabled = true,
                                     )
                                 }
                             }
@@ -355,16 +374,16 @@ object AppearancePreferencesScreen : Screen {
                         GroupedListColumn {
                             GroupedPreferenceCard(
                                 position = GroupPosition.FIRST,
-                                highlightKey = R.string.pref_appearance_tab_home_title,
+                                highlightKey = R.string.pref_appearance_tab_cinehub_title,
                             ) {
                                 SwitchPreference(
                                     value = true,
                                     onValueChange = {},
                                     enabled = false,
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_home_title)) },
+                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinehub_title)) },
                                     summary = {
                                         Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_home_summary),
+                                            text = "Default launch destination (Always active)",
                                             color = MaterialTheme.colorScheme.outline,
                                         )
                                     }
@@ -439,22 +458,6 @@ object AppearancePreferencesScreen : Screen {
                                 )
                             }
 
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_cinehub_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableTabCineHub,
-                                    onValueChange = { browserPreferences.enableTabCineHub.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinehub_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_cinehub_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
                             GroupedPreferenceCard(
                                 position = GroupPosition.LAST,
                                 highlightKey = R.string.pref_appearance_tab_cinetv_title,

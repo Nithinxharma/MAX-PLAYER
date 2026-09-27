@@ -204,14 +204,10 @@ object MainScreen : Screen {
 
     val visibleTabs = remember(
       isShortsEnabled, isCineHubTabVisible, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      homeLabel, shortsLabel, cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
+      cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
-        add(
-          VisibleTab("library", "Local Library", icon = Icons.Rounded.Folder) {
-            MediaLibraryContent()
-          }
-        )
+        // Max Stream (CineHub) is the primary launch destination
         if (isCineHubTabVisible) {
           add(
             VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
@@ -319,7 +315,7 @@ object MainScreen : Screen {
       }
     }
 
-    val isHomeTabActive = selectedTab in visibleTabs.indices && visibleTabs[selectedTab].id == "home"
+    val isHomeTabActive = selectedTab in visibleTabs.indices && visibleTabs[selectedTab].id == "cinehub"
 
     LaunchedEffect(
       isHomeTabActive,
@@ -440,8 +436,8 @@ object MainScreen : Screen {
         AnimatedContent(
           targetState = selectedTab,
           transitionSpec = {
-            val slideDistance = with(density) { 48.dp.roundToPx() }
-            val animationDuration = 250
+            val slideDistance = with(density) { 36.dp.roundToPx() }
+            val animationDuration = 220
             
             if (targetState > initialState) {
               (slideInHorizontally(
@@ -509,7 +505,7 @@ object MainScreen : Screen {
             if (targetTab in visibleTabs.indices) {
               visibleTabs[targetTab].content()
             } else {
-              FolderListScreen.Content()
+              CineHubScreen.Content()
             }
           }
         }

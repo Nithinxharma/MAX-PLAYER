@@ -66,19 +66,21 @@ object CryptoJS {
 
         while (numberOfDerivedBytes < targetKeySize) {
             md5.reset()
-            if (block != null) md5.update(block)
+            val currentBlock = block
+            if (currentBlock != null) md5.update(currentBlock)
             md5.update(password)
             md5.update(salt)
-            block = md5.digest()
+            var currentDigest = md5.digest()
 
             for (i in 1 until iterations) {
                 md5.reset()
-                md5.update(block)
-                block = md5.digest()
+                md5.update(currentDigest)
+                currentDigest = md5.digest()
             }
 
-            val copyLength = min(block.size, targetKeySize - numberOfDerivedBytes)
-            block.copyInto(derivedBytes, numberOfDerivedBytes, 0, copyLength)
+            block = currentDigest
+            val copyLength = min(currentDigest.size, targetKeySize - numberOfDerivedBytes)
+            currentDigest.copyInto(derivedBytes, numberOfDerivedBytes, 0, copyLength)
             numberOfDerivedBytes += copyLength
         }
 
