@@ -49,8 +49,8 @@ fun PlayerPanels(
 
 val CARDS_MAX_WIDTH = 420.dp
 val panelCardsColors: @Composable () -> CardColors = {
-  // Higher alpha for better readability in panels (less transparent)
-  val alpha = 0.85f
+  // Higher alpha for better readability and consistent glass styling
+  val alpha = 0.92f
 
   CardDefaults.cardColors(
     containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = alpha),

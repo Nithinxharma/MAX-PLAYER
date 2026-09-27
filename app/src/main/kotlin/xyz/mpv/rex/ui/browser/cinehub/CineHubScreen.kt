@@ -2325,6 +2325,87 @@ fun CineDetailView(
       .offset { IntOffset(0, animatedOffsetY.roundToInt()) }
       .background(MaterialTheme.colorScheme.background)
   ) {
+    if (isTmdbEnriching && tmdbEnrichedMovie == null && tmdbEnrichedTvShow == null && item !is MovieItem && item !is TvShowItem) {
+      // Phase 4: TMDB-style loading state to prevent flashing temporary scraped/provider metadata
+      Column(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(bottom = 56.dp)
+      ) {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .maxStreamShimmer(shape = RoundedCornerShape(0.dp))
+        )
+        Column(
+          modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+          verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Top
+          ) {
+            Box(
+              modifier = Modifier
+                .width(100.dp)
+                .height(148.dp)
+                .maxStreamShimmer(shape = RoundedCornerShape(14.dp))
+            )
+            Column(
+              modifier = Modifier.weight(1f),
+              verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth(0.85f)
+                  .height(24.dp)
+                  .maxStreamShimmer(shape = RoundedCornerShape(6.dp))
+              )
+              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                  modifier = Modifier
+                    .width(60.dp)
+                    .height(22.dp)
+                    .maxStreamShimmer(shape = RoundedCornerShape(8.dp))
+                )
+                Box(
+                  modifier = Modifier
+                    .width(70.dp)
+                    .height(22.dp)
+                    .maxStreamShimmer(shape = RoundedCornerShape(8.dp))
+                )
+              }
+              Box(
+                modifier = Modifier
+                  .width(50.dp)
+                  .height(22.dp)
+                  .maxStreamShimmer(shape = RoundedCornerShape(8.dp))
+              )
+            }
+          }
+          Spacer(modifier = Modifier.height(8.dp))
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(16.dp)
+              .maxStreamShimmer(shape = RoundedCornerShape(4.dp))
+          )
+          Box(
+            modifier = Modifier
+              .fillMaxWidth(0.9f)
+              .height(16.dp)
+              .maxStreamShimmer(shape = RoundedCornerShape(4.dp))
+          )
+          Box(
+            modifier = Modifier
+              .fillMaxWidth(0.7f)
+              .height(16.dp)
+              .maxStreamShimmer(shape = RoundedCornerShape(4.dp))
+          )
+        }
+      }
+    } else {
     Column(
       modifier = Modifier
         .fillMaxSize()
@@ -3530,6 +3611,7 @@ fun CineDetailView(
         }
       }
     }
+  }
 
     if (detailPendingLinks.isNotEmpty()) {
       QualitySelectorBottomSheet(

@@ -135,27 +135,29 @@ fun AudioTrackCard(
 ) {
   val title = getTrackTitle(track)
   val containerColor = if (isSelected) {
-    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
   } else {
-    MaterialTheme.colorScheme.surfaceContainerHigh
+    androidx.compose.ui.graphics.Color(0x3812131D)
   }
   val borderColor = if (isSelected) {
-    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-  } else androidx.compose.ui.graphics.Color.Transparent
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+  } else {
+    androidx.compose.ui.graphics.Color.White.copy(alpha = 0.12f)
+  }
 
   androidx.compose.material3.Surface(
     modifier = modifier.fillMaxWidth(),
-    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
     color = containerColor,
-    border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, borderColor) else null,
+    border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
     onClick = onClick,
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 14.dp, vertical = 10.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
       RadioButton(
         selected = isSelected,
@@ -169,7 +171,7 @@ fun AudioTrackCard(
           text = title,
           style = MaterialTheme.typography.bodyMedium,
           fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-          color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+          color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
         val badges = remember(track) {
           buildList {
@@ -199,8 +201,8 @@ fun AudioTrackCard(
             for (badge in badges) {
               androidx.compose.material3.Surface(
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
-                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                        else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f),
               ) {
                 Text(
                   text = badge,
@@ -227,27 +229,29 @@ fun AudioTrackRow(
   modifier: Modifier = Modifier,
 ) {
   val containerColor = if (isSelected) {
-    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
   } else {
-    MaterialTheme.colorScheme.surfaceContainerHigh
+    androidx.compose.ui.graphics.Color(0x3812131D)
   }
   val borderColor = if (isSelected) {
-    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-  } else androidx.compose.ui.graphics.Color.Transparent
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+  } else {
+    androidx.compose.ui.graphics.Color.White.copy(alpha = 0.12f)
+  }
 
   androidx.compose.material3.Surface(
     modifier = modifier.fillMaxWidth(),
-    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
     color = containerColor,
-    border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, borderColor) else null,
+    border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
     onClick = onClick,
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 14.dp, vertical = 10.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
       RadioButton(
         selected = isSelected,
@@ -257,7 +261,7 @@ fun AudioTrackRow(
         text = title,
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
       )
     }
   }

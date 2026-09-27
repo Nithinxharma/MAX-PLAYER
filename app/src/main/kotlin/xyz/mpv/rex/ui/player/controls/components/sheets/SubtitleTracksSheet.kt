@@ -134,27 +134,29 @@ fun SubtitleTrackRow(
 ) {
   val title = getTrackTitle(track)
   val containerColor = if (isSelected) {
-    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
   } else {
-    MaterialTheme.colorScheme.surfaceContainerHigh
+    androidx.compose.ui.graphics.Color(0x3812131D)
   }
   val borderColor = if (isSelected) {
-    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-  } else androidx.compose.ui.graphics.Color.Transparent
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+  } else {
+    androidx.compose.ui.graphics.Color.White.copy(alpha = 0.12f)
+  }
 
   Surface(
     modifier = modifier.fillMaxWidth(),
-    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
     color = containerColor,
-    border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, borderColor) else null,
+    border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
     onClick = onToggle,
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 10.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
       Checkbox(
         checked = isSelected,
@@ -168,7 +170,7 @@ fun SubtitleTrackRow(
           text = title,
           style = MaterialTheme.typography.bodyMedium,
           fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-          color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+          color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
         val badges = remember(track, isPrimary) {
           buildList {
@@ -190,8 +192,8 @@ fun SubtitleTrackRow(
               Surface(
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
                 color = if (badge == "Primary") MaterialTheme.colorScheme.primary
-                        else if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                        else if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                        else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.08f),
               ) {
                 Text(
                   text = badge,
@@ -231,27 +233,29 @@ fun SubtitleTrackRow(
   modifier: Modifier = Modifier,
 ) {
   val containerColor = if (isSelected) {
-    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
   } else {
-    MaterialTheme.colorScheme.surfaceContainerHigh
+    androidx.compose.ui.graphics.Color(0x3812131D)
   }
   val borderColor = if (isSelected) {
-    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-  } else androidx.compose.ui.graphics.Color.Transparent
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+  } else {
+    androidx.compose.ui.graphics.Color.White.copy(alpha = 0.12f)
+  }
 
   Surface(
     modifier = modifier.fillMaxWidth(),
-    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
     color = containerColor,
-    border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, borderColor) else null,
+    border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
     onClick = onToggle,
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 10.dp),
+        .padding(horizontal = 16.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
       Checkbox(
         checked = isSelected,
@@ -261,7 +265,7 @@ fun SubtitleTrackRow(
         text = if (isPrimary) "$title [primary]" else title,
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.weight(1f),
       )
       if (isExternal) {

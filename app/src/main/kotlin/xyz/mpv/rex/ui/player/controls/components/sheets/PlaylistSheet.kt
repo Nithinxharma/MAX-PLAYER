@@ -525,16 +525,20 @@ fun PlaylistTrackListItem(
     Modifier.border(
       width = 2.dp,
       color = Color.Red,
-      shape = RoundedCornerShape(12.dp),
+      shape = RoundedCornerShape(14.dp),
     )
   } else if (item.isPlaying) {
     Modifier.border(
-      width = 2.dp,
+      width = 1.5.dp,
       brush = Brush.linearGradient(listOf(accentColor, accentSecondary)),
-      shape = RoundedCornerShape(12.dp),
+      shape = RoundedCornerShape(14.dp),
     )
   } else {
-    Modifier
+    Modifier.border(
+      width = 1.dp,
+      color = Color.White.copy(alpha = 0.08f),
+      shape = RoundedCornerShape(14.dp),
+    )
   }
 
   val clickModifier = if (isInSelectionMode) {
@@ -553,17 +557,17 @@ fun PlaylistTrackListItem(
         horizontal = MaterialTheme.spacing.medium,
         vertical = MaterialTheme.spacing.extraSmall,
       )
-      .clip(RoundedCornerShape(12.dp))
+      .clip(RoundedCornerShape(14.dp))
       .then(borderModifier)
       .then(clickModifier),
     color = if (isSelected) {
       Color.Red.copy(alpha = 0.2f)
     } else if (item.isPlaying) {
-      MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+      MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
     } else {
-      Color.Transparent
+      Color(0x3812131D)
     },
-    shape = RoundedCornerShape(12.dp),
+    shape = RoundedCornerShape(14.dp),
   ) {
     Row(
       modifier = Modifier

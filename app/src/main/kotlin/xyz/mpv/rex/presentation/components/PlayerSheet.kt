@@ -9,8 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.rememberSplineBasedDecay
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
@@ -168,9 +170,10 @@ fun PlayerSheet(
             WindowInsets.systemBars
               .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
           ).imePadding(),
-      shape = MaterialTheme.shapes.extraLargeIncreased.copy(bottomEnd = ZeroCornerSize, bottomStart = ZeroCornerSize),
-      color = surfaceColor ?: MaterialTheme.colorScheme.surfaceContainerLow,
+      shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+      color = surfaceColor ?: Color(0xEE12131D),
       tonalElevation = tonalElevation,
+      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
       content = {
         BackHandler(
           enabled = anchoredDraggableState.targetValue == 0,
@@ -183,10 +186,10 @@ fun PlayerSheet(
             Box(
                 modifier = Modifier
                     .padding(vertical = 12.dp)
-                    .size(width = 36.dp, height = 4.dp)
+                    .size(width = 38.dp, height = 4.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        shape = xyz.mpv.rex.ui.theme.pillShape
+                        color = Color.White.copy(alpha = 0.35f),
+                        shape = RoundedCornerShape(2.dp)
                     )
             )
             content()
