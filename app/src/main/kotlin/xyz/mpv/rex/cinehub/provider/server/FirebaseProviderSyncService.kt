@@ -273,20 +273,40 @@ class FirebaseProviderSyncService(
 
             val isAllowAll = planConfig.allowAllExtensions
 
-            // STEP 6: Query extensions collection directly using extension document IDs
+            // STEP 6: Query and index extension catalog from ALL sources (Firestore, Room repos, Built-in presets, Local disk)
             _syncStatus.value = "Querying extension catalog..."
-            val availableExtensionsMap = mutableMapOf<String, AvailablePlugin>()
+            val allCatalogPlugins = mutableListOf<AvailablePlugin>()
 
-            // 6a. Fetch from Firestore `extensions` collection
+            // 6a. Fetch from built-in presets and user registered repositories first to ensure download URLs exist
+            val allRepoUrls = mutableSetOf<String>()
+            RepositoryManager.BUILT_IN_PRESETS.forEach { allRepoUrls.add(it.url) }
+            runCatching {
+                db.extensionDao().getAllRepositoriesSync().forEach { allRepoUrls.add(it.url) }
+            }
+
+            for (repoUrl in allRepoUrls) {
+                val plugins = fetchRepositoryPlugins(repoUrl)
+                allCatalogPlugins.addAll(plugins)
+            }
+
+            // 6b. Fetch from Firestore `extensions` collection and merge / override
             try {
                 val extensionsSnap = firestore.collection(EXTENSIONS_COLLECTION).get().await()
                 if (extensionsSnap != null && !extensionsSnap.isEmpty) {
                     for (doc in extensionsSnap.documents) {
                         val ext = FirestoreExtension.fromSnapshot(doc)
-                        if (ext.enabled && ext.url.isNotBlank()) {
-                            val plugin = ext.toAvailablePlugin()
-                            val key = ext.internalName.ifBlank { ext.id }.trim().lowercase(Locale.ROOT)
-                            availableExtensionsMap[key] = plugin
+                        if (ext.enabled) {
+                            var plugin = ext.toAvailablePlugin()
+                            // If Firestore doc is missing a direct download url, link it with matching repo plugin
+                            if (plugin.url.isBlank()) {
+                                val matchedRepoPlugin = allCatalogPlugins.firstOrNull { 
+                                    matchesExtensionOrProvider(ext.internalName, it) || matchesExtensionOrProvider(ext.name, it) 
+                                }
+                                if (matchedRepoPlugin != null && matchedRepoPlugin.url.isNotBlank()) {
+                                    plugin = plugin.copy(url = matchedRepoPlugin.url)
+                                }
+                            }
+                            allCatalogPlugins.add(plugin)
                         }
                     }
                 }
@@ -294,54 +314,52 @@ class FirebaseProviderSyncService(
                 Log.w(TAG, "Error querying extensions collection: ${e.message}")
             }
 
-            // 6b. Fallback: If Firestore `extensions` collection is not yet populated, discover from preset manifests
-            if (availableExtensionsMap.isEmpty()) {
-                Log.i(TAG, "EXTENSION_SYNC: Extensions collection is empty in Firestore. Sourcing from catalog manifests...")
-                for (preset in RepositoryManager.BUILT_IN_PRESETS) {
-                    val plugins = fetchRepositoryPlugins(preset.url)
-                    for (p in plugins) {
-                        val key = p.internalName.trim().lowercase(Locale.ROOT)
-                        if (!availableExtensionsMap.containsKey(key)) {
-                            availableExtensionsMap[key] = p
-                        }
-                    }
-                }
+            // Deduplicate catalog by normalized key
+            val masterCatalog = allCatalogPlugins.distinctBy { 
+                it.internalName.ifBlank { it.name }.trim().lowercase(Locale.ROOT) 
             }
+            Log.i(TAG, "EXTENSION_SYNC: Built master catalog with ${masterCatalog.size} available plugins across all sources.")
 
-            // STEP 7: Compute final target extensions to install
+            // STEP 7: Compute final target extensions to install (Extension Name = Provider Name matching)
             val targetPluginsToInstall = mutableListOf<AvailablePlugin>()
             val resolvedIdsList = mutableListOf<String>()
 
             if (isAllowAll) {
                 // All available extensions minus blocked
-                for ((key, plugin) in availableExtensionsMap) {
+                for (plugin in masterCatalog) {
+                    val key = plugin.internalName.trim().lowercase(Locale.ROOT)
                     val pluginNameKey = plugin.name.trim().lowercase(Locale.ROOT)
-                    if (!blockedSet.contains(key) && !blockedSet.contains(pluginNameKey)) {
+                    if (!blockedSet.contains(key) && !blockedSet.contains(pluginNameKey) && 
+                        !blockedSet.any { matchesExtensionOrProvider(it, plugin) }) {
                         targetPluginsToInstall.add(plugin)
-                        resolvedIdsList.add(key)
+                        resolvedIdsList.add(plugin.name)
                     }
                 }
             } else {
                 // Exact match of (plan.allowedExtensions + customExtensions - blockedExtensions)
-                val targetIds = (planSet + customSet) - blockedSet
+                // Supports extensionName == providerName, internalName, and partial identifiers
+                val targetIds = (planSet + customSet).filterNot { target ->
+                    blockedSet.contains(target) || blockedSet.any { b -> b.equals(target, ignoreCase = true) }
+                }
+
                 for (targetId in targetIds) {
-                    val cleanId = targetId.trim().lowercase(Locale.ROOT)
-                    val matchedPlugin = availableExtensionsMap[cleanId] 
-                        ?: availableExtensionsMap.values.firstOrNull { 
-                            it.name.trim().lowercase(Locale.ROOT) == cleanId || 
-                            it.internalName.trim().lowercase(Locale.ROOT) == cleanId 
-                        }
+                    val matchedPlugin = masterCatalog.firstOrNull { plugin ->
+                        matchesExtensionOrProvider(targetId, plugin)
+                    }
+
                     if (matchedPlugin != null) {
-                        targetPluginsToInstall.add(matchedPlugin)
-                        resolvedIdsList.add(cleanId)
+                        if (!targetPluginsToInstall.any { it.internalName.equals(matchedPlugin.internalName, ignoreCase = true) }) {
+                            targetPluginsToInstall.add(matchedPlugin)
+                            resolvedIdsList.add(matchedPlugin.name)
+                        }
                     } else {
-                        Log.d(TAG, "EXTENSION_SYNC: Target extension ID '$cleanId' requested by plan/custom, but not yet present in catalog.")
+                        Log.w(TAG, "EXTENSION_SYNC: Target extension/provider '$targetId' requested by plan/custom, but not yet present in repository catalogs.")
                     }
                 }
             }
 
             _resolvedExtensionIds.value = resolvedIdsList
-            Log.i(TAG, "EXTENSION_SYNC: Resolved ${targetPluginsToInstall.size} target extensions for user $uid: $resolvedIdsList")
+            Log.i(TAG, "EXTENSION_SYNC: Resolved ${targetPluginsToInstall.size} target extensions for user $uid: ${targetPluginsToInstall.map { "${it.name} (${it.internalName})" }}")
 
             // STEP 8: Remove blocked or disallowed extensions if currently installed
             val currentInstalled = db.extensionDao().getAllInstalledExtensionsSync()
@@ -529,49 +547,98 @@ class FirebaseProviderSyncService(
     }
 
     /**
+     * Intelligent matching algorithm equating extension name and provider name.
+     * Matches across:
+     * - Name (case-insensitive & stripped of punctuation/whitespace)
+     * - InternalName / package ID (case-insensitive & stripped)
+     * - Substring containment (e.g. "superstream" matches "com.lagradost.superstream" or "SuperStream Provider")
+     * - Authors / tvTypes / inner provider lists
+     */
+    fun matchesExtensionOrProvider(targetId: String, plugin: AvailablePlugin): Boolean {
+        val cleanTarget = targetId.trim().lowercase(Locale.ROOT)
+        if (cleanTarget.isBlank()) return false
+        val normTarget = cleanTarget.replace(Regex("""[^a-z0-9]"""), "")
+
+        val pName = plugin.name.trim().lowercase(Locale.ROOT)
+        val pInternal = plugin.internalName.trim().lowercase(Locale.ROOT)
+        val normName = pName.replace(Regex("""[^a-z0-9]"""), "")
+        val normInternal = pInternal.replace(Regex("""[^a-z0-9]"""), "")
+
+        // 1. Direct or normalized match
+        if (pName == cleanTarget || pInternal == cleanTarget) return true
+        if (normTarget.isNotEmpty() && (normName == normTarget || normInternal == normTarget)) return true
+
+        // 2. Substring & prefix matching
+        if (normTarget.isNotEmpty() && normInternal.isNotEmpty()) {
+            if (normInternal.contains(normTarget) || normTarget.contains(normInternal)) return true
+        }
+        if (normTarget.isNotEmpty() && normName.isNotEmpty()) {
+            if (normName.contains(normTarget) || normTarget.contains(normName)) return true
+        }
+
+        // 3. Match against inner providers / metadata
+        if (plugin.authors.any { it.trim().lowercase(Locale.ROOT).replace(Regex("""[^a-z0-9]"""), "") == normTarget }) return true
+        if (plugin.tvTypes.any { it.trim().lowercase(Locale.ROOT).replace(Regex("""[^a-z0-9]"""), "") == normTarget }) return true
+
+        return false
+    }
+
+    /**
      * Fetches all available extensions in the system with full metadata.
      */
     suspend fun fetchAllAvailableExtensions(): List<FirestoreExtension> = withContext(Dispatchers.IO) {
         val result = mutableMapOf<String, FirestoreExtension>()
+
+        // 1. Fill from all built-in preset catalogs & user repos
+        val allRepoUrls = mutableSetOf<String>()
+        RepositoryManager.BUILT_IN_PRESETS.forEach { allRepoUrls.add(it.url) }
+        runCatching {
+            db.extensionDao().getAllRepositoriesSync().forEach { allRepoUrls.add(it.url) }
+        }
+
+        for (repoUrl in allRepoUrls) {
+            val plugins = fetchRepositoryPlugins(repoUrl)
+            for (p in plugins) {
+                val key = p.internalName.ifBlank { p.name }.trim().lowercase(Locale.ROOT)
+                val repoName = RepositoryManager.BUILT_IN_PRESETS.firstOrNull { it.url == repoUrl }?.name ?: "Repository"
+                result[key] = FirestoreExtension(
+                    id = key,
+                    name = p.name,
+                    internalName = p.internalName,
+                    repository = repoName,
+                    repositoryUrl = repoUrl,
+                    url = p.url,
+                    tvUrl = p.tvUrl,
+                    iconUrl = p.iconUrl,
+                    version = p.version,
+                    versionCode = p.versionCode,
+                    description = p.description,
+                    lang = p.lang ?: "en",
+                    authors = p.authors,
+                    tvTypes = p.tvTypes,
+                    enabled = true
+                )
+            }
+        }
+
+        // 2. Merge / override from Firestore
         try {
-            // From Firestore
             val snap = firestore.collection(EXTENSIONS_COLLECTION).get().await()
             if (snap != null && !snap.isEmpty) {
                 for (doc in snap.documents) {
                     val ext = FirestoreExtension.fromSnapshot(doc)
                     val key = ext.internalName.ifBlank { ext.id }.trim().lowercase(Locale.ROOT)
-                    result[key] = ext
+                    val existing = result[key]
+                    val finalUrl = ext.url.ifBlank { existing?.url ?: "" }
+                    result[key] = ext.copy(
+                        url = finalUrl,
+                        version = if (ext.version.isNotBlank()) ext.version else existing?.version ?: "1.0.0",
+                        versionCode = if (ext.versionCode > 0) ext.versionCode else existing?.versionCode ?: 1
+                    )
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Error fetching extensions collection: ${e.message}")
-        }
-
-        // Fill in any gaps from built-in preset catalogs
-        for (preset in RepositoryManager.BUILT_IN_PRESETS) {
-            val plugins = fetchRepositoryPlugins(preset.url)
-            for (p in plugins) {
-                val key = p.internalName.trim().lowercase(Locale.ROOT)
-                if (!result.containsKey(key)) {
-                    result[key] = FirestoreExtension(
-                        id = key,
-                        name = p.name,
-                        internalName = p.internalName,
-                        repository = preset.name,
-                        repositoryUrl = preset.url,
-                        url = p.url,
-                        tvUrl = p.tvUrl,
-                        iconUrl = p.iconUrl,
-                        version = p.version,
-                        versionCode = p.versionCode,
-                        description = p.description,
-                        lang = p.lang ?: "en",
-                        authors = p.authors,
-                        tvTypes = p.tvTypes,
-                        enabled = true
-                    )
-                }
-            }
         }
 
         result.values.sortedBy { it.name.lowercase(Locale.ROOT) }
@@ -641,8 +708,18 @@ class FirebaseProviderSyncService(
                             results.addAll(fetchRepositoryPlugins(subUrl))
                         }
                     }
-                } else if (root.has("providers")) {
+                }
+                if (root.has("providers")) {
                     val array = root.optJSONArray("providers")
+                    if (array != null) {
+                        for (i in 0 until array.length()) {
+                            val obj = array.getJSONObject(i)
+                            parsePlugin(obj, pluginListUrl)?.let { results.add(it) }
+                        }
+                    }
+                }
+                if (root.has("plugins")) {
+                    val array = root.optJSONArray("plugins")
                     if (array != null) {
                         for (i in 0 until array.length()) {
                             val obj = array.getJSONObject(i)

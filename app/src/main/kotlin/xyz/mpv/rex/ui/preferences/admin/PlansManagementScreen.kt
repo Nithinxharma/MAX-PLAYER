@@ -552,11 +552,44 @@ private fun PlanEditorDialog(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search extensions...") },
+                            placeholder = { Text("Search or type extension/provider name...") },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        // Quick Add custom provider / extension button if not in list
+                        if (searchQuery.isNotBlank() && !filteredExtensions.any { it.name.equals(searchQuery.trim(), ignoreCase = true) || it.internalName.equals(searchQuery.trim(), ignoreCase = true) }) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                                    .clickable {
+                                        val customKey = searchQuery.trim().lowercase(Locale.ROOT)
+                                        selectedExtensions = selectedExtensions + customKey
+                                        searchQuery = ""
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Add \"${searchQuery.trim()}\" as Provider/Extension",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Will resolve provider name during Firebase sync",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Icon(Icons.Default.AddCircle, contentDescription = "Add", tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -580,7 +613,10 @@ private fun PlanEditorDialog(
 
                         filteredExtensions.forEach { ext ->
                             val extKey = ext.internalName.lowercase(Locale.ROOT)
-                            val isSelected = selectedExtensions.contains(extKey)
+                            val extNameKey = ext.name.lowercase(Locale.ROOT)
+                            val isSelected = selectedExtensions.contains(extKey) || 
+                                    selectedExtensions.contains(extNameKey) ||
+                                    selectedExtensions.any { it.equals(ext.name, ignoreCase = true) || it.equals(ext.internalName, ignoreCase = true) }
 
                             Row(
                                 modifier = Modifier
@@ -592,7 +628,9 @@ private fun PlanEditorDialog(
                                     )
                                     .clickable {
                                         selectedExtensions = if (isSelected) {
-                                            selectedExtensions - extKey
+                                            selectedExtensions.filterNot { 
+                                                it.equals(extKey, ignoreCase = true) || it.equals(extNameKey, ignoreCase = true) 
+                                            }.toSet()
                                         } else {
                                             selectedExtensions + extKey
                                         }

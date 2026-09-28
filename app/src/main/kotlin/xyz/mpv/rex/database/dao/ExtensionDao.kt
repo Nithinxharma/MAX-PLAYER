@@ -11,6 +11,9 @@ interface ExtensionDao {
     @Query("SELECT * FROM extension_repositories")
     fun getAllRepositories(): Flow<List<ExtensionRepo>>
 
+    @Query("SELECT * FROM extension_repositories")
+    suspend fun getAllRepositoriesSync(): List<ExtensionRepo>
+
     @Query("SELECT * FROM extension_repositories WHERE url = :url LIMIT 1")
     suspend fun getRepository(url: String): ExtensionRepo?
 
