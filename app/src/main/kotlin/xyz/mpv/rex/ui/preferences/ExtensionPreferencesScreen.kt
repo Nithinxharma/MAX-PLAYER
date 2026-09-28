@@ -34,6 +34,9 @@ fun ExtensionPreferencesScreen(
     onNavigateToRepositories: () -> Unit,
     onNavigateToInstalled: () -> Unit,
     onNavigateToPresets: () -> Unit = {},
+    onNavigateToPlans: () -> Unit = {},
+    onNavigateToUserPermissions: () -> Unit = {},
+    onNavigateToAssignment: () -> Unit = {},
     onNavigateToTestCenter: () -> Unit = {},
     onNavigateToForceActivation: () -> Unit = {},
     onNavigateToExecutionTrace: () -> Unit = {},
@@ -134,6 +137,34 @@ fun ExtensionPreferencesScreen(
                         badge = if (repos.isNotEmpty()) "${repos.size}" else null,
                         showDivider = false,
                         onClick = onNavigateToRepositories
+                    )
+                }
+
+                GlassCategoryHeader(title = "Firebase Extension Access Control (RBAC)", icon = Icons.Outlined.AdminPanelSettings)
+
+                GlassSettingsSection {
+                    GlassPreferenceItem(
+                        title = "Plans Management",
+                        subtitle = "Configure Free, Premium, VIP, and Admin allowed extension lists",
+                        icon = Icons.Outlined.Layers,
+                        showDivider = true,
+                        onClick = onNavigateToPlans
+                    )
+
+                    GlassPreferenceItem(
+                        title = "User Permissions & Overrides",
+                        subtitle = "Manage individual user plans, custom extension grants, and blacklists",
+                        icon = Icons.Outlined.ManageAccounts,
+                        showDivider = true,
+                        onClick = onNavigateToUserPermissions
+                    )
+
+                    GlassPreferenceItem(
+                        title = "Extension Assignment Matrix",
+                        subtitle = "Assign and unassign extensions across all plans in real time",
+                        icon = Icons.Outlined.ChecklistRtl,
+                        showDivider = false,
+                        onClick = onNavigateToAssignment
                     )
                 }
 

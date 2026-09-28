@@ -79,14 +79,83 @@ object DeveloperOptionsScreen : Screen {
                         .padding(paddingValues)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    PreferenceSectionHeader(title = "Firebase Provider Management & Control Panel")
+                    PreferenceSectionHeader(title = "Firebase Extension Access Control (RBAC)")
+                    GroupedListColumn {
+                        GroupedPreferenceCard(position = GroupPosition.FIRST) {
+                            Preference(
+                                title = { Text("Plans Management") },
+                                summary = {
+                                    Text(
+                                        "Configure tier plans (Free, Premium, VIP, Admin) & assign allowed extensions",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Layers,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(xyz.mpv.rex.ui.preferences.admin.PlansManagementScreenRoute)
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                            Preference(
+                                title = { Text("User Permissions & Overrides") },
+                                summary = {
+                                    Text(
+                                        "Assign user plans, grant custom extensions, and configure user blacklists",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ManageAccounts,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(xyz.mpv.rex.ui.preferences.admin.UserPermissionsScreenRoute)
+                                }
+                            )
+                        }
+                        GroupedPreferenceCard(position = GroupPosition.LAST) {
+                            Preference(
+                                title = { Text("Extension Assignment Matrix") },
+                                summary = {
+                                    Text(
+                                        "Assign or unassign individual extensions across all plans in real time",
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ChecklistRtl,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    backstack.add(xyz.mpv.rex.ui.preferences.admin.ExtensionAssignmentScreenRoute)
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    PreferenceSectionHeader(title = "Firebase Provider Synchronization & Discovery")
                     GroupedListColumn {
                         GroupedPreferenceCard(position = GroupPosition.FIRST) {
                             Preference(
                                 title = { Text("Trigger Firebase Provider Sync") },
                                 summary = {
                                     Text(
-                                        "Sync provider_manifests/global and update installed providers silently",
+                                        "Resolve user plan/permissions and install assigned extensions silently",
                                         color = MaterialTheme.colorScheme.outline
                                     )
                                 },
@@ -100,7 +169,7 @@ object DeveloperOptionsScreen : Screen {
                                 onClick = {
                                     val syncService = org.koin.core.context.GlobalContext.get().get<xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService>()
                                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                        syncService.syncUserProviders()
+                                        syncService.syncUserProviders(force = true)
                                     }
                                 }
                             )
