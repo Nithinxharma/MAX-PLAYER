@@ -996,12 +996,55 @@ class ExtensionManager(
 
     suspend fun installExtension(plugin: AvailablePlugin): Boolean = withContext(Dispatchers.IO) {
         try {
+            var downloadUrl = plugin.url.trim()
+            if (downloadUrl.isBlank()) {
+                val seed = xyz.mpv.rex.cinehub.provider.server.KnownExtensionCatalog.findSeedPlugin(plugin.name)
+                    ?: xyz.mpv.rex.cinehub.provider.server.KnownExtensionCatalog.findSeedPlugin(plugin.internalName)
+                if (seed != null && seed.url.isNotBlank()) {
+                    downloadUrl = seed.url
+                    Log.i("ExtensionManager", "Resolved download URL for ${plugin.name} from seed catalog: $downloadUrl")
+                }
+            }
+
             var localPath: String? = null
             var discoveredClasses: List<String> = emptyList()
-            if (plugin.url.isNotBlank()) {
-                val targetFile = File(extensionDir, "${plugin.internalName}.cs3")
-                val existing = db.extensionDao().getExtension(plugin.internalName)
-                if (targetFile.exists() && targetFile.length() > 0 && existing != null && existing.versionCode >= plugin.versionCode) {
+            val targetFile = File(extensionDir, "${plugin.internalName}.cs3")
+            val existing = db.extensionDao().getExtension(plugin.internalName)
+
+            val existingFileValid = targetFile.exists() && targetFile.length() > 100
+            val isAlreadyUpToDate = existingFileValid && existing != null && existing.versionCode >= plugin.versionCode
+
+            if (isAlreadyUpToDate) {
+                localPath = targetFile.absolutePath
+                discoveredClasses = extractClassNamesFromZip(targetFile)
+                if (discoveredClasses.isEmpty()) {
+                    val optDir = File(context.codeCacheDir, "opt_${plugin.internalName}").apply { mkdirs() }
+                    discoveredClasses = extractClassesFromDex(targetFile, optDir)
+                }
+            } else if (downloadUrl.isNotBlank()) {
+                if (targetFile.exists()) {
+                    runCatching { targetFile.setWritable(true) }
+                }
+                val request = Request.Builder()
+                    .url(downloadUrl)
+                    .addHeader("User-Agent", "Mozilla/5.0 (MAX-STREAM-Provider-Engine/2.0)")
+                    .build()
+
+                val downloaded = client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful && response.body != null) {
+                        response.body!!.byteStream().use { input ->
+                            targetFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        true
+                    } else {
+                        Log.w("ExtensionManager", "Download failed for ${plugin.name} from $downloadUrl: HTTP ${response.code}")
+                        false
+                    }
+                }
+
+                if (downloaded && targetFile.exists() && targetFile.length() > 100) {
                     localPath = targetFile.absolutePath
                     discoveredClasses = extractClassNamesFromZip(targetFile)
                     if (discoveredClasses.isEmpty()) {
@@ -1009,26 +1052,12 @@ class ExtensionManager(
                         discoveredClasses = extractClassesFromDex(targetFile, optDir)
                     }
                 } else {
-                    if (targetFile.exists()) {
-                        runCatching { targetFile.setWritable(true) }
-                    }
-                    val request = Request.Builder().url(plugin.url).build()
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful && response.body != null) {
-                            response.body!!.byteStream().use { input ->
-                                targetFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            localPath = targetFile.absolutePath
-                            discoveredClasses = extractClassNamesFromZip(targetFile)
-                            if (discoveredClasses.isEmpty()) {
-                                val optDir = File(context.codeCacheDir, "opt_${plugin.internalName}").apply { mkdirs() }
-                                discoveredClasses = extractClassesFromDex(targetFile, optDir)
-                            }
-                        }
-                    }
+                    Log.e("ExtensionManager", "Failed downloading or empty file for extension ${plugin.name} ($downloadUrl)")
+                    return@withContext false
                 }
+            } else {
+                Log.w("ExtensionManager", "No download URL available for extension ${plugin.name} (${plugin.internalName})")
+                return@withContext false
             }
 
             val installed = InstalledExtension(

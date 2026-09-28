@@ -190,6 +190,22 @@ fun PlansManagementScreen(
                                     }
                                 }
 
+                                if (plan.inherits != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "INHERITS: ${plan.inherits.uppercase(Locale.ROOT)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                }
+
                                 if (plan.allowAllExtensions) {
                                     Box(
                                         modifier = Modifier
@@ -336,6 +352,7 @@ fun PlansManagementScreen(
         PlanEditorDialog(
             plan = plan,
             allExtensions = allExtensions,
+            allPlans = plans,
             onDismiss = { editingPlan = null },
             onSave = { updatedPlan ->
                 scope.launch(Dispatchers.IO) {
@@ -440,6 +457,7 @@ fun PlansManagementScreen(
 private fun PlanEditorDialog(
     plan: PlanConfig,
     allExtensions: List<FirestoreExtension>,
+    allPlans: List<PlanConfig> = emptyList(),
     onDismiss: () -> Unit,
     onSave: (PlanConfig) -> Unit,
     onDelete: (String) -> Unit
@@ -447,6 +465,7 @@ private fun PlanEditorDialog(
     var name by remember { mutableStateOf(plan.name) }
     var description by remember { mutableStateOf(plan.description) }
     var allowAll by remember { mutableStateOf(plan.allowAllExtensions) }
+    var selectedInherits by remember { mutableStateOf<String?>(plan.inherits) }
     var selectedExtensions by remember { mutableStateOf(plan.allowedExtensions.map { it.lowercase(Locale.ROOT) }.toSet()) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -539,6 +558,43 @@ private fun PlanEditorDialog(
                             checked = allowAll,
                             onCheckedChange = { allowAll = it }
                         )
+                    }
+
+                    // Plan Inheritance Selector
+                    if (!allowAll) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                "Plan Inheritance",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                "Users on this plan will automatically inherit all extensions from the selected base tier.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val availableParentPlans = listOf(null) + allPlans.filter { it.id != plan.id }.map { it.id }
+                                availableParentPlans.forEach { parentId ->
+                                    val isSelected = (selectedInherits == parentId) || (selectedInherits == null && parentId == null)
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedInherits = parentId },
+                                        label = { Text(parentId?.uppercase(Locale.ROOT) ?: "NONE") }
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     if (!allowAll) {
@@ -715,6 +771,7 @@ private fun PlanEditorDialog(
                                     name = name.trim(),
                                     description = description.trim(),
                                     allowAllExtensions = allowAll,
+                                    inherits = selectedInherits?.takeIf { it.isNotBlank() },
                                     allowedExtensions = selectedExtensions.toList()
                                 )
                                 onSave(updated)

@@ -55,14 +55,8 @@ data class UserPermissions(
 
 /**
  * Data representation of plan configurations in Firestore (`plans/{planId}`).
- *
- * Example:
- * {
- *   "name": "Premium",
- *   "description": "Premium tier extension access",
- *   "allowedExtensions": ["bollyflix", "vega", "uhdmovies", "superstream"],
- *   "allowAllExtensions": false
- * }
+ * Supports recursive inheritance:
+ * Free -> Premium (inherits Free) -> VIP (inherits Premium) -> Admin (all extensions).
  */
 @IgnoreExtraProperties
 data class PlanConfig(
@@ -70,14 +64,22 @@ data class PlanConfig(
     val name: String = "Free",
     val description: String = "",
     val allowedExtensions: List<String> = emptyList(),
-    val allowAllExtensions: Boolean = false
+    val allowAllExtensions: Boolean = false,
+    val inherits: String? = null,
+    val price: String = "₹0",
+    val strikePrice: String = "₹0",
+    val enabled: Boolean = true
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "id" to id,
         "name" to name,
         "description" to description,
         "allowedExtensions" to allowedExtensions,
-        "allowAllExtensions" to allowAllExtensions
+        "allowAllExtensions" to allowAllExtensions,
+        "inherits" to inherits,
+        "price" to price,
+        "strikePrice" to strikePrice,
+        "enabled" to enabled
     )
 
     companion object {
@@ -97,44 +99,64 @@ data class PlanConfig(
                 ?: doc.getBoolean("allExtensions") 
                 ?: allowedExtensions.contains("*")
 
+            val inherits = doc.getString("inherits")?.trim()?.lowercase()?.takeIf { it.isNotBlank() && it != id }
+            val price = doc.getString("price") ?: "₹0"
+            val strikePrice = doc.getString("strikePrice") ?: "₹0"
+            val enabled = doc.getBoolean("enabled") ?: true
+
             return PlanConfig(
                 id = id,
                 name = name,
                 description = description,
                 allowedExtensions = allowedExtensions.filter { it != "*" },
-                allowAllExtensions = allowAllExtensions
+                allowAllExtensions = allowAllExtensions,
+                inherits = inherits,
+                price = price,
+                strikePrice = strikePrice,
+                enabled = enabled
             )
         }
 
         fun defaultForPlan(planId: String): PlanConfig {
             val normalized = planId.trim().lowercase()
             return when (normalized) {
-                "admin", "super_admin", "developer" -> PlanConfig(
+                "admin", "super_admin", "developer", "owner" -> PlanConfig(
                     id = "admin",
                     name = "Admin",
                     description = "Full system administration and extension access",
                     allowedExtensions = emptyList(),
-                    allowAllExtensions = true
+                    allowAllExtensions = true,
+                    inherits = "vip",
+                    price = "₹0",
+                    strikePrice = "₹0",
+                    enabled = true
                 )
                 "vip" -> PlanConfig(
                     id = "vip",
                     name = "VIP",
                     description = "Exclusive high-speed providers and VIP catalog",
                     allowedExtensions = listOf(
-                        "bollyflix", "vega", "uhdmovies", "allmoviesforyou",
-                        "superstream", "moviesmod", "topmovies", "streamwish",
+                        "allmoviesforyou", "moviesmod", "topmovies", "streamwish",
                         "phisher", "castletv"
                     ),
-                    allowAllExtensions = false
+                    allowAllExtensions = false,
+                    inherits = "premium",
+                    price = "₹299",
+                    strikePrice = "₹499",
+                    enabled = true
                 )
                 "premium" -> PlanConfig(
                     id = "premium",
                     name = "Premium",
                     description = "Popular high-speed scrapers and movie/TV providers",
                     allowedExtensions = listOf(
-                        "bollyflix", "vega", "uhdmovies", "superstream", "moviesmod"
+                        "uhdmovies", "moviesmod"
                     ),
-                    allowAllExtensions = false
+                    allowAllExtensions = false,
+                    inherits = "free",
+                    price = "₹99",
+                    strikePrice = "₹199",
+                    enabled = true
                 )
                 else -> PlanConfig(
                     id = "free",
@@ -143,7 +165,11 @@ data class PlanConfig(
                     allowedExtensions = listOf(
                         "bollyflix", "vega", "superstream"
                     ),
-                    allowAllExtensions = false
+                    allowAllExtensions = false,
+                    inherits = null,
+                    price = "₹0",
+                    strikePrice = "₹0",
+                    enabled = true
                 )
             }
         }
@@ -152,6 +178,7 @@ data class PlanConfig(
 
 /**
  * Data representation of repositories in Firestore (`repositories/{repositoryId}`).
+ * Repositories are metadata containers ONLY.
  */
 @IgnoreExtraProperties
 data class FirestoreRepository(
@@ -159,8 +186,20 @@ data class FirestoreRepository(
     val name: String = "",
     val description: String = "",
     val pluginListUrl: String = "",
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val pluginCount: Int = 0,
+    val lastSync: Long = System.currentTimeMillis()
 ) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "id" to id,
+        "name" to name,
+        "description" to description,
+        "pluginListUrl" to pluginListUrl,
+        "enabled" to enabled,
+        "pluginCount" to pluginCount,
+        "lastSync" to lastSync
+    )
+
     companion object {
         fun fromSnapshot(doc: DocumentSnapshot): FirestoreRepository {
             val id = doc.id
@@ -170,13 +209,17 @@ data class FirestoreRepository(
                 ?: doc.getString("url") 
                 ?: ""
             val enabled = doc.getBoolean("enabled") ?: true
+            val pluginCount = (doc.get("pluginCount") as? Number)?.toInt() ?: 0
+            val lastSync = (doc.get("lastSync") as? Number)?.toLong() ?: System.currentTimeMillis()
 
             return FirestoreRepository(
                 id = id,
                 name = name,
                 description = description,
                 pluginListUrl = pluginListUrl,
-                enabled = enabled
+                enabled = enabled,
+                pluginCount = pluginCount,
+                lastSync = lastSync
             )
         }
     }
@@ -184,18 +227,6 @@ data class FirestoreRepository(
 
 /**
  * Data representation of extensions in Firestore (`extensions/{extensionId}`).
- *
- * Example:
- * {
- *   "name": "Bollyflix",
- *   "internalName": "bollyflix",
- *   "repository": "megix_repo_csx",
- *   "url": "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/Bollyflix.cs3",
- *   "version": "33.0.0",
- *   "versionCode": 33,
- *   "lang": "en",
- *   "enabled": true
- * }
  */
 @IgnoreExtraProperties
 data class FirestoreExtension(
@@ -203,6 +234,7 @@ data class FirestoreExtension(
     val name: String = "",
     val internalName: String = "",
     val repository: String = "",
+    val repositoryId: String = "",
     val repositoryUrl: String = "",
     val url: String = "",
     val tvUrl: String? = null,
@@ -213,8 +245,29 @@ data class FirestoreExtension(
     val lang: String = "en",
     val authors: List<String> = emptyList(),
     val tvTypes: List<String> = emptyList(),
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val healthScore: Int = 100
 ) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "id" to id,
+        "name" to name,
+        "internalName" to internalName,
+        "repository" to repository,
+        "repositoryId" to repositoryId.ifBlank { repository },
+        "repositoryUrl" to repositoryUrl,
+        "url" to url,
+        "tvUrl" to tvUrl,
+        "iconUrl" to iconUrl,
+        "version" to version,
+        "versionCode" to versionCode,
+        "description" to description,
+        "lang" to lang,
+        "authors" to authors,
+        "tvTypes" to tvTypes,
+        "enabled" to enabled,
+        "healthScore" to healthScore
+    )
+
     fun toAvailablePlugin(): AvailablePlugin {
         return AvailablePlugin(
             name = name.ifBlank { internalName },
@@ -240,6 +293,7 @@ data class FirestoreExtension(
             val name = doc.getString("name") ?: id
             val internalName = doc.getString("internalName") ?: id
             val repository = doc.getString("repository") ?: doc.getString("repositoryId") ?: ""
+            val repositoryId = doc.getString("repositoryId") ?: repository
             val repositoryUrl = doc.getString("repositoryUrl") ?: ""
             val url = doc.getString("url") ?: doc.getString("downloadUrl") ?: ""
             val tvUrl = doc.getString("tvUrl")
@@ -258,12 +312,14 @@ data class FirestoreExtension(
             val tvTypes = (doc.get("tvTypes") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
 
             val enabled = doc.getBoolean("enabled") ?: true
+            val healthScore = (doc.get("healthScore") as? Number)?.toInt() ?: 100
 
             return FirestoreExtension(
                 id = id,
                 name = name,
                 internalName = internalName,
                 repository = repository,
+                repositoryId = repositoryId,
                 repositoryUrl = repositoryUrl,
                 url = url,
                 tvUrl = tvUrl,
@@ -274,8 +330,49 @@ data class FirestoreExtension(
                 lang = lang,
                 authors = authors,
                 tvTypes = tvTypes,
-                enabled = enabled
+                enabled = enabled,
+                healthScore = healthScore
             )
         }
     }
 }
+
+/**
+ * Analytics Data Models for Batched Local & Remote Storage
+ */
+data class SearchAnalyticsEvent(
+    val query: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val resultCount: Int = 0,
+    val selectedProvider: String? = null
+)
+
+data class StreamAnalyticsEvent(
+    val mediaTitle: String,
+    val provider: String,
+    val extractor: String? = null,
+    val isSuccess: Boolean = true,
+    val latencyMs: Long = 0L,
+    val timestamp: Long = System.currentTimeMillis(),
+    val error: String? = null
+)
+
+data class ProviderHealthMetric(
+    val providerName: String,
+    val searchPassed: Boolean = true,
+    val homePassed: Boolean = true,
+    val loadPassed: Boolean = true,
+    val streamPassed: Boolean = true,
+    val healthScore: Int = 100, // 0 to 100%
+    val lastTested: Long = System.currentTimeMillis()
+)
+
+data class DailyAnalyticsSummary(
+    val date: String,
+    val totalActiveUsers: Int = 0,
+    val totalSearches: Int = 0,
+    val totalStreams: Int = 0,
+    val providerSuccessRate: Int = 100,
+    val topExtension: String = "None",
+    val topSearches: List<String> = emptyList()
+)

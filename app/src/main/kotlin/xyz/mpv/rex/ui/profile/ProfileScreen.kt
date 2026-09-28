@@ -191,7 +191,17 @@ object ProfileScreen : Screen {
                         item {
                             AdminPanelCard(
                                 uid = currentUser?.uid ?: "local_admin",
-                                role = userRole
+                                role = userRole,
+                                onNavigateToPlans = { backstack.add(xyz.mpv.rex.ui.preferences.admin.PlansManagementScreenRoute) },
+                                onNavigateToExtensions = { backstack.add(xyz.mpv.rex.ui.preferences.admin.ExtensionAssignmentScreenRoute) },
+                                onNavigateToUsers = { backstack.add(xyz.mpv.rex.ui.preferences.admin.UserPermissionsScreenRoute) },
+                                onForceSync = {
+                                    scope.launch {
+                                        Toast.makeText(context, "Synchronizing OTT fleet...", Toast.LENGTH_SHORT).show()
+                                        val ok = syncService.forceSync()
+                                        Toast.makeText(context, if (ok) "Sync completed successfully" else "Sync finished with notes", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             )
                         }
 
@@ -551,7 +561,14 @@ private fun PremiumBadgePill(isVip: Boolean = false) {
  * Admin Panel Card
  */
 @Composable
-private fun AdminPanelCard(uid: String, role: String) {
+private fun AdminPanelCard(
+    uid: String,
+    role: String,
+    onNavigateToPlans: () -> Unit = {},
+    onNavigateToExtensions: () -> Unit = {},
+    onNavigateToUsers: () -> Unit = {},
+    onForceSync: () -> Unit = {}
+) {
     AdminGlassCard(
         title = "Admin Operations Panel",
         icon = Icons.Default.AdminPanelSettings,
@@ -561,6 +578,46 @@ private fun AdminPanelCard(uid: String, role: String) {
         AdminDetailRow(label = "Admin UID", value = uid.take(16) + "...")
         AdminDetailRow(label = "Backend Status", value = "ONLINE (Firestore / Auth)")
         AdminDetailRow(label = "Provider Core", value = "CloudStream v3 Engine")
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "OTT FLEET MANAGEMENT",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White.copy(alpha = 0.6f)
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DevActionButton(
+                label = "Plans",
+                modifier = Modifier.weight(1f),
+                onClick = onNavigateToPlans
+            )
+            DevActionButton(
+                label = "Extensions",
+                modifier = Modifier.weight(1f),
+                onClick = onNavigateToExtensions
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DevActionButton(
+                label = "User Access",
+                modifier = Modifier.weight(1f),
+                onClick = onNavigateToUsers
+            )
+            DevActionButton(
+                label = "Sync Fleet",
+                modifier = Modifier.weight(1f),
+                onClick = onForceSync
+            )
+        }
     }
 }
 
