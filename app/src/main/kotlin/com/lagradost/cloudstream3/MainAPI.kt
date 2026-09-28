@@ -605,6 +605,27 @@ abstract class MainAPI {
         return if (lists.isEmpty()) null else HomePageResponse(lists)
     }
     
+    open fun fixUrl(url: String): String {
+        if (url.isEmpty()) return ""
+        if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("{\"") || url.startsWith("[")) {
+            return url
+        }
+        if (url.startsWith("//")) {
+            return "https:$url"
+        }
+        val prefix = mainUrl.trimEnd('/')
+        return if (url.startsWith('/')) {
+            "$prefix$url"
+        } else {
+            "$prefix/$url"
+        }
+    }
+
+    open fun fixUrlNull(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return fixUrl(url)
+    }
+
     open suspend fun getLoadUrl(name: com.lagradost.cloudstream3.syncproviders.SyncIdName, id: String): String? = null
 
     open suspend fun load(url: String): LoadResponse? = null
@@ -863,29 +884,6 @@ fun base64Decode(string: String): String {
         for (b in bytes) {
             append((b.toInt() and 0xFF).toChar())
         }
-    }
-}
-fun MainAPI.fixUrlNull(url: String?): String? {
-    if (url.isNullOrEmpty()) {
-        return null
-    }
-    return fixUrl(url)
-}
-fun MainAPI.fixUrl(url: String): String {
-    if (url.startsWith("http") || url.startsWith("{\"") || url.startsWith("[")) {
-        return url
-    }
-    if (url.isEmpty()) {
-        return ""
-    }
-    val startsWithNoHttp = url.startsWith("//")
-    if (startsWithNoHttp) {
-        return "https:$url"
-    } else {
-        if (url.startsWith('/')) {
-            return mainUrl + url
-        }
-        return "$mainUrl/$url"
     }
 }
 fun LoadResponse.addTrailer(url: String?) {

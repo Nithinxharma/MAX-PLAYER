@@ -216,7 +216,28 @@ object DefaultExtractors {
             Gofile(),
             ByseSX(),
             GDMirrorbot(),
-            VidStack()
+            VidStack(),
+
+            // CloudStream Missing Extractors Compatibility
+            LuluStream(),
+            Luluvdo(),
+            Ponplayer(),
+            SuperStreamExtractor(),
+            SuperStream(),
+            StreamCheck(),
+            Embedrise(),
+            StreamCloud(),
+            FPlayer(),
+            Chillx(),
+            ChillxTop(),
+            Dropload(),
+            VTube(),
+            VtubeNetwork(),
+            DailyMotion(),
+            DailymotionExtractor(),
+            DaiLy(),
+            StreamRuby(),
+            RubyStream()
         )
 
         for (extractor in extractors) {

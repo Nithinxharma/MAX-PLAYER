@@ -245,3 +245,24 @@
 # Preserve Jsoup HTML parsing classes used by scrapers and providers
 -keep class org.jsoup.** { *; }
 -dontwarn org.jsoup.**
+
+# Explicit Keep Rules for CloudStream Compatibility & Extractors
+-keep class com.lagradost.cloudstream3.utils.CryptoJSHelper { *; }
+-keep class com.lagradost.cloudstream3.extractors.helper.CryptoJSHelper { *; }
+-keep class com.lagradost.cloudstream3.extractors.helper.CryptoJS { *; }
+-keep class com.lagradost.cloudstream3.extractors.DefaultExtractors { *; }
+-keep class com.lagradost.cloudstream3.extractors.** {
+    <init>(...);
+    <fields>;
+    <methods>;
+}
+-keepclassmembers class com.lagradost.cloudstream3.MainAPI {
+    public *** fixUrlNull(...);
+    public *** fixUrl(...);
+    public *** search(...);
+    public *** load(...);
+    public *** loadLinks(...);
+    public *** getMainPage(...);
+    public *** loadMainPage(...);
+}
+-keep class com.lagradost.cloudstream3.APIHolder { *; }
