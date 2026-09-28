@@ -44,6 +44,14 @@ object AppUtils {
             null
         }
     }
+
+    inline fun <reified T> String.parsedSafe(): T? {
+        return tryParseJson(this)
+    }
+
+    fun base64Decode(string: String): String = com.lagradost.cloudstream3.base64Decode(string)
+    fun base64DecodeArray(string: String): ByteArray = com.lagradost.cloudstream3.base64DecodeArray(string)
+    fun base64Encode(bytes: ByteArray): String = com.lagradost.cloudstream3.base64Encode(bytes)
 }
 
 fun Any.toJson(): String {
@@ -59,3 +67,15 @@ inline fun <reified T> tryParseJson(value: String?): T? {
         null
     }
 }
+
+fun <T> tryParseJson(value: String?, clazz: Class<T>): T? = AppUtils.tryParseJson(value, clazz)
+fun <T : Any> parseJson(value: String, kClass: KClass<T>): T = AppUtils.parseJson(value, kClass)
+fun <T> parseJson(value: String, clazz: Class<T>): T = AppUtils.parseJson(value, clazz)
+inline fun <reified T : Any> parseJson(value: String): T = AppUtils.parseJson(value)
+
+inline fun <reified T> String.parsedSafe(): T? = tryParseJson<T>(this)
+
+fun base64Decode(string: String): String = com.lagradost.cloudstream3.base64Decode(string)
+fun base64DecodeArray(string: String): ByteArray = com.lagradost.cloudstream3.base64DecodeArray(string)
+fun base64Encode(bytes: ByteArray): String = com.lagradost.cloudstream3.base64Encode(bytes)
+

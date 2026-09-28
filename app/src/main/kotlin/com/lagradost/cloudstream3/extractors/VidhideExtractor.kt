@@ -5,3 +5,9 @@ open class VidhideExtractor : VidHidePro() {
     override var mainUrl = "https://vidhide.com"
     override val requiresReferer = false
 }
+
+open class FileLions : VidHidePro() {
+    override var name = "FileLions"
+    override var mainUrl = "https://filelions.to"
+    override val requiresReferer = false
+}

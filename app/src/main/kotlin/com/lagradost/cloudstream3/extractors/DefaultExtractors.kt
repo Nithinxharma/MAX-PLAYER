@@ -237,7 +237,9 @@ object DefaultExtractors {
             DailymotionExtractor(),
             DaiLy(),
             StreamRuby(),
-            RubyStream()
+            RubyStream(),
+            OkRu(),
+            FileLions()
         )
 
         for (extractor in extractors) {

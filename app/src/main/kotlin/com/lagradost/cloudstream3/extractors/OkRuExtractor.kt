@@ -7,6 +7,13 @@ open class OkRuSSL : Odnoklassniki() {
     override var mainUrl = "https://ok.ru"
 }
 
+open class OkRuExtractor : OkRuSSL() {
+    override var name    = "OkRu"
+    override var mainUrl = "https://ok.ru"
+}
+
+open class OkRu : OkRuExtractor()
+
 open class OkRuHTTP : Odnoklassniki() {
     override var name    = "OkRuHTTP"
     override var mainUrl = "http://ok.ru"

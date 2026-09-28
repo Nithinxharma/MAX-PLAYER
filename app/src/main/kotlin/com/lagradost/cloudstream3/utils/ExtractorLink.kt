@@ -23,6 +23,13 @@ interface IDownloadableMinimum {
     var headers: Map<String, String>
 }
 
+enum class ExtractorLinkFlag {
+    None,
+    RequiresUserAgent,
+    RequiresReferer,
+    IPRestricted
+}
+
 data class AudioFile(
     val url: String,
     val lang: String,
@@ -40,7 +47,8 @@ open class ExtractorLink(
     override var headers: Map<String, String> = mapOf(),
     open var extractorData: String? = null,
     open var errorMessage: String? = null,
-    open var audioTracks: List<AudioFile> = emptyList()
+    open var audioTracks: List<AudioFile> = emptyList(),
+    open var flags: Set<ExtractorLinkFlag> = emptySet()
 ) : IDownloadableMinimum {
 
     // Overloaded legacy constructor using Boolean isM3u8
@@ -63,11 +71,29 @@ open class ExtractorLink(
         type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
         headers = headers,
         extractorData = extractorData,
-        errorMessage = errorMessage
+        errorMessage = errorMessage,
+        flags = emptySet()
     )
 
     val isM3u8: Boolean get() = type == ExtractorLinkType.M3U8
+    val isDash: Boolean get() = type == ExtractorLinkType.DASH
+    val isTorrent: Boolean get() = type == ExtractorLinkType.TORRENT
+    val isMagnet: Boolean get() = type == ExtractorLinkType.MAGNET
 }
+
+fun newExtractorLink(
+    source: String,
+    name: String,
+    url: String,
+    type: ExtractorLinkType = ExtractorLinkType.VIDEO
+): ExtractorLink = ExtractorLink(
+    source = source,
+    name = name,
+    url = url,
+    referer = "",
+    quality = Qualities.Unknown.value,
+    type = type
+)
 
 data class PlayListItem(
     val url: String,
