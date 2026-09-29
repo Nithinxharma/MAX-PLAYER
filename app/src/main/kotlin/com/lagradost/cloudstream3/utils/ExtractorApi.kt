@@ -168,7 +168,7 @@ suspend fun loadExtractor(
         val mainUrl = extractor.mainUrl
         if (mainUrl.isBlank()) continue
         val domains = mainUrl.split(",").map {
-            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/').trimEnd('*').trimEnd('.').removePrefix("*.")
+            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/')
         }
         val isMatch = domains.any { domain ->
             domain.isNotBlank() && (compareUrl.startsWith(domain) || compareUrl.contains(domain))
