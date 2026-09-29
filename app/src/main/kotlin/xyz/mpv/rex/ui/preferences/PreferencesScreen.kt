@@ -1,7 +1,6 @@
 package xyz.mpv.rex.ui.preferences
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,41 +23,44 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.ViewQuilt
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.Gesture
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material.icons.outlined.Tv
-import androidx.compose.material.icons.outlined.VideoLibrary
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -87,6 +89,7 @@ import xyz.mpv.rex.auth.elevation.AdminSessionManager
 import xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.auth.LoginScreen
+import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
 import xyz.mpv.rex.ui.components.glass.GlassButtonVariant
 import xyz.mpv.rex.ui.components.glass.GlassCard
 import xyz.mpv.rex.ui.components.glass.GlassCategoryHeader
@@ -94,717 +97,541 @@ import xyz.mpv.rex.ui.components.glass.GlassPreferenceItem
 import xyz.mpv.rex.ui.components.glass.GlassSettingsSection
 import xyz.mpv.rex.ui.components.glass.GlassTopBar
 import xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton
-import xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog
 import xyz.mpv.rex.ui.profile.ProfileScreen
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 import xyz.mpv.rex.ui.utils.LocalBackStack
 
 /**
- * Modernized Settings Screen enforcing strict Server-Controlled RBAC visibility:
+ * Modernized MAX STREAM Master Profile & Preferences Experience.
  *
- * Normal User:
- * - Profile, Plan, Logout ONLY.
- * - Hides: Repository Manager, Extension Manager, Developer Settings, Provider Controls.
+ * Implements the Apple Settings Organization + Premium OTT Design System.
  *
- * Premium User:
- * - Profile, Current Plan, Active Providers Count, Logout.
- *
- * VIP User:
- * - Profile, VIP Badge, Provider Count, Repository Count, Logout.
- *
- * Admin User:
- * - Shows all above + Repository Management, Provider Diagnostics, Firebase Diagnostics,
- *   Sync Status, Installed Extension Count, Force Provider Sync, Clear Provider Cache.
+ * Features:
+ * - Premium OTT Profile Header with dynamic role tiers (User, Admin, Developer)
+ * - Premium Account Card with subtle glassmorphism and live status indicators
+ * - Quick Actions (Edit Profile, Manage Account, Downloads, Watch History, Admin Diagnostics)
+ * - Global Settings Search
+ * - 6 Core Root Categories:
+ *   1. Account & Entitlements
+ *   2. General Settings (Player, Controls, Decoders, Subtitles, Audio, Library, Integrations, Dev)
+ *   3. Appearance & Theming
+ *   4. Accessibility & Touch
+ *   5. Privacy & Data Protection
+ *   6. About MaxStream
  */
 @Serializable
 object PreferencesScreen : Screen {
-  @OptIn(ExperimentalMaterial3Api::class)
-  @Composable
-  override fun Content() {
-    val context = LocalContext.current
-    val backstack = LocalBackStack.current
-    val scope = rememberCoroutineScope()
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    override fun Content() {
+        val context = LocalContext.current
+        val backstack = LocalBackStack.current
+        val scope = rememberCoroutineScope()
+        val isDark = isSystemInDarkTheme()
+        val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
+
+        val authManager = koinInject<AuthManager>()
+        val syncService = koinInject<FirebaseProviderSyncService>()
+        val adminSessionManager = koinInject<AdminSessionManager>()
+
+        val userProfile by authManager.userProfile.collectAsState()
+        val userRole by authManager.userRole.collectAsState()
+        val isAdmin by authManager.isAdmin.collectAsState()
+        val isPremium by authManager.isPremium.collectAsState()
+        val isElevated by adminSessionManager.isElevated.collectAsState()
+
+        val userPlan by syncService.userPlan.collectAsState()
+        val isSyncing by syncService.isSyncing.collectAsState()
+        val syncStatus by syncService.syncStatus.collectAsState()
+        val loadedProvidersCount by syncService.loadedProvidersCount.collectAsState()
+        val installedExtensionsCount by syncService.installedExtensionsCount.collectAsState()
+        val syncedRepositoriesCount by syncService.syncedRepositoriesCount.collectAsState()
+
+        val currentUser = authManager.currentUser
+
+        // Supported Roles: User, Admin, Developer
+        val isDeveloper = isAdmin || userRole.contains("dev", ignoreCase = true) || isElevated
+        val effectiveRole = when {
+            isAdmin -> "admin"
+            isDeveloper -> "developer"
+            userRole.equals("vip", ignoreCase = true) || userPlan.equals("vip", ignoreCase = true) -> "vip"
+            isPremium || userRole.equals("premium", ignoreCase = true) || userPlan.equals("premium", ignoreCase = true) -> "premium"
+            else -> "user"
+        }
+
+        val roleBadgeColor = when (effectiveRole) {
+            "admin" -> Color(0xFFFF2D55)
+            "developer" -> Color(0xFFAF52DE)
+            "vip" -> Color(0xFFFFB800)
+            "premium" -> Color(0xFF00E676)
+            else -> Color(0xFF00C2FF)
+        }
+
+        val displayName = userProfile?.name?.takeIf { it.isNotBlank() }
+            ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
+            ?: "Max Stream User"
+        val email = userProfile?.email?.takeIf { it.isNotBlank() }
+            ?: currentUser?.email?.takeIf { it.isNotBlank() }
+            ?: "Guest Session"
+        val photoUrl = userProfile?.photo?.takeIf { it.isNotBlank() }
+            ?: currentUser?.photoUrl?.toString()
+
+        var showEditNameDialog by remember { mutableStateOf(false) }
+        var newNameInput by remember { mutableStateOf(displayName) }
+
+        Scaffold(
+            topBar = {
+                GlassTopBar(
+                    title = stringResource(R.string.pref_preferences),
+                    onBackClick = { backstack.removeLastOrNull() }
+                )
+            },
+            containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
+        ) { padding ->
+            ProvidePreferenceLocals {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = navBarHeight + 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // 1. Premium OTT Profile Header & Account Card
+                    item {
+                        GlassCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            onClick = { backstack.add(AccountPreferencesScreen) }
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                // Profile Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (!photoUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = photoUrl,
+                                            contentDescription = "User Avatar",
+                                            modifier = Modifier
+                                                .size(56.dp)
+                                                .clip(CircleShape)
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(56.dp)
+                                                .clip(CircleShape)
+                                                .background(roleBadgeColor.copy(alpha = 0.2f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Person,
+                                                contentDescription = null,
+                                                tint = roleBadgeColor,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(14.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = displayName,
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1
+                                            )
+
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = roleBadgeColor.copy(alpha = 0.18f),
+                                                border = BorderStroke(1.dp, roleBadgeColor.copy(alpha = 0.6f))
+                                            ) {
+                                                Text(
+                                                    text = effectiveRole.uppercase(),
+                                                    color = roleBadgeColor,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = email,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                        contentDescription = null,
+                                        tint = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.outline
+                                    )
+                                }
+
+                                // Status Indicators Row (Subtle glass pills)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    // Plan Status Indicator
+                                    Surface(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = when (effectiveRole) {
+                                                    "admin" -> Icons.Default.AdminPanelSettings
+                                                    "developer" -> Icons.Outlined.Code
+                                                    "vip" -> Icons.Default.WorkspacePremium
+                                                    "premium" -> Icons.Default.Star
+                                                    else -> Icons.Default.CheckCircle
+                                                },
+                                                contentDescription = null,
+                                                tint = roleBadgeColor,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Column {
+                                                Text("TIER", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = MaxStreamTheme.TextMuted)
+                                                Text(userPlan.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = roleBadgeColor)
+                                            }
+                                        }
+                                    }
+
+                                    // Providers / Sync Status Indicator
+                                    Surface(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CloudQueue,
+                                                contentDescription = null,
+                                                tint = Color(0xFF00C2FF),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Column {
+                                                Text("PROVIDERS", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = MaxStreamTheme.TextMuted)
+                                                Text("$loadedProvidersCount ACTIVE", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(0xFF00C2FF))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Quick Actions Section
+                    item {
+                        GlassCategoryHeader(title = "Quick Actions", icon = Icons.Outlined.Tune)
+                        GlassSettingsSection {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                QuickActionButton(
+                                    label = "Edit Profile",
+                                    icon = Icons.Default.Edit,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        newNameInput = displayName
+                                        showEditNameDialog = true
+                                    }
+                                )
+
+                                QuickActionButton(
+                                    label = "Account",
+                                    icon = Icons.Outlined.ManageAccounts,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { backstack.add(AccountPreferencesScreen) }
+                                )
+
+                                QuickActionButton(
+                                    label = "Downloads",
+                                    icon = Icons.Outlined.Download,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        Toast.makeText(context, "Offline Downloads Manager", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+
+                                QuickActionButton(
+                                    label = "History",
+                                    icon = Icons.Outlined.History,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { backstack.add(RecentlyPlayedScreen) }
+                                )
+                            }
+
+                            // Role-Aware Quick Actions for Admin & Developer Accounts
+                            if (isAdmin || isDeveloper) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    QuickActionButton(
+                                        label = "Admin Tools",
+                                        icon = Icons.Outlined.Build,
+                                        accentColor = Color(0xFFFF2D55),
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { backstack.add(xyz.mpv.rex.ui.preferences.admin.PlansManagementScreenRoute) }
+                                    )
+
+                                    QuickActionButton(
+                                        label = "Diagnostics",
+                                        icon = Icons.Outlined.Assessment,
+                                        accentColor = Color(0xFFAF52DE),
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen) }
+                                    )
+
+                                    QuickActionButton(
+                                        label = "Providers",
+                                        icon = Icons.Outlined.Extension,
+                                        accentColor = Color(0xFFFFB800),
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionRepositoriesScreenRoute) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Global Settings Search
+                    item {
+                        GlassCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            onClick = { backstack.add(SettingsSearchScreen) }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = "Search Settings",
+                                    tint = MaxStreamTheme.CrimsonAccent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = stringResource(R.string.settings_search_hint),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // 4. Root Categories List (Apple-style rows with Luxury OTT presentation)
+                    item {
+                        GlassCategoryHeader(title = "Preferences Categories", icon = Icons.Default.Settings)
+                        GlassSettingsSection {
+                            // Category 1: Account
+                            GlassPreferenceItem(
+                                title = "Account & Entitlements",
+                                subtitle = "Profile details, membership tiers, and cloud sync",
+                                icon = Icons.Outlined.Person,
+                                badge = effectiveRole.uppercase(),
+                                showDivider = true,
+                                onClick = { backstack.add(AccountPreferencesScreen) }
+                            )
+
+                            // Category 2: General
+                            GlassPreferenceItem(
+                                title = "General Settings",
+                                subtitle = "Player engine, controls, audio, decoders, IPTV, and media library",
+                                icon = Icons.Outlined.Tune,
+                                showDivider = true,
+                                onClick = { backstack.add(GeneralPreferencesScreen) }
+                            )
+
+                            // Category 3: Appearance
+                            GlassPreferenceItem(
+                                title = stringResource(R.string.pref_appearance_title),
+                                subtitle = "Dark theme, AMOLED mode, glassmorphism depth, and color accents",
+                                icon = Icons.Outlined.Palette,
+                                showDivider = true,
+                                onClick = { backstack.add(AppearancePreferencesScreen) }
+                            )
+
+                            // Category 4: Accessibility
+                            GlassPreferenceItem(
+                                title = "Accessibility",
+                                subtitle = "High contrast, large touch targets, subtitles, and haptic feedback",
+                                icon = Icons.Outlined.AccessibilityNew,
+                                showDivider = true,
+                                onClick = { backstack.add(AccessibilityPreferencesScreen) }
+                            )
+
+                            // Category 5: Privacy
+                            GlassPreferenceItem(
+                                title = "Privacy & Security",
+                                subtitle = "Watch history controls, search cache, telemetry, and policies",
+                                icon = Icons.Outlined.Security,
+                                showDivider = true,
+                                onClick = { backstack.add(PrivacyPreferencesScreen) }
+                            )
+
+                            // Category 6: About MaxStream
+                            GlassPreferenceItem(
+                                title = stringResource(R.string.pref_about_title),
+                                subtitle = "Version info, open source licenses, updates, and engine diagnostics",
+                                icon = Icons.Outlined.Info,
+                                showDivider = false,
+                                onClick = { backstack.add(AboutScreen) }
+                            )
+                        }
+                    }
+
+                    // 5. Session Logout
+                    item {
+                        GlassSettingsSection {
+                            GlassPreferenceItem(
+                                title = "Logout Session",
+                                subtitle = "Sign out from Firebase and clear active credentials",
+                                icon = Icons.Default.Logout,
+                                showDivider = false,
+                                onClick = {
+                                    scope.launch {
+                                        authManager.signOut(context)
+                                        backstack.clear()
+                                        backstack.add(LoginScreen)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Edit Profile Name Dialog
+        if (showEditNameDialog) {
+            AlertDialog(
+                onDismissRequest = { showEditNameDialog = false },
+                title = { Text("Edit Display Name") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Update your display name across MaxStream:")
+                        OutlinedTextField(
+                            value = newNameInput,
+                            onValueChange = { newNameInput = it },
+                            label = { Text("Display Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (newNameInput.isNotBlank()) {
+                                scope.launch {
+                                    runCatching {
+                                        val request = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                                            .setDisplayName(newNameInput.trim())
+                                            .build()
+                                        currentUser?.updateProfile(request)
+                                        currentUser?.let { authManager.syncUserToFirestore(it) }
+                                    }
+                                    Toast.makeText(context, "Display name updated", Toast.LENGTH_SHORT).show()
+                                    showEditNameDialog = false
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditNameDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Compact Glass Quick Action Button with subtle tactile press feedback.
+ */
+@Composable
+private fun QuickActionButton(
+    label: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    accentColor: Color? = null,
+    onClick: () -> Unit
+) {
     val isDark = isSystemInDarkTheme()
-    val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
+    val tint = accentColor ?: (if (isDark) Color.White else MaterialTheme.colorScheme.primary)
 
-    val authManager = koinInject<AuthManager>()
-    val syncService = koinInject<FirebaseProviderSyncService>()
-    val adminSessionManager = koinInject<AdminSessionManager>()
-
-    val userProfile by authManager.userProfile.collectAsState()
-    val userRole by authManager.userRole.collectAsState()
-    val isAdmin by authManager.isAdmin.collectAsState()
-    val isPremium by authManager.isPremium.collectAsState()
-    val isElevated by adminSessionManager.isElevated.collectAsState()
-
-    val userPlan by syncService.userPlan.collectAsState()
-    val permissions by syncService.userPermissions.collectAsState()
-    val isSyncing by syncService.isSyncing.collectAsState()
-    val syncStatus by syncService.syncStatus.collectAsState()
-    val lastSyncTime by syncService.lastSyncTimeFormatted.collectAsState()
-    val loadedProvidersCount by syncService.loadedProvidersCount.collectAsState()
-    val installedExtensionsCount by syncService.installedExtensionsCount.collectAsState()
-    val syncedRepositoriesCount by syncService.syncedRepositoriesCount.collectAsState()
-
-    val currentUser = authManager.currentUser
-
-    // Determine normalized role tier
-    val effectiveRole = when {
-      isAdmin -> "admin"
-      userRole.equals("vip", ignoreCase = true) || userPlan.equals("vip", ignoreCase = true) -> "vip"
-      isPremium || userRole.equals("premium", ignoreCase = true) || userPlan.equals("premium", ignoreCase = true) -> "premium"
-      else -> "user"
-    }
-
-    val isVip = effectiveRole == "vip"
-    val isActualPremium = effectiveRole == "premium"
-    val isNormalUser = effectiveRole == "user"
-
-    // Diagnostics dialog states
-    var showProviderDiagnosticsDialog by remember { mutableStateOf(false) }
-    var showFirebaseDiagnosticsDialog by remember { mutableStateOf(false) }
-
-    val displayName = userProfile?.name?.takeIf { it.isNotBlank() }
-        ?: currentUser?.displayName?.takeIf { it.isNotBlank() }
-        ?: "Max Stream User"
-    val email = userProfile?.email?.takeIf { it.isNotBlank() }
-        ?: currentUser?.email?.takeIf { it.isNotBlank() }
-        ?: "Tap to sign in or view profile"
-    val photoUrl = userProfile?.photo?.takeIf { it.isNotBlank() }
-        ?: currentUser?.photoUrl?.toString()
-
-    Scaffold(
-      topBar = {
-        GlassTopBar(
-          title = stringResource(R.string.pref_preferences),
-          onBackClick = { backstack.removeLastOrNull() }
-        )
-      },
-      containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
-    ) { padding ->
-      ProvidePreferenceLocals {
-        LazyColumn(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(padding),
-          contentPadding = PaddingValues(top = 8.dp, bottom = navBarHeight + 32.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          // 1. Account & Profile Card in Glass (Shown for all users)
-          item {
-            GlassCard(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-              shape = RoundedCornerShape(20.dp),
-              onClick = { backstack.add(ProfileScreen) }
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(horizontal = 16.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                if (!photoUrl.isNullOrBlank()) {
-                  AsyncImage(
-                    model = photoUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                      .size(52.dp)
-                      .clip(CircleShape)
-                  )
-                } else {
-                  Box(
-                    modifier = Modifier
-                      .size(52.dp)
-                      .clip(CircleShape)
-                      .background(MaxStreamTheme.CrimsonAccent.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                  ) {
-                    Icon(
-                      imageVector = Icons.Outlined.Person,
-                      contentDescription = null,
-                      tint = MaxStreamTheme.CrimsonAccent,
-                      modifier = Modifier.size(28.dp)
-                    )
-                  }
-                }
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                      text = displayName,
-                      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                      color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Distinct Role/Plan Pill
-                    val (badgeLabel, badgeColor) = when (effectiveRole) {
-                      "admin" -> "ADMIN" to Color(0xFFFF2D55)
-                      "vip" -> "VIP" to Color(0xFFFFB800)
-                      "premium" -> "PREMIUM" to Color(0xFF00E676)
-                      else -> "FREE" to Color(0xFF00C2FF)
-                    }
-
-                    Box(
-                      modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(badgeColor.copy(alpha = 0.2f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                      Text(
-                        text = badgeLabel,
-                        color = badgeColor,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                      )
-                    }
-                  }
-
-                  Spacer(modifier = Modifier.height(2.dp))
-                  Text(
-                    text = email,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                  )
-                }
-
-                Icon(
-                  imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                  contentDescription = null,
-                  tint = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.outline,
-                )
-              }
-            }
-          }
-
-          // 2. Role-Specific Plan & Provider Metric Cards
-          item {
-            val planTitle = when (effectiveRole) {
-              "admin" -> "Administrator Authority (Unrestricted)"
-              "vip" -> "VIP Gold Membership Tier"
-              "premium" -> "Premium Streaming Membership"
-              else -> "Free Streaming Plan"
-            }
-
-            val planColor = when (effectiveRole) {
-              "admin" -> Color(0xFFFF2D55)
-              "vip" -> Color(0xFFFFB800)
-              "premium" -> Color(0xFF00E676)
-              else -> Color(0xFF00C2FF)
-            }
-
-            GlassCard(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-              shape = RoundedCornerShape(18.dp)
-            ) {
-              Column(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-              ) {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
-                ) {
-                  Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                  ) {
-                    Icon(
-                      imageVector = when (effectiveRole) {
-                        "admin" -> Icons.Default.AdminPanelSettings
-                        "vip" -> Icons.Default.WorkspacePremium
-                        "premium" -> Icons.Default.Star
-                        else -> Icons.Default.CheckCircle
-                      },
-                      contentDescription = null,
-                      tint = planColor,
-                      modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                      text = "Current Plan",
-                      style = MaterialTheme.typography.titleSmall,
-                      fontWeight = FontWeight.Bold,
-                      color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
-                    )
-                  }
-
-                  // Plan Badge
-                  Surface(
-                    shape = RoundedCornerShape(50),
-                    color = planColor.copy(alpha = 0.16f),
-                    border = BorderStroke(1.dp, planColor.copy(alpha = 0.6f))
-                  ) {
-                    Text(
-                      text = userPlan.uppercase(),
-                      color = planColor,
-                      fontSize = 10.sp,
-                      fontWeight = FontWeight.Bold,
-                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                  }
-                }
-
-                Text(
-                  text = planTitle,
-                  style = MaterialTheme.typography.bodyMedium,
-                  fontWeight = FontWeight.SemiBold,
-                  color = planColor
-                )
-
-                // Show provider and repository count based on tier
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                  if (effectiveRole == "vip" || effectiveRole == "admin") {
-                    Surface(
-                      modifier = Modifier.weight(1f),
-                      shape = RoundedCornerShape(12.dp),
-                      color = Color.White.copy(alpha = 0.05f)
-                    ) {
-                      Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                          text = "Active Providers",
-                          style = MaterialTheme.typography.labelSmall,
-                          color = MaxStreamTheme.TextMuted
-                        )
-                        Text(
-                          text = "$loadedProvidersCount Loaded",
-                          style = MaterialTheme.typography.titleMedium,
-                          fontWeight = FontWeight.Bold,
-                          color = planColor
-                        )
-                      }
-                    }
-
-                    Surface(
-                      modifier = Modifier.weight(1f),
-                      shape = RoundedCornerShape(12.dp),
-                      color = Color.White.copy(alpha = 0.05f)
-                    ) {
-                      Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                          text = "Server Repos",
-                          style = MaterialTheme.typography.labelSmall,
-                          color = MaxStreamTheme.TextMuted
-                        )
-                        Text(
-                          text = "$syncedRepositoriesCount Active",
-                          style = MaterialTheme.typography.titleMedium,
-                          fontWeight = FontWeight.Bold,
-                          color = planColor
-                        )
-                      }
-                    }
-                  } else if (effectiveRole == "premium") {
-                    Surface(
-                      modifier = Modifier.fillMaxWidth(),
-                      shape = RoundedCornerShape(12.dp),
-                      color = Color.White.copy(alpha = 0.05f)
-                    ) {
-                      Row(
-                        modifier = Modifier
-                          .fillMaxWidth()
-                          .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                      ) {
-                        Text(
-                          text = "Active Providers Count",
-                          style = MaterialTheme.typography.bodyMedium,
-                          color = MaxStreamTheme.TextPrimary
-                        )
-                        Text(
-                          text = "$loadedProvidersCount Providers Available",
-                          style = MaterialTheme.typography.titleSmall,
-                          fontWeight = FontWeight.Bold,
-                          color = planColor
-                        )
-                      }
-                    }
-                  } else {
-                    Text(
-                      text = "Standard access active with server-managed providers.",
-                      style = MaterialTheme.typography.bodySmall,
-                      color = MaxStreamTheme.TextSecondary
-                    )
-                  }
-                }
-              }
-            }
-          }
-
-          // 3. ADMIN USER ONLY: Additional Management & Diagnostic Cards
-          if (isAdmin) {
-            item {
-              GlassCategoryHeader(title = "Admin: Server & Provider Controls", icon = Icons.Outlined.Build)
-              GlassSettingsSection {
-                // Repository Management
-                GlassPreferenceItem(
-                  title = "Repository Management",
-                  subtitle = "$syncedRepositoriesCount server repositories configured • Manage feeds",
-                  icon = Icons.Outlined.CloudQueue,
-                  badge = "$syncedRepositoriesCount",
-                  showDivider = true,
-                  onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionRepositoriesScreenRoute) }
-                )
-
-                // Provider Diagnostics
-                GlassPreferenceItem(
-                  title = "Provider Diagnostics",
-                  subtitle = "Inspect $loadedProvidersCount active runtime providers & bridge state",
-                  icon = Icons.Outlined.Assessment,
-                  showDivider = true,
-                  onClick = { showProviderDiagnosticsDialog = true }
-                )
-
-                // Firebase Diagnostics
-                GlassPreferenceItem(
-                  title = "Firebase Diagnostics",
-                  subtitle = "Plan: $userPlan • UID: ${currentUser?.uid?.take(8)}... • State: Active",
-                  icon = Icons.Outlined.Storage,
-                  showDivider = true,
-                  onClick = { showFirebaseDiagnosticsDialog = true }
-                )
-
-                // Sync Status
-                GlassPreferenceItem(
-                  title = "Provider Sync Status",
-                  subtitle = "$syncStatus • $loadedProvidersCount Providers Loaded • Last Sync: $lastSyncTime",
-                  icon = Icons.Outlined.Sync,
-                  badge = if (isSyncing) "SYNCING" else "SYNCED",
-                  showDivider = true,
-                  onClick = {
-                    Toast.makeText(context, "Last Sync: $lastSyncTime ($syncStatus)", Toast.LENGTH_SHORT).show()
-                  }
-                )
-
-                // Installed Extension Count
-                GlassPreferenceItem(
-                  title = "Installed Extension Count",
-                  subtitle = "$installedExtensionsCount extensions currently installed in local database",
-                  icon = Icons.Outlined.Extension,
-                  badge = "$installedExtensionsCount",
-                  showDivider = true,
-                  onClick = { backstack.add(xyz.mpv.rex.ui.preferences.InstalledExtensionsScreenRoute) }
-                )
-
-                // Force Provider Sync
-                GlassPreferenceItem(
-                  title = "Force Provider Sync",
-                  subtitle = if (isSyncing) "Syncing with Firebase..." else "Immediately re-sync permissions, repositories, and plugins",
-                  icon = Icons.Outlined.Refresh,
-                  badge = if (isSyncing) "SYNCING" else null,
-                  showDivider = true,
-                  onClick = {
-                    scope.launch {
-                      Toast.makeText(context, "Triggering Firebase Provider Sync...", Toast.LENGTH_SHORT).show()
-                      val result = syncService.forceSync()
-                      Toast.makeText(
-                        context,
-                        if (result) "Provider sync completed successfully" else "Provider sync finished with notes",
-                        Toast.LENGTH_SHORT
-                      ).show()
-                    }
-                  }
-                )
-
-                // Clear Provider Cache
-                GlassPreferenceItem(
-                  title = "Clear Provider Cache",
-                  subtitle = "Wipe manifest memory cache and reload runtime provider registry",
-                  icon = Icons.Outlined.CleaningServices,
-                  showDivider = false,
-                  onClick = {
-                    scope.launch {
-                      syncService.clearProviderCache()
-                      Toast.makeText(context, "Provider cache cleared & registry reloaded", Toast.LENGTH_SHORT).show()
-                    }
-                  }
-                )
-              }
-            }
-          }
-
-          // Search settings bar in Glass
-          item {
-            GlassCard(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-              shape = MaxStreamTheme.CapsuleShape,
-              onClick = { backstack.add(SettingsSearchScreen) }
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(horizontal = 18.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                Icon(
-                  imageVector = Icons.Outlined.Search,
-                  contentDescription = null,
-                  tint = MaxStreamTheme.CrimsonAccent,
-                  modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                  text = stringResource(R.string.settings_search_hint),
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
-            }
-          }
-
-          // 4. General App Preferences (Available for all users, but NEVER show extension/repo manager here)
-          // UI & Appearance Section
-          item {
-            GlassCategoryHeader(title = stringResource(R.string.pref_category_ui_appearance), icon = Icons.Outlined.Palette)
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_appearance_title),
-                subtitle = stringResource(id = R.string.pref_appearance_summary),
-                icon = Icons.Outlined.Palette,
-                onClick = { backstack.add(AppearancePreferencesScreen) }
-              )
-            }
-          }
-
-          // Playback & Controls Section
-          item {
-            GlassCategoryHeader(title = stringResource(R.string.pref_category_playback_controls), icon = Icons.Outlined.PlayCircle)
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_player),
-                subtitle = stringResource(id = R.string.pref_player_summary),
-                icon = Icons.Outlined.PlayCircle,
-                showDivider = true,
-                onClick = { backstack.add(PlayerPreferencesScreen) }
-              )
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_layout_title),
-                subtitle = stringResource(id = R.string.pref_layout_summary),
-                icon = Icons.AutoMirrored.Outlined.ViewQuilt,
-                showDivider = true,
-                onClick = { backstack.add(PlayerControlsPreferencesScreen) }
-              )
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_gesture),
-                subtitle = stringResource(id = R.string.pref_gesture_summary),
-                icon = Icons.Outlined.Gesture,
-                onClick = { backstack.add(GesturePreferencesScreen) }
-              )
-            }
-          }
-
-          // Media & Library Section
-          item {
-            GlassCategoryHeader(title = stringResource(R.string.pref_media_library_title), icon = Icons.Outlined.VideoLibrary)
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = stringResource(R.string.pref_media_library_title),
-                subtitle = stringResource(R.string.pref_media_library_summary),
-                icon = Icons.Outlined.VideoLibrary,
-                onClick = { backstack.add(MediaLibraryPreferencesScreen) }
-              )
-            }
-          }
-
-          // Media Settings Section
-          item {
-            GlassCategoryHeader(title = stringResource(R.string.pref_category_media_settings), icon = Icons.Outlined.Memory)
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_decoder),
-                subtitle = stringResource(id = R.string.pref_decoder_summary),
-                icon = Icons.Outlined.Memory,
-                showDivider = true,
-                onClick = { backstack.add(DecoderPreferencesScreen) }
-              )
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_subtitles),
-                subtitle = stringResource(id = R.string.pref_subtitles_summary),
-                icon = Icons.Outlined.Subtitles,
-                showDivider = true,
-                onClick = { backstack.add(SubtitlesPreferencesScreen) }
-              )
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_audio),
-                subtitle = stringResource(id = R.string.pref_audio_summary),
-                icon = Icons.Outlined.Audiotrack,
-                onClick = { backstack.add(AudioPreferencesScreen) }
-              )
-            }
-          }
-
-          // Integrations Section
-          item {
-            GlassCategoryHeader(title = "Integrations", icon = Icons.Outlined.Tv)
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = "CineTV Live & Playlist",
-                subtitle = "Manage IPTV credentials, authentication & stream mappings",
-                icon = Icons.Outlined.Tv,
-                showDivider = true,
-                onClick = { backstack.add(xyz.mpv.rex.cinetv.ui.CineTvSettingsScreen) }
-              )
-              GlassPreferenceItem(
-                title = "Jellyfin",
-                subtitle = "External player sync",
-                icon = Icons.Outlined.VideoLibrary,
-                showDivider = true,
-                onClick = { backstack.add(xyz.mpv.rex.jellyfin.ui.JellyfinSettingsScreen) }
-              )
-              GlassPreferenceItem(
-                title = "yt-dlp",
-                subtitle = "Manage MAX STREAM Ytdlp & extractor preferences",
-                icon = Icons.Outlined.CloudDownload,
-                onClick = { backstack.add(YtdlSettingsScreen) }
-              )
-            }
-          }
-
-          // Advanced & About Section
-          item {
-            GlassCategoryHeader(title = stringResource(R.string.pref_category_advanced_about), icon = Icons.Outlined.Code)
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = stringResource(R.string.pref_advanced),
-                subtitle = stringResource(id = R.string.pref_advanced_summary),
-                icon = Icons.Outlined.Code,
-                showDivider = isAdmin,
-                onClick = { backstack.add(AdvancedPreferencesScreen) }
-              )
-              // Developer Options ONLY for Admins (Strict requirement: Hide for normal users)
-              if (isAdmin) {
-                GlassPreferenceItem(
-                  title = stringResource(id = R.string.pref_developer_options_title),
-                  subtitle = stringResource(id = R.string.pref_developer_options_summary),
-                  icon = Icons.Outlined.Build,
-                  showDivider = true,
-                  onClick = { backstack.add(DeveloperOptionsScreen) }
-                )
-              }
-              GlassPreferenceItem(
-                title = stringResource(id = R.string.pref_about_title),
-                subtitle = stringResource(id = R.string.pref_about_summary),
-                icon = Icons.Outlined.Info,
-                onClick = { backstack.add(AboutScreen) }
-              )
-            }
-          }
-
-          // 5. Logout Card (Available for all roles)
-          item {
-            GlassSettingsSection {
-              GlassPreferenceItem(
-                title = "Logout Session",
-                subtitle = "Sign out from Firebase and clear active profile credentials",
-                icon = Icons.Default.Logout,
-                badge = null,
-                showDivider = false,
-                onClick = {
-                  scope.launch {
-                    authManager.signOut(context)
-                    backstack.clear()
-                    backstack.add(LoginScreen)
-                  }
-                }
-              )
-            }
-          }
-        }
-      }
-    }
-
-    // Provider Diagnostics Dialog (Admin only)
-    if (showProviderDiagnosticsDialog) {
-      val diagnostics = syncService.getProviderDiagnostics()
-      MaxStreamGlassDialog(
-        onDismissRequest = { showProviderDiagnosticsDialog = false },
-        title = "Provider Runtime Diagnostics",
-        icon = Icons.Outlined.Assessment,
-        confirmButton = {
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MaxStreamGlassButton(
-              text = "Full Audit Center",
-              variant = GlassButtonVariant.Secondary,
-              onClick = {
-                showProviderDiagnosticsDialog = false
-                backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen)
-              }
-            )
-            MaxStreamGlassButton(
-              text = "Close",
-              variant = GlassButtonVariant.Primary,
-              onClick = { showProviderDiagnosticsDialog = false }
-            )
-          }
-        }
-      ) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (isDark) Color.White.copy(alpha = 0.06f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+    ) {
         Column(
-          modifier = Modifier.fillMaxWidth(),
-          verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-          Text("• Total Active APIHolder Providers: ${diagnostics["totalProviders"]}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-          Text("• Installed Extensions in DB: ${diagnostics["installedCount"]}", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-          Text("• Synced Server Repositories: ${diagnostics["syncedReposCount"]}", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-          Text("• Orchestration Status: ${diagnostics["syncStatus"]}", color = MaterialTheme.colorScheme.primary)
-          Text("• Last Sync: ${diagnostics["lastSync"]}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-          Spacer(modifier = Modifier.height(4.dp))
-          Text("Loaded Providers:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-          val names = diagnostics["providerNames"] as? List<*> ?: emptyList<Any>()
-          names.take(15).forEach { name ->
-            Text("  - $name", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          }
-          if (names.size > 15) {
-            Text("  ... and ${names.size - 15} more", style = MaterialTheme.typography.labelSmall, color = MaxStreamTheme.TextMuted)
-          }
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                fontSize = 10.sp
+            )
         }
-      }
     }
-
-    // Firebase Diagnostics Dialog (Admin only)
-    if (showFirebaseDiagnosticsDialog) {
-      val fbDiagnostics = syncService.getFirebaseDiagnostics()
-      MaxStreamGlassDialog(
-        onDismissRequest = { showFirebaseDiagnosticsDialog = false },
-        title = "Firebase RBAC & Sync Diagnostics",
-        icon = Icons.Outlined.Storage,
-        confirmButton = {
-          MaxStreamGlassButton(
-            text = "Close",
-            variant = GlassButtonVariant.Primary,
-            onClick = { showFirebaseDiagnosticsDialog = false }
-          )
-        }
-      ) {
-        Column(
-          modifier = Modifier.fillMaxWidth(),
-          verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          Text("• Authenticated: ${fbDiagnostics["authenticated"]}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-          Text("• Firebase UID: ${fbDiagnostics["uid"]}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          Text("• Account Email: ${fbDiagnostics["email"]}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          Text("• Effective Plan Tier: ${fbDiagnostics["plan"]}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-          Text("• Permissions Model:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-          Text(
-            text = "${fbDiagnostics["permissions"]}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
-      }
-    }
-  }
 }

@@ -1,6 +1,7 @@
 package xyz.mpv.rex.di
 
 import xyz.mpv.rex.database.MpvExDatabase
+import xyz.mpv.rex.preferences.AccessibilityPreferences
 import xyz.mpv.rex.preferences.AdvancedPreferences
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.AudioPreferences
@@ -9,6 +10,7 @@ import xyz.mpv.rex.preferences.DecoderPreferences
 import xyz.mpv.rex.preferences.FoldersPreferences
 import xyz.mpv.rex.preferences.GesturePreferences
 import xyz.mpv.rex.preferences.PlayerPreferences
+import xyz.mpv.rex.preferences.PrivacyPreferences
 import xyz.mpv.rex.preferences.SettingsManager
 import xyz.mpv.rex.preferences.SubtitlesPreferences
 import xyz.mpv.rex.preferences.UiPreferences
@@ -28,6 +30,8 @@ val PreferencesModule =
     single { AndroidPreferenceStore(androidContext()) }.bind(PreferenceStore::class)
 
     single { AppearancePreferences(get()) }
+    singleOf(::AccessibilityPreferences)
+    singleOf(::PrivacyPreferences)
     singleOf(::PlayerPreferences)
     singleOf(::GesturePreferences)
     singleOf(::DecoderPreferences)

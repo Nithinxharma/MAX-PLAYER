@@ -923,6 +923,108 @@ object SearchablePreferences {
                 targetIndex = 11,
             ))
 
+            // Account Preferences
+            add(SearchablePreference(
+                title = "Account & Profile",
+                summary = "Manage name, photo, and user credentials",
+                keywords = listOf("account", "profile", "user", "avatar", "email", "sign in", "login"),
+                category = "Account",
+                screen = AccountPreferencesScreen,
+                targetIndex = 0,
+            ))
+            add(SearchablePreference(
+                title = "Membership Plan & Entitlements",
+                summary = "Active tier, VIP capabilities, and permissions model",
+                keywords = listOf("plan", "tier", "vip", "premium", "membership", "subscription", "entitlements"),
+                category = "Account",
+                screen = AccountPreferencesScreen,
+                targetIndex = 1,
+            ))
+            add(SearchablePreference(
+                title = "Cloud Provider Sync",
+                summary = "Synchronize providers, plugins, and repositories with Firebase",
+                keywords = listOf("sync", "cloud", "firebase", "providers", "repositories", "force sync"),
+                category = "Account",
+                screen = AccountPreferencesScreen,
+                targetIndex = 2,
+            ))
+
+            // Accessibility Preferences
+            add(SearchablePreference(
+                title = "High Contrast Mode",
+                summary = "Enhance border outlines, button contrast, and text sharpness",
+                keywords = listOf("contrast", "accessibility", "vision", "sharp", "borders", "high contrast"),
+                category = "Accessibility",
+                screen = AccessibilityPreferencesScreen,
+                targetIndex = 0,
+            ))
+            add(SearchablePreference(
+                title = "Enhanced Subtitle Legibility",
+                summary = "Enforce high-contrast background shading behind active subtitles",
+                keywords = listOf("subtitles", "captions", "readability", "legibility", "contrast", "text shadow"),
+                category = "Accessibility",
+                screen = AccessibilityPreferencesScreen,
+                targetIndex = 0,
+            ))
+            add(SearchablePreference(
+                title = "Large Touch Targets",
+                summary = "Increase button hit areas to minimum 48dp across the entire player",
+                keywords = listOf("touch", "targets", "large", "buttons", "hitbox", "motor", "tap"),
+                category = "Accessibility",
+                screen = AccessibilityPreferencesScreen,
+                targetIndex = 1,
+            ))
+            add(SearchablePreference(
+                title = "Haptic Vibration Feedback",
+                summary = "Provide tactile feedback on gesture seek, volume, and playback toggles",
+                keywords = listOf("haptic", "vibration", "feedback", "tactile", "touch", "buzz"),
+                category = "Accessibility",
+                screen = AccessibilityPreferencesScreen,
+                targetIndex = 1,
+            ))
+            add(SearchablePreference(
+                title = "Reduced Motion & Low-End Mode",
+                summary = "Disable complex mesh blur gradients and simplify transitions for smooth 60fps",
+                keywords = listOf("reduced motion", "performance", "animations", "disable blur", "low end", "smooth", "fps"),
+                category = "Accessibility",
+                screen = AccessibilityPreferencesScreen,
+                targetIndex = 2,
+            ))
+
+            // Privacy Preferences
+            add(SearchablePreference(
+                title = "Pause Watch History",
+                summary = "Temporarily stop recording playback progress and recently played media",
+                keywords = listOf("privacy", "history", "watch history", "pause", "tracking", "recent"),
+                category = "Privacy",
+                screen = PrivacyPreferencesScreen,
+                targetIndex = 0,
+            ))
+            add(SearchablePreference(
+                title = "Clear Watch History",
+                summary = "Delete all stored playback timestamps, resumes, and history logs",
+                keywords = listOf("clear history", "delete history", "privacy", "reset history", "playback"),
+                category = "Privacy",
+                screen = PrivacyPreferencesScreen,
+                targetIndex = 0,
+            ))
+            add(SearchablePreference(
+                title = "Pause Search History",
+                summary = "Do not save search queries in local cache or recent suggestions",
+                keywords = listOf("search", "search history", "pause", "privacy", "queries"),
+                category = "Privacy",
+                screen = PrivacyPreferencesScreen,
+                targetIndex = 1,
+            ))
+            add(SearchablePreference(
+                title = "Anonymous Crash Reports",
+                summary = "Automatically transmit fatal stack traces to assist bug fixes",
+                keywords = listOf("crash", "telemetry", "reports", "diagnostics", "bugs", "analytics"),
+                category = "Privacy",
+                screen = PrivacyPreferencesScreen,
+                targetIndex = 2,
+            ))
+
             // About
             add(SearchablePreference(
                 titleRes = R.string.pref_about_title,

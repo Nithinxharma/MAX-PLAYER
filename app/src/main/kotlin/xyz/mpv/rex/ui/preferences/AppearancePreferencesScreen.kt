@@ -1,844 +1,386 @@
 package xyz.mpv.rex.ui.preferences
 
-import android.os.Build
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
+import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
-import xyz.mpv.rex.R
-import xyz.mpv.rex.preferences.AppearancePreferences
-import xyz.mpv.rex.preferences.BrowserPreferences
-import xyz.mpv.rex.preferences.GesturePreferences
-import xyz.mpv.rex.preferences.FoldersPreferences
-import xyz.mpv.rex.preferences.MultiChoiceSegmentedButton
-import xyz.mpv.rex.ui.preferences.components.ThemePicker
-import xyz.mpv.rex.ui.preferences.components.SwitchPreference
-import xyz.mpv.rex.preferences.preference.collectAsState
-import xyz.mpv.rex.presentation.Screen
-import xyz.mpv.rex.presentation.components.GroupPosition
-import xyz.mpv.rex.presentation.components.GroupedListColumn
-import xyz.mpv.rex.ui.theme.DarkMode
-import xyz.mpv.rex.ui.utils.LocalBackStack
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.toImmutableList
-import kotlinx.serialization.Serializable
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.ui.semantics.Role
-import xyz.mpv.rex.utils.locale.LocaleHelper
-import me.zhanghai.compose.preference.Preference
-import me.zhanghai.compose.preference.ProvidePreferenceLocals
-import me.zhanghai.compose.preference.SliderPreference
-import org.koin.compose.koinInject
-import kotlin.math.roundToInt
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import android.widget.Toast
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Animation
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.ColorLens
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.ViewQuilt
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import xyz.mpv.rex.utils.media.MediaLibraryEvents
-import xyz.mpv.rex.utils.media.OpenDocumentTreeContract
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import kotlinx.serialization.Serializable
+import me.zhanghai.compose.preference.ProvidePreferenceLocals
+import org.koin.compose.koinInject
+import xyz.mpv.rex.R
+import xyz.mpv.rex.preferences.AppearancePreferences
+import xyz.mpv.rex.preferences.preference.collectAsState
+import xyz.mpv.rex.presentation.Screen
+import xyz.mpv.rex.ui.components.glass.GlassCategoryHeader
+import xyz.mpv.rex.ui.components.glass.GlassPreferenceItem
+import xyz.mpv.rex.ui.components.glass.GlassSettingsSection
+import xyz.mpv.rex.ui.components.glass.GlassSwitchPreference
+import xyz.mpv.rex.ui.components.glass.GlassTopBar
+import xyz.mpv.rex.ui.preferences.components.ThemePicker
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
+import xyz.mpv.rex.ui.utils.LocalBackStack
+import xyz.mpv.rex.utils.locale.LocaleHelper
 
+/**
+ * Root Category 3: Dedicated Appearance Preferences Screen
+ *
+ * Provides comprehensive visual customization: Theme presets, AMOLED pure black mode,
+ * dynamic colors, glassmorphic UI depth, animations, typography, and media thumbnail settings.
+ */
 @Serializable
 object AppearancePreferencesScreen : Screen {
+
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
-        val preferences = koinInject<AppearancePreferences>()
-        val browserPreferences = koinInject<BrowserPreferences>()
-        val gesturePreferences = koinInject<GesturePreferences>()
-        val foldersPreferences = koinInject<FoldersPreferences>()
-        val hybridMediaIndex = koinInject<xyz.mpv.rex.database.repository.HybridMediaIndexRepository>()
-        val backstack = LocalBackStack.current
-        val systemDarkTheme = isSystemInDarkTheme()
-
-        val darkMode by preferences.darkMode.collectAsState()
-        val appTheme by preferences.appTheme.collectAsState()
-
-        // Determine if we're in dark mode for theme preview
-        val isDarkMode = when (darkMode) {
-            DarkMode.Dark -> true
-            DarkMode.Light -> false
-            DarkMode.System -> systemDarkTheme
-        }
-
         val context = LocalContext.current
-        val scope = rememberCoroutineScope()
-        val libraryScanRoots by foldersPreferences.libraryScanRoots.collectAsState()
-        val libraryRootPicker = rememberLauncherForActivityResult(OpenDocumentTreeContract()) { uri ->
-            uri ?: return@rememberLauncherForActivityResult
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            }.onSuccess {
-                foldersPreferences.libraryScanRoots.set(libraryScanRoots + uri.toString())
-                MediaLibraryEvents.notifyChanged()
-            }
-        }
-        var showNetworkWarning by remember { mutableStateOf(false) }
+        val backstack = LocalBackStack.current
+        val isDark = isSystemInDarkTheme()
+        val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
+
+        val preferences = koinInject<AppearancePreferences>()
+
+        val appTheme by preferences.appTheme.collectAsState()
+        val amoledMode by preferences.amoledMode.collectAsState()
+        val materialYou by preferences.materialYou.collectAsState()
+        val enableModernGlassUI by preferences.enableModernGlassUI.collectAsState()
+        val enableGlassPlayerControls by preferences.enableGlassPlayerControls.collectAsState()
+        val enableGlassSeekbarBackground by preferences.enableGlassSeekbarBackground.collectAsState()
+        val enableBounceAnimation by preferences.enableBounceAnimation.collectAsState()
+        val useSystemFont by preferences.useSystemFont.collectAsState()
+        val unlimitedNameLines by preferences.unlimitedNameLines.collectAsState()
+        val showUnplayedOldVideoLabel by preferences.showUnplayedOldVideoLabel.collectAsState()
+        val showNetworkThumbnails by preferences.showNetworkThumbnails.collectAsState()
+        val matchPlayerControlsToTheme by preferences.matchPlayerControlsToTheme.collectAsState()
+        val hidePlayerButtonsBackground by preferences.hidePlayerButtonsBackground.collectAsState()
+
+        val currentLanguage = remember { LocaleHelper.getCurrentLanguage(context) }
         var showLanguageDialog by remember { mutableStateOf(false) }
 
         Scaffold(
-            containerColor = if (systemDarkTheme) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
             topBar = {
-                xyz.mpv.rex.ui.components.glass.GlassTopBar(
+                GlassTopBar(
                     title = stringResource(R.string.pref_appearance_title),
                     onBackClick = { backstack.removeLastOrNull() }
                 )
             },
+            containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
         ) { padding ->
-            val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
             ProvidePreferenceLocals {
                 LazyColumn(
-                    state = rememberPreferenceLazyListState(),
-                    modifier =
-                    Modifier
+                    modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = navBarHeight + 16.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = navBarHeight + 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Theme & Color Palette Section
                     item {
-                        PreferenceSectionHeader(title = stringResource(id = R.string.pref_appearance_language_title))
-                    }
-
-                    item {
-                        val currentLanguage = remember { LocaleHelper.getCurrentLanguage(context) }
-                        GroupedListColumn {
-                            GroupedPreferenceCard(
-                                position = GroupPosition.ONLY,
-                                highlightKey = R.string.pref_appearance_language_title,
+                        GlassCategoryHeader(title = "Theme & Color Palette", icon = Icons.Outlined.Palette)
+                        GlassSettingsSection {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
                             ) {
-                                Preference(
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_language_title)) },
-                                    summary = {
-                                        Text(
-                                            text = if (currentLanguage.code.isEmpty()) {
-                                                stringResource(R.string.system_default)
-                                            } else {
-                                                "${currentLanguage.nativeName} (${currentLanguage.localizedName})"
-                                            },
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    },
-                                    icon = {
-                                        Icon(
-                                            Icons.Outlined.Language,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    },
-                                    onClick = { showLanguageDialog = true },
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        PreferenceSectionHeader(title = stringResource(id = R.string.pref_appearance_category_theme))
-                    }
-
-                    item {
-                        val amoledMode by preferences.amoledMode.collectAsState()
-                        val enableModernGlassUI by preferences.enableModernGlassUI.collectAsState()
-                        val useSystemFont by preferences.useSystemFont.collectAsState()
-                        val matchPlayerControlsToTheme by preferences.matchPlayerControlsToTheme.collectAsState()
-                        val hidePlayerButtonsBackground by preferences.hidePlayerButtonsBackground.collectAsState()
-                        val enableGlassPlayerControls by preferences.enableGlassPlayerControls.collectAsState()
-                        val enableGlassSeekbarBackground by preferences.enableGlassSeekbarBackground.collectAsState()
-                        val enableExpandingOnScreenControls by preferences.enableExpandingOnScreenControls.collectAsState()
-                        val playerAlwaysDarkMode by preferences.playerAlwaysDarkMode.collectAsState()
-
-                        GroupedListColumn {
-                            GroupedPreferenceCard(
-                                position = GroupPosition.FIRST,
-                                highlightKey = listOf(
-                                    R.string.pref_appearance_title,
-                                    R.string.pref_appearance_amoled_mode_title,
-                                ),
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "MaxStream Dark Theme",
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                        color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaxStreamTheme.CrimsonAccent.copy(alpha = 0.2f)
                                     ) {
                                         Text(
-                                            text = stringResource(id = R.string.pref_appearance_darkmode_dark),
-                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.weight(1f)
+                                            text = "Default Dark",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaxStreamTheme.CrimsonAccent,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
-                                        androidx.compose.material3.Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                        ) {
-                                            Text(
-                                                text = "Forced Dark",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                            )
-                                        }
-                                    }
-                                    ThemePicker(
-                                        currentTheme = appTheme,
-                                        isDarkMode = true,
-                                        onThemeSelected = { preferences.appTheme.set(it) },
-                                        modifier = Modifier.padding(vertical = 8.dp),
-                                    )
-                                    SwitchPreference(
-                                        value = amoledMode,
-                                        onValueChange = { preferences.amoledMode.set(it) },
-                                        title = { Text(text = stringResource(id = R.string.pref_appearance_amoled_mode_title)) },
-                                        summary = {
-                                            Text(
-                                                text = stringResource(id = R.string.pref_appearance_amoled_mode_summary),
-                                                color = MaterialTheme.colorScheme.outline,
-                                            )
-                                        },
-                                        enabled = true,
-                                    )
-                                }
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_enable_modern_glass_ui_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableModernGlassUI,
-                                    onValueChange = { preferences.enableModernGlassUI.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_enable_modern_glass_ui_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_enable_modern_glass_ui_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_use_system_font_title,
-                            ) {
-                                SwitchPreference(
-                                    value = useSystemFont,
-                                    onValueChange = { preferences.useSystemFont.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_use_system_font_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_use_system_font_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_match_player_controls_to_theme_title,
-                            ) {
-                                SwitchPreference(
-                                    value = matchPlayerControlsToTheme,
-                                    onValueChange = { preferences.matchPlayerControlsToTheme.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_title)) },
-                                    summary = { Text(text = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_summary)) },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_hide_player_buttons_background_title,
-                            ) {
-                                SwitchPreference(
-                                    value = hidePlayerButtonsBackground,
-                                    onValueChange = { preferences.hidePlayerButtonsBackground.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_title)) },
-                                    summary = { Text(text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_summary)) },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_enable_glass_player_controls_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableGlassPlayerControls,
-                                    onValueChange = { preferences.enableGlassPlayerControls.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_title)) },
-                                    summary = { Text(text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_summary)) },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_enable_glass_seekbar_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableGlassSeekbarBackground,
-                                    onValueChange = { preferences.enableGlassSeekbarBackground.set(it) },
-                                    enabled = enableGlassPlayerControls,
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_title)) },
-                                    summary = { Text(text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_summary)) },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_expanding_on_screen_controls_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableExpandingOnScreenControls,
-                                    onValueChange = { preferences.enableExpandingOnScreenControls.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_expanding_on_screen_controls_title)) },
-                                    summary = { Text(text = stringResource(id = R.string.pref_appearance_expanding_on_screen_controls_summary)) },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.LAST,
-                                highlightKey = R.string.pref_appearance_player_always_dark_mode_title,
-                            ) {
-                                SwitchPreference(
-                                    value = if (enableGlassPlayerControls) true else playerAlwaysDarkMode,
-                                    onValueChange = { preferences.playerAlwaysDarkMode.set(it) },
-                                    enabled = !enableGlassPlayerControls,
-                                    onDisabledClick = {
-                                        Toast.makeText(
-                                            context,
-                                            context.getString(R.string.pref_appearance_player_always_dark_mode_disabled_toast),
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_player_always_dark_mode_title)) },
-                                    summary = { Text(text = stringResource(id = R.string.pref_appearance_player_always_dark_mode_summary)) },
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        PreferenceSectionHeader(title = stringResource(id = R.string.pref_appearance_category_bottom_nav))
-                    }
-
-                    item {
-                        val enableShorts by browserPreferences.enableShorts.collectAsState()
-                        val enableTabRecents by browserPreferences.enableTabRecents.collectAsState()
-                        val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
-                        val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
-                        val enableTabCineHub by browserPreferences.enableTabCineHub.collectAsState()
-                        val enableTabCineTv by browserPreferences.enableTabCineTv.collectAsState()
-
-                        GroupedListColumn {
-                            GroupedPreferenceCard(
-                                position = GroupPosition.FIRST,
-                                highlightKey = R.string.pref_appearance_tab_cinehub_title,
-                            ) {
-                                SwitchPreference(
-                                    value = true,
-                                    onValueChange = {},
-                                    enabled = false,
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinehub_title)) },
-                                    summary = {
-                                        Text(
-                                            text = "Default launch destination (Always active)",
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_shorts_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableShorts,
-                                    onValueChange = { browserPreferences.enableShorts.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_shorts_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_shorts_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_recents_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableTabRecents,
-                                    onValueChange = { browserPreferences.enableTabRecents.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_recents_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_recents_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_playlists_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableTabPlaylists,
-                                    onValueChange = { browserPreferences.enableTabPlaylists.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_playlists_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_playlists_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_tab_network_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableTabNetwork,
-                                    onValueChange = { browserPreferences.enableTabNetwork.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_network_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_network_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.LAST,
-                                highlightKey = R.string.pref_appearance_tab_cinetv_title,
-                            ) {
-                                SwitchPreference(
-                                    value = enableTabCineTv,
-                                    onValueChange = { browserPreferences.enableTabCineTv.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_tab_cinetv_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_tab_cinetv_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        PreferenceSectionHeader(title = stringResource(id = R.string.pref_appearance_category_file_browser))
-                    }
-
-                    item {
-                        val unlimitedNameLines by preferences.unlimitedNameLines.collectAsState()
-                        val showUnplayedOldVideoLabel by preferences.showUnplayedOldVideoLabel.collectAsState()
-                        val unplayedOldVideoDays by preferences.unplayedOldVideoDays.collectAsState()
-                        val autoScrollToLastPlayed by browserPreferences.autoScrollToLastPlayed.collectAsState()
-                        val watchedThreshold by browserPreferences.watchedThreshold.collectAsState()
-                        val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
-                        val includeNoMediaContent by browserPreferences.includeNoMediaContent.collectAsState()
-                        val showTreeViewPath by browserPreferences.showTreeViewPath.collectAsState()
-
-                        GroupedListColumn {
-                            GroupedPreferenceCard(
-                                position = GroupPosition.FIRST,
-                                highlightKey = R.string.pref_appearance_unlimited_name_lines_title,
-                            ) {
-                                SwitchPreference(
-                                    value = unlimitedNameLines,
-                                    onValueChange = { preferences.unlimitedNameLines.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_unlimited_name_lines_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_unlimited_name_lines_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_show_unplayed_old_video_label_title,
-                            ) {
-                                SwitchPreference(
-                                    value = showUnplayedOldVideoLabel,
-                                    onValueChange = { preferences.showUnplayedOldVideoLabel.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_unplayed_old_video_days_title,
-                            ) {
-                                SliderPreference(
-                                    value = unplayedOldVideoDays.toFloat(),
-                                    onValueChange = { preferences.unplayedOldVideoDays.set(it.roundToInt()) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_unplayed_old_video_days_title)) },
-                                    valueRange = 1f..30f,
-                                    summary = {
-                                        Text(
-                                            text = stringResource(
-                                                id = R.string.pref_appearance_unplayed_old_video_days_summary,
-                                                unplayedOldVideoDays,
-                                            ),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    },
-                                    onSliderValueChange = { preferences.unplayedOldVideoDays.set(it.roundToInt()) },
-                                    sliderValue = unplayedOldVideoDays.toFloat(),
-                                    enabled = showUnplayedOldVideoLabel
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_auto_scroll_title,
-                            ) {
-                                SwitchPreference(
-                                    value = autoScrollToLastPlayed,
-                                    onValueChange = { browserPreferences.autoScrollToLastPlayed.set(it) },
-                                    title = { Text(text = stringResource(R.string.pref_appearance_auto_scroll_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(R.string.pref_appearance_auto_scroll_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_appearance_watched_threshold_title,
-                            ) {
-                                SliderPreference(
-                                    value = watchedThreshold.toFloat(),
-                                    onValueChange = { browserPreferences.watchedThreshold.set(it.roundToInt()) },
-                                    sliderValue = watchedThreshold.toFloat(),
-                                    onSliderValueChange = { browserPreferences.watchedThreshold.set(it.roundToInt()) },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_watched_threshold_title)) },
-                                    valueRange = 50f..100f,
-                                    valueSteps = 9,
-                                    summary = {
-                                        Text(
-                                            text = stringResource(
-                                                id = R.string.pref_appearance_watched_threshold_summary,
-                                                watchedThreshold,
-                                            ),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    },
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_show_audio_files_title,
-                            ) {
-                                SwitchPreference(
-                                    value = showAudioFiles,
-                                    onValueChange = { browserPreferences.showAudioFiles.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_show_audio_files_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_show_audio_files_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-
-                            GroupedPreferenceCard(
-                                position = GroupPosition.MIDDLE,
-                                highlightKey = R.string.pref_include_no_media_content_title,
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                    SwitchPreference(
-                                        value = includeNoMediaContent,
-                                        onValueChange = { newValue ->
-                                            browserPreferences.includeNoMediaContent.set(newValue)
-                                            MediaLibraryEvents.notifyChanged()
-                                            scope.launch(Dispatchers.IO) {
-                                                runCatching { hybridMediaIndex.ensureFresh(force = true, userInitiated = true) }
-                                            }
-                                        },
-                                        title = { Text(text = stringResource(id = R.string.pref_include_no_media_content_title)) },
-                                        summary = {
-                                            Text(
-                                                text = stringResource(id = R.string.pref_include_no_media_content_summary),
-                                                color = MaterialTheme.colorScheme.outline,
-                                            )
-                                        },
-                                    )
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        TextButton(
-                                            onClick = { libraryRootPicker.launch(null) },
-                                            enabled = includeNoMediaContent,
-                                        ) {
-                                            Text(text = stringResource(R.string.pref_add_library_root))
-                                        }
-                                        Text(
-                                            text = stringResource(
-                                                R.string.pref_library_root_count,
-                                                libraryScanRoots.size,
-                                            ),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.outline,
-                                            modifier = Modifier.padding(horizontal = 16.dp),
-                                        )
-                                        if (libraryScanRoots.isNotEmpty()) {
-                                            TextButton(
-                                                onClick = {
-                                                    foldersPreferences.libraryScanRoots.set(emptySet())
-                                                    MediaLibraryEvents.notifyChanged()
-                                                },
-                                            ) {
-                                                Text(text = stringResource(R.string.pref_clear_library_roots))
-                                            }
-                                        }
                                     }
                                 }
-                            }
 
-                            GroupedPreferenceCard(
-                                position = GroupPosition.LAST,
-                                highlightKey = R.string.pref_show_tree_view_path_title,
-                            ) {
-                                SwitchPreference(
-                                    value = showTreeViewPath,
-                                    onValueChange = { browserPreferences.showTreeViewPath.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_show_tree_view_path_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_show_tree_view_path_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                    }
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                    item {
-                        PreferenceSectionHeader(title = stringResource(id = R.string.pref_appearance_category_thumbnails))
-                    }
-
-                    item {
-                        val tapThumbnailToSelect by gesturePreferences.tapThumbnailToSelect.collectAsState()
-                        val showNetworkThumbnails by preferences.showNetworkThumbnails.collectAsState()
-
-                        GroupedListColumn {
-                            GroupedPreferenceCard(
-                                position = GroupPosition.FIRST,
-                                highlightKey = R.string.pref_gesture_tap_thumbnail_to_select_title,
-                            ) {
-                                SwitchPreference(
-                                    value = tapThumbnailToSelect,
-                                    onValueChange = { gesturePreferences.tapThumbnailToSelect.set(it) },
-                                    title = { Text(text = stringResource(id = R.string.pref_gesture_tap_thumbnail_to_select_title)) },
-                                    summary = {
-                                        Text(
-                                            text = stringResource(id = R.string.pref_gesture_tap_thumbnail_to_select_summary),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    }
+                                ThemePicker(
+                                    currentTheme = appTheme,
+                                    isDarkMode = true,
+                                    onThemeSelected = { preferences.appTheme.set(it) },
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
 
-                            GroupedPreferenceCard(
-                                position = GroupPosition.LAST,
-                                highlightKey = R.string.pref_appearance_show_network_thumbnails_title,
-                            ) {
-                                Column {
-                                    SwitchPreference(
-                                        value = showNetworkThumbnails,
-                                        onValueChange = { newValue ->
-                                            if (newValue) {
-                                                showNetworkWarning = true
-                                            } else {
-                                                preferences.showNetworkThumbnails.set(false)
-                                            }
-                                        },
-                                        title = { Text(text = stringResource(id = R.string.pref_appearance_show_network_thumbnails_title)) },
-                                        summary = {
-                                            Text(
-                                                text = stringResource(id = R.string.pref_appearance_show_network_thumbnails_summary),
-                                                color = MaterialTheme.colorScheme.outline,
-                                            )
-                                        }
-                                    )
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_amoled_mode_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_amoled_mode_summary),
+                                icon = Icons.Outlined.DarkMode,
+                                checked = amoledMode,
+                                onCheckedChange = { preferences.amoledMode.set(it) },
+                                showDivider = true
+                            )
 
-                                    if (showNetworkWarning) {
-                                        xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
-                                            onDismissRequest = { showNetworkWarning = false },
-                                            title = stringResource(R.string.pref_appearance_network_thumbnails_dialog_title),
-                                            icon = Icons.Outlined.Warning,
-                                            dismissButton = {
-                                                xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
-                                                    text = stringResource(R.string.generic_cancel),
-                                                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
-                                                    onClick = { showNetworkWarning = false }
-                                                )
-                                            },
-                                            confirmButton = {
-                                                xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
-                                                    text = stringResource(R.string.generic_confirm),
-                                                    variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
-                                                    onClick = {
-                                                        preferences.showNetworkThumbnails.set(true)
-                                                        showNetworkWarning = false
-                                                    }
-                                                )
-                                            }
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.pref_appearance_network_thumbnails_dialog_message),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            GlassSwitchPreference(
+                                title = "Material You Dynamic Complement",
+                                subtitle = "Complement MaxStream branding with system accent colors",
+                                icon = Icons.Outlined.ColorLens,
+                                checked = materialYou,
+                                onCheckedChange = { preferences.materialYou.set(it) },
+                                showDivider = false
+                            )
                         }
                     }
 
+                    // Glassmorphism & Visual Depth Section
+                    item {
+                        GlassCategoryHeader(title = "Glassmorphism & Depth", icon = Icons.Outlined.AutoAwesome)
+                        GlassSettingsSection {
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_enable_modern_glass_ui_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_enable_modern_glass_ui_summary),
+                                icon = Icons.Outlined.AutoAwesome,
+                                checked = enableModernGlassUI,
+                                onCheckedChange = { preferences.enableModernGlassUI.set(it) },
+                                showDivider = true
+                            )
+
+                            GlassSwitchPreference(
+                                title = "Glass Player Controls",
+                                subtitle = "Render video player panels and badges with blurred frosted glass",
+                                icon = Icons.Outlined.ViewQuilt,
+                                checked = enableGlassPlayerControls,
+                                onCheckedChange = { preferences.enableGlassPlayerControls.set(it) },
+                                showDivider = true
+                            )
+
+                            GlassSwitchPreference(
+                                title = "Glass Seekbar Background",
+                                subtitle = "Show intelligent translucent glass behind video playback scrubber",
+                                icon = Icons.Outlined.AutoAwesome,
+                                checked = enableGlassSeekbarBackground,
+                                onCheckedChange = { preferences.enableGlassSeekbarBackground.set(it) },
+                                showDivider = false
+                            )
+                        }
+                    }
+
+                    // Motion & Animation Section
+                    item {
+                        GlassCategoryHeader(title = "Motion & Interactions", icon = Icons.Outlined.Animation)
+                        GlassSettingsSection {
+                            GlassSwitchPreference(
+                                title = "Premium Micro-Interactions",
+                                subtitle = "Subtle spring bounce feedback on interactive cards and buttons",
+                                icon = Icons.Outlined.Animation,
+                                checked = enableBounceAnimation,
+                                onCheckedChange = { preferences.enableBounceAnimation.set(it) },
+                                showDivider = false
+                            )
+                        }
+                    }
+
+                    // UI Density & Display Section
+                    item {
+                        GlassCategoryHeader(title = "Layout Density & Typography", icon = Icons.Outlined.TextFields)
+                        GlassSettingsSection {
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_use_system_font_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_use_system_font_summary),
+                                icon = Icons.Outlined.TextFields,
+                                checked = useSystemFont,
+                                onCheckedChange = { preferences.useSystemFont.set(it) },
+                                showDivider = true
+                            )
+
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_unlimited_name_lines_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_unlimited_name_lines_summary),
+                                icon = Icons.Outlined.TextFields,
+                                checked = unlimitedNameLines,
+                                onCheckedChange = { preferences.unlimitedNameLines.set(it) },
+                                showDivider = true
+                            )
+
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_summary),
+                                icon = Icons.Outlined.Palette,
+                                checked = matchPlayerControlsToTheme,
+                                onCheckedChange = { preferences.matchPlayerControlsToTheme.set(it) },
+                                showDivider = true
+                            )
+
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_summary),
+                                icon = Icons.Outlined.ViewQuilt,
+                                checked = hidePlayerButtonsBackground,
+                                onCheckedChange = { preferences.hidePlayerButtonsBackground.set(it) },
+                                showDivider = false
+                            )
+                        }
+                    }
+
+                    // Media Presentation Section
+                    item {
+                        GlassCategoryHeader(title = "Media Presentation & Badges", icon = Icons.Outlined.Image)
+                        GlassSettingsSection {
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_summary),
+                                icon = Icons.Outlined.Image,
+                                checked = showUnplayedOldVideoLabel,
+                                onCheckedChange = { preferences.showUnplayedOldVideoLabel.set(it) },
+                                showDivider = true
+                            )
+
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_show_network_thumbnails_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_show_network_thumbnails_summary),
+                                icon = Icons.Outlined.Image,
+                                checked = showNetworkThumbnails,
+                                onCheckedChange = { preferences.showNetworkThumbnails.set(it) },
+                                showDivider = false
+                            )
+                        }
+                    }
+
+                    // Language Selection Section
+                    item {
+                        GlassCategoryHeader(title = stringResource(id = R.string.pref_appearance_language_title), icon = Icons.Outlined.Language)
+                        GlassSettingsSection {
+                            GlassPreferenceItem(
+                                title = stringResource(id = R.string.pref_appearance_language_title),
+                                subtitle = if (currentLanguage.code.isEmpty()) {
+                                    stringResource(R.string.system_default)
+                                } else {
+                                    "${currentLanguage.nativeName} (${currentLanguage.localizedName})"
+                                },
+                                icon = Icons.Outlined.Language,
+                                showDivider = false,
+                                onClick = { showLanguageDialog = true }
+                            )
+                        }
+                    }
                 }
             }
         }
 
+        // Language Selection Dialog
         if (showLanguageDialog) {
-            val currentCode = remember { LocaleHelper.getSavedLanguageCode(context) }
-            var selectedCode by remember { mutableStateOf(currentCode) }
             val languages = remember { LocaleHelper.getSupportedLanguages(context) }
+            val currentLangCode = currentLanguage.code
+            var selectedCode by remember { mutableStateOf(currentLangCode) }
 
-            xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(
+            AlertDialog(
                 onDismissRequest = { showLanguageDialog = false },
-                icon = Icons.Filled.Language,
-                title = stringResource(R.string.pref_appearance_language_title),
-                dismissButton = {
-                    xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
-                        text = stringResource(R.string.generic_cancel),
-                        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Ghost,
-                        onClick = { showLanguageDialog = false }
-                    )
-                },
-                confirmButton = {
-                    xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton(
-                        text = stringResource(R.string.generic_confirm),
-                        variant = xyz.mpv.rex.ui.components.glass.GlassButtonVariant.Primary,
-                        onClick = {
-                            LocaleHelper.setAppLanguage(context, selectedCode)
-                            showLanguageDialog = false
-                        }
-                    )
-                }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 350.dp)
-                        .verticalScroll(rememberScrollState())
-                        .selectableGroup(),
-                ) {
-                    languages.forEach { language ->
-                        val isSelected = selectedCode == language.code
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .selectable(
-                                    selected = isSelected,
-                                    onClick = { selectedCode = language.code },
-                                    role = Role.RadioButton,
-                                )
-                                .padding(horizontal = 8.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = isSelected,
-                                onClick = null,
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = language.nativeName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                                if (language.code.isNotEmpty()) {
-                                    Text(
-                                        text = language.localizedName,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                title = { Text(stringResource(R.string.pref_appearance_language_title)) },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectableGroup()
+                    ) {
+                        languages.forEach { lang ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .selectable(
+                                        selected = selectedCode == lang.code,
+                                        onClick = { selectedCode = lang.code },
+                                        role = Role.RadioButton
                                     )
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selectedCode == lang.code,
+                                    onClick = null
+                                )
+                                Spacer(modifier = Modifier.padding(start = 12.dp))
+                                Column {
+                                    Text(
+                                        text = if (lang.code.isEmpty()) stringResource(R.string.system_default) else lang.nativeName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (selectedCode == lang.code) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    if (lang.code.isNotEmpty()) {
+                                        Text(
+                                            text = lang.localizedName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            preferences.appLanguage.set(selectedCode)
+                            LocaleHelper.setAppLanguage(context, selectedCode)
+                            showLanguageDialog = false
+                        }
+                    ) {
+                        Text("Apply")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLanguageDialog = false }) {
+                        Text("Cancel")
+                    }
                 }
-            }
+            )
         }
     }
 }
