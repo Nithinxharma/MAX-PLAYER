@@ -217,6 +217,21 @@ suspend fun loadExtractor(
         }
     }
 
+    // 4. Dynamic Plugin DEX Self-Healing Discovery Fallback
+    if (!extracted) {
+        try {
+            extracted = xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.discoverAndResolveExtractor(
+                cleanUrl,
+                referer,
+                subtitleCallback,
+                callback
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.d("ExtractorApi", "Dynamic discovery fallback note: ${e.message}")
+        }
+    }
+
     return extracted
 }
 
