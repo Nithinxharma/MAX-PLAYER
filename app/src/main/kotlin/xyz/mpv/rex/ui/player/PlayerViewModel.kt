@@ -644,6 +644,71 @@ class PlayerViewModel(
     _mediaIdentifier.value = identifier
   }
 
+  fun playSeriesEpisode(context: android.content.Context, episode: xyz.mpv.rex.cinehub.playlist.model.SeriesEpisode) {
+    viewModelScope.launch(Dispatchers.IO) {
+      val seriesTitle = episode.seriesTitle
+      val formattedCode = episode.formattedEpisodeCode
+      val fullTitle = if (episode.title.isNotBlank() && !episode.title.startsWith("Episode ")) {
+        "$seriesTitle - $formattedCode ${episode.title}"
+      } else {
+        "$seriesTitle - $formattedCode"
+      }
+
+      _mediaTitle.value = fullTitle
+      _mediaIdentifier.value = episode.episodeId
+
+      // 1. Direct stream or local media file
+      if (episode.dataUrl.isNotBlank() && (episode.dataUrl.startsWith("http://") || episode.dataUrl.startsWith("https://") || episode.dataUrl.startsWith("file://") || episode.dataUrl.startsWith("/"))) {
+        withContext(Dispatchers.Main) {
+          val startPos = if (episode.progressSeconds > 0) episode.progressSeconds.toDouble() else 0.0
+          val startOpt = if (startPos > 0.5) "start=$startPos" else null
+          val opts = listOfNotNull(startOpt).joinToString(",")
+          if (opts.isNotBlank()) {
+            `is`.xyz.mpv.MPVLib.command("loadfile", episode.dataUrl, "replace", "-1", opts)
+          } else {
+            `is`.xyz.mpv.MPVLib.command("loadfile", episode.dataUrl, "replace")
+          }
+          `is`.xyz.mpv.MPVLib.setPropertyString("force-media-title", fullTitle)
+        }
+        return@launch
+      }
+
+      // 2. CloudStream Provider extraction
+      if (episode.dataUrl.isNotBlank() && episode.providerName.isNotBlank()) {
+        val api = com.lagradost.cloudstream3.APIHolder.getApi(episode.providerName)
+          ?: com.lagradost.cloudstream3.APIHolder.apis.firstOrNull { it.name.equals(episode.providerName, true) }
+
+        if (api != null) {
+          val links = mutableListOf<com.lagradost.cloudstream3.utils.ExtractorLink>()
+          val subs = mutableListOf<com.lagradost.cloudstream3.SubtitleFile>()
+          runCatching {
+            api.loadLinks(episode.dataUrl, isCasting = false, subtitleCallback = { subs.add(it) }) { link ->
+              links.add(link)
+            }
+          }
+          if (links.isNotEmpty()) {
+            val bestLink = links.maxByOrNull { it.quality } ?: links.first()
+            withContext(Dispatchers.Main) {
+              val startPos = if (episode.progressSeconds > 0) episode.progressSeconds.toDouble() else 0.0
+              val startOpt = if (startPos > 0.5) "start=$startPos" else null
+              val opts = listOfNotNull(startOpt).joinToString(",")
+              if (opts.isNotBlank()) {
+                `is`.xyz.mpv.MPVLib.command("loadfile", bestLink.url, "replace", "-1", opts)
+              } else {
+                `is`.xyz.mpv.MPVLib.command("loadfile", bestLink.url, "replace")
+              }
+              `is`.xyz.mpv.MPVLib.setPropertyString("force-media-title", fullTitle)
+            }
+          } else {
+            withContext(Dispatchers.Main) {
+              Toast.makeText(context, "No stream links found for ${episode.title}", Toast.LENGTH_SHORT).show()
+            }
+          }
+        }
+      }
+    }
+  }
+
   var currentMediaTitle: String
     get() = _mediaTitle.value
     set(value) { _mediaTitle.value = value }

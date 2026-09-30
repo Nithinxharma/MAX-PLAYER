@@ -232,6 +232,7 @@ fun extractAndPlayMovie(
   movieTitle: String,
   scope: kotlinx.coroutines.CoroutineScope,
   onDismiss: () -> Unit = {},
+  onDiagnostic: ((xyz.mpv.rex.ui.browser.cinehub.components.StreamExtractionDiagnostic) -> Unit)? = null,
   onLinksLoaded: (List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>) -> Unit,
 ) {
   scope.launch(Dispatchers.IO) {
@@ -239,6 +240,7 @@ fun extractAndPlayMovie(
       ?: APIHolder.getApi(providerName)
     val links = mutableListOf<com.lagradost.cloudstream3.utils.ExtractorLink>()
     val subtitles = mutableListOf<com.lagradost.cloudstream3.SubtitleFile>()
+    var caughtException: Throwable? = null
 
     if (api != null) {
       try {
@@ -247,32 +249,47 @@ fun extractAndPlayMovie(
         }) { link ->
           synchronized(links) { links.add(link) }
         }
-      } catch (e: Exception) {
-        android.util.Log.e("CineHub", "Error extracting movie links: ${e.message}")
+      } catch (e: Throwable) {
+        caughtException = e
+        android.util.Log.e("CineHub", "Error extracting movie links from $providerName ($dataUrl): ${e.message}", e)
       }
     }
 
     if (links.isEmpty()) {
-      val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
-      val provider = registry.getProvider(providerName)
-        ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
-      val streams = provider?.loadStreams(dataUrl) ?: emptyList()
-      for (st in streams) {
-        links.add(
-          com.lagradost.cloudstream3.utils.ExtractorLink(
-            source = provider?.name ?: "Extension",
-            name = st.name,
-            url = st.url,
-            referer = st.headers["Referer"] ?: "",
-            quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
-            isM3u8 = st.isM3u8,
-            headers = st.headers
+      try {
+        val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
+        val provider = registry.getProvider(providerName)
+          ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
+        val streams = provider?.loadStreams(dataUrl) ?: emptyList()
+        for (st in streams) {
+          links.add(
+            com.lagradost.cloudstream3.utils.ExtractorLink(
+              source = provider?.name ?: "Extension",
+              name = st.name,
+              url = st.url,
+              referer = st.headers["Referer"] ?: "",
+              quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
+              isM3u8 = st.isM3u8,
+              headers = st.headers
+            )
           )
-        )
+        }
+      } catch (e: Throwable) {
+        if (caughtException == null) caughtException = e
+        android.util.Log.e("CineHub", "Error in fallback stream loading from $providerName: ${e.message}", e)
       }
     }
 
+    val diagnostic = xyz.mpv.rex.ui.browser.cinehub.components.diagnoseStreamFailure(
+      providerName = providerName,
+      targetUrl = dataUrl,
+      exception = caughtException,
+      linksCount = links.size,
+      extractorsCount = APIHolder.extractorApis.size
+    )
+
     withContext(Dispatchers.Main) {
+      onDiagnostic?.invoke(diagnostic)
       onLinksLoaded(links, subtitles)
     }
   }
@@ -286,6 +303,7 @@ fun extractAndPlayEpisode(
   seriesTitle: String,
   scope: kotlinx.coroutines.CoroutineScope,
   onDismiss: () -> Unit = {},
+  onDiagnostic: ((xyz.mpv.rex.ui.browser.cinehub.components.StreamExtractionDiagnostic) -> Unit)? = null,
   onLinksLoaded: (List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>) -> Unit,
 ) {
   scope.launch(Dispatchers.IO) {
@@ -293,6 +311,7 @@ fun extractAndPlayEpisode(
       ?: APIHolder.getApi(providerName)
     val links = mutableListOf<com.lagradost.cloudstream3.utils.ExtractorLink>()
     val subtitles = mutableListOf<com.lagradost.cloudstream3.SubtitleFile>()
+    var caughtException: Throwable? = null
 
     if (api != null) {
       try {
@@ -301,32 +320,47 @@ fun extractAndPlayEpisode(
         }) { link ->
           synchronized(links) { links.add(link) }
         }
-      } catch (e: Exception) {
-        android.util.Log.e("CineHub", "Error extracting episode links: ${e.message}")
+      } catch (e: Throwable) {
+        caughtException = e
+        android.util.Log.e("CineHub", "Error extracting episode links from $providerName ($data): ${e.message}", e)
       }
     }
 
     if (links.isEmpty()) {
-      val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
-      val provider = registry.getProvider(providerName)
-        ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
-      val streams = provider?.loadStreams(data) ?: emptyList()
-      for (st in streams) {
-        links.add(
-          com.lagradost.cloudstream3.utils.ExtractorLink(
-            source = provider?.name ?: "Extension",
-            name = st.name,
-            url = st.url,
-            referer = st.headers["Referer"] ?: "",
-            quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
-            isM3u8 = st.isM3u8,
-            headers = st.headers
+      try {
+        val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
+        val provider = registry.getProvider(providerName)
+          ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
+        val streams = provider?.loadStreams(data) ?: emptyList()
+        for (st in streams) {
+          links.add(
+            com.lagradost.cloudstream3.utils.ExtractorLink(
+              source = provider?.name ?: "Extension",
+              name = st.name,
+              url = st.url,
+              referer = st.headers["Referer"] ?: "",
+              quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
+              isM3u8 = st.isM3u8,
+              headers = st.headers
+            )
           )
-        )
+        }
+      } catch (e: Throwable) {
+        if (caughtException == null) caughtException = e
+        android.util.Log.e("CineHub", "Error in fallback episode stream loading from $providerName: ${e.message}", e)
       }
     }
 
+    val diagnostic = xyz.mpv.rex.ui.browser.cinehub.components.diagnoseStreamFailure(
+      providerName = providerName,
+      targetUrl = data,
+      exception = caughtException,
+      linksCount = links.size,
+      extractorsCount = APIHolder.extractorApis.size
+    )
+
     withContext(Dispatchers.Main) {
+      onDiagnostic?.invoke(diagnostic)
       onLinksLoaded(links, subtitles)
     }
   }
@@ -2425,8 +2459,10 @@ fun CineDetailView(
   val actorsList = (tmdbEnrichedMovie?.actors?.takeIf { it.isNotEmpty() } ?: (item as? MovieItem)?.actors?.takeIf { it.isNotEmpty() } ?: tmdbEnrichedTvShow?.actors?.takeIf { it.isNotEmpty() } ?: (item as? TvShowItem)?.actors?.takeIf { it.isNotEmpty() }).orEmpty()
 
   var isInstantPlayExtracting by remember { mutableStateOf(false) }
+  var activeStreamDiagnostic by remember { mutableStateOf<xyz.mpv.rex.ui.browser.cinehub.components.StreamExtractionDiagnostic?>(null) }
 
   val onInstantPlayClick: () -> Unit = {
+    activeStreamDiagnostic = null
     when (item) {
       is MovieItem -> {
         if (item.videoFilePath.startsWith("ext_stream:")) {
@@ -2437,7 +2473,13 @@ fun CineDetailView(
           scope.launch(Dispatchers.IO) {
             val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
             val provider = registry.getProvider(providerId)
-            val streams = provider?.loadStreams(dataUrl) ?: emptyList()
+            var caughtEx: Throwable? = null
+            val streams = try {
+              provider?.loadStreams(dataUrl) ?: emptyList()
+            } catch (t: Throwable) {
+              caughtEx = t
+              emptyList()
+            }
             val stream = streams.firstOrNull()
             val extractorLinks = streams.map { s ->
               com.lagradost.cloudstream3.utils.ExtractorLink(
@@ -2449,6 +2491,13 @@ fun CineDetailView(
                 headers = s.headers
               )
             }
+            val diag = xyz.mpv.rex.ui.browser.cinehub.components.diagnoseStreamFailure(
+              providerName = provider?.name ?: providerId,
+              targetUrl = dataUrl,
+              exception = caughtEx,
+              linksCount = streams.size,
+              extractorsCount = APIHolder.extractorApis.size
+            )
             withContext(Dispatchers.Main) {
               isInstantPlayExtracting = false
               if (stream != null && stream.url.isNotBlank()) {
@@ -2468,7 +2517,7 @@ fun CineDetailView(
                   allLinks = extractorLinks
                 )
               } else {
-                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                activeStreamDiagnostic = diag
               }
             }
           }
@@ -2533,6 +2582,9 @@ fun CineDetailView(
               movieTitle = resp.name,
               scope = scope,
               onDismiss = onDismiss,
+              onDiagnostic = { diag ->
+                if (!diag.isSuccess) activeStreamDiagnostic = diag
+              },
               onLinksLoaded = { links, subs ->
                 isInstantPlayExtracting = false
                 if (onLinksLoaded != null) {
@@ -2574,8 +2626,27 @@ fun CineDetailView(
                 seriesTitle = resp.name,
                 scope = scope,
                 onDismiss = onDismiss,
+                onDiagnostic = { diag ->
+                  if (!diag.isSuccess) activeStreamDiagnostic = diag
+                },
                 onLinksLoaded = { links, subs ->
                   isInstantPlayExtracting = false
+                  val provName = item.providerName.ifBlank { resp.apiName }
+                  xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.buildAndSetPlaylist(
+                    context = context,
+                    seriesId = resp.url.ifBlank { resp.name },
+                    seriesTitle = resp.name,
+                    providerEpisodes = resp.episodes,
+                    posterUrl = posterPath,
+                    backdropUrl = backdropPath,
+                    fanartUrl = backdropPath ?: posterPath,
+                    overview = plot,
+                    year = year,
+                    rating = rating,
+                    providerName = provName,
+                    initialSeason = firstEp.season ?: 1,
+                    initialEpisode = firstEp.episode ?: 1
+                  )
                   val epMetadataJson = kotlinx.serialization.json.Json.encodeToString(
                     mapOf(
                       "seriesTitle" to resp.name,
@@ -2626,6 +2697,9 @@ fun CineDetailView(
           movieTitle = item.name,
           scope = scope,
           onDismiss = onDismiss,
+          onDiagnostic = { diag ->
+            if (!diag.isSuccess) activeStreamDiagnostic = diag
+          },
           onLinksLoaded = { links, subs ->
             isInstantPlayExtracting = false
             if (onLinksLoaded != null) {
@@ -3549,10 +3623,25 @@ fun CineDetailView(
           val provName = if (item is ExtensionMediaDetails) item.providerName.ifBlank { loadResp.apiName } else loadResp.apiName
           val context = LocalContext.current
 
+          // Diagnostic card shown on stream failure
+          activeStreamDiagnostic?.let { diag ->
+            xyz.mpv.rex.ui.browser.cinehub.components.StreamDiagnosticCard(
+              diagnostic = diag,
+              onRetry = {
+                activeStreamDiagnostic = null
+                onInstantPlayClick()
+              },
+              onDismiss = {
+                activeStreamDiagnostic = null
+              }
+            )
+          }
+
           if (loadResp is MovieLoadResponse) {
             var isExtractingMovie by remember { mutableStateOf(false) }
             Button(
               onClick = {
+                activeStreamDiagnostic = null
                 isExtractingMovie = true
                 extractAndPlayMovie(
                   context = context,
@@ -3561,6 +3650,9 @@ fun CineDetailView(
                   movieTitle = loadResp.name,
                   scope = scope,
                   onDismiss = onDismiss,
+                  onDiagnostic = { diag ->
+                    if (!diag.isSuccess) activeStreamDiagnostic = diag
+                  },
                   onLinksLoaded = { links, subs ->
                     isExtractingMovie = false
                     if (onLinksLoaded != null) {
@@ -3598,8 +3690,6 @@ fun CineDetailView(
                         detailPendingYear = loadResp.year?.toString()
                         detailPendingRating = loadResp.score?.score
                         detailPendingProvider = provName
-                      } else if (links.isEmpty()) {
-                        Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                       }
                     }
                   }
@@ -3740,6 +3830,7 @@ fun CineDetailView(
                     modifier = Modifier
                       .fillMaxWidth()
                       .clickable(enabled = extractingEpisodeData == null) {
+                        activeStreamDiagnostic = null
                         extractingEpisodeData = ep.data
                         extractAndPlayEpisode(
                           context = context,
@@ -3752,8 +3843,29 @@ fun CineDetailView(
                             extractingEpisodeData = null
                             onDismiss()
                           },
+                          onDiagnostic = { diag ->
+                            if (!diag.isSuccess) activeStreamDiagnostic = diag
+                          },
                           onLinksLoaded = { links, subs ->
                             extractingEpisodeData = null
+                            xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.buildAndSetPlaylist(
+                              context = context,
+                              seriesId = loadResp.url.ifBlank { loadResp.name },
+                              seriesTitle = loadResp.name,
+                              providerEpisodes = loadResp.episodes,
+                              posterUrl = posterPath,
+                              backdropUrl = backdropPath,
+                              fanartUrl = backdropPath ?: posterPath,
+                              overview = plot,
+                              year = year,
+                              rating = rating,
+                              providerName = provName,
+                              initialSeason = ep.season ?: selectedSeason,
+                              initialEpisode = epNumber
+                            )
+                            if (tmdbSeasonEpisodes.isNotEmpty()) {
+                              xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.enrichWithTmdb(tmdbSeasonEpisodes)
+                            }
                             if (onLinksLoaded != null) {
                               onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
                             } else {
@@ -3793,8 +3905,6 @@ fun CineDetailView(
                                 detailPendingYear = loadResp.year?.toString()
                                 detailPendingRating = epDisplayRating ?: loadResp.score?.score
                                 detailPendingProvider = provName
-                              } else if (links.isEmpty()) {
-                                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                               }
                             }
                           }

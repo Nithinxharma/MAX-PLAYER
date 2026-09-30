@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassCard
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
+import xyz.mpv.rex.ui.utils.LocalBackStack
 
 /**
  * Flagship Max Stream Extension Diagnostics Center:
@@ -372,6 +373,22 @@ private fun HeaderAuditSection(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Run Full Audit", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
+                }
+
+                val backstack = LocalBackStack.current
+                OutlinedButton(
+                    onClick = {
+                        backstack.add(xyz.mpv.rex.cinehub.diagnostic.ParserDiagnosticsViewerScreenRoute)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaxStreamTheme.CrimsonAccent.copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .height(42.dp)
+                        .testTag("view_diagnostics_button")
+                ) {
+                    Icon(Icons.Default.BugReport, contentDescription = null, tint = MaxStreamTheme.CrimsonAccent, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("View Diagnostics", fontSize = 13.sp, color = MaxStreamTheme.CrimsonAccent)
                 }
 
                 OutlinedButton(

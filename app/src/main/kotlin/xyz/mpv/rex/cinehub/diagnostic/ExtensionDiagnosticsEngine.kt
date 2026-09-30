@@ -431,24 +431,33 @@ object ExtensionDiagnosticsEngine {
                     isSuccess = true
                 )
             } else {
+                // Execute deep diagnostic inspection payload instead of simply returning empty list
+                val diagPayload = runCatching {
+                    ParserDiagnosticCollector.analyzeSearchParser(api, query)
+                }.getOrNull()
+
+                val failureReasonDetail = diagPayload?.failureReason ?: "Parser executed successfully over HTTP 200 OK but returned 0 items."
+                val selectorSummary = diagPayload?.selectorMatchCounts?.entries?.filter { it.value > 0 }?.joinToString { "${it.key}:${it.value}" }
+                    ?: "All common CSS selectors matched 0 items"
+
                 SearchDiagnosticsResult(
                     providerName = api.name,
                     query = query,
                     requestStep = reqStep,
                     providerCalledStep = callStep,
-                    responseReceivedStep = "HTTP 200 OK (Payload received)",
-                    parserExecutedStep = "Parser executed but returned empty list",
-                    resultsReturnedStep = "0 results returned",
+                    responseReceivedStep = "HTTP 200 OK (${diagPayload?.responseSizeFormatted ?: "Payload received"})",
+                    parserExecutedStep = "Parser executed. Selectors: $selectorSummary",
+                    resultsReturnedStep = "0 results returned (Diagnostic Payload Captured)",
                     resultsCount = 0,
                     isSuccess = false,
-                    failureReason = "Parser returned empty list.",
+                    failureReason = failureReasonDetail,
                     possibleCauses = listOf(
-                        "Website layout or endpoints changed",
+                        "Point of Failure: $failureReasonDetail",
+                        "Content-Type: ${diagPayload?.contentType ?: "text/html"}",
+                        "Candidate links found in page: ${diagPayload?.candidateLinksFound?.size ?: 0}",
+                        "JSON mapping result: ${diagPayload?.jsonMappingResults?.summary ?: "HTML"}",
                         "Missing or outdated CSS selectors in Jsoup parser",
-                        "Regex mismatch against scraped script blocks",
-                        "JSON mapping failure or missing data fields",
-                        "Cloudflare challenge block on search endpoint",
-                        "Network timeout or geographic restrictions"
+                        "Tap 'View Diagnostics' in Developer Mode to inspect 10 KB preview and regex matches"
                     )
                 )
             }
@@ -580,6 +589,16 @@ object ExtensionDiagnosticsEngine {
         }
 
         if (knownMissingForApi != null) {
+            val rootCauseText = "Required extractor '${knownMissingForApi.name}' is requested by ${api.name} but not registered in ExtractorApi."
+            runCatching {
+                ParserDiagnosticCollector.analyzeLoadLinks(
+                    api = api,
+                    episodeData = "$sampleDataUrl/${knownMissingForApi.name.lowercase()}",
+                    resolvedLinks = emptyList(),
+                    explicitFailureReason = rootCauseText
+                )
+            }
+
             return StreamLinkDiagnosticsResult(
                 providerName = api.name,
                 loadLinksSuccess = false,
@@ -587,7 +606,7 @@ object ExtensionDiagnosticsEngine {
                 extractorRegistered = false,
                 videoLinksFound = 0,
                 resultText = "No Stream Links",
-                rootCause = "Required extractor '${knownMissingForApi.name}' is requested by ${api.name} but not registered in ExtractorApi."
+                rootCause = rootCauseText
             )
         }
 

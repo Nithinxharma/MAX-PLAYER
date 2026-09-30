@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -89,9 +90,14 @@ fun MaxStreamMediaInfoSheet(
     details: MediaInfoDetails,
     onDismissRequest: () -> Unit,
     onPlayClick: () -> Unit,
+    diagnostic: StreamExtractionDiagnostic? = null,
+    onRetryPlay: (() -> Unit)? = null,
+    onDismissDiagnostic: (() -> Unit)? = null,
+    isExtracting: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var isBookmarked by remember { mutableStateOf(false) }
+    var localDiagnostic by remember(diagnostic) { mutableStateOf(diagnostic) }
     val isDark = isSystemInDarkTheme()
 
     val sheetBgColor = if (isDark) {
@@ -265,6 +271,21 @@ fun MaxStreamMediaInfoSheet(
                         }
                     }
 
+                    // Failure Diagnostic Card (if stream resolution failed)
+                    localDiagnostic?.let { diag ->
+                        StreamDiagnosticCard(
+                            diagnostic = diag,
+                            onRetry = {
+                                localDiagnostic = null
+                                onRetryPlay?.invoke() ?: onPlayClick()
+                            },
+                            onDismiss = {
+                                localDiagnostic = null
+                                onDismissDiagnostic?.invoke()
+                            }
+                        )
+                    }
+
                     // Action Buttons: Play + My List
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -273,14 +294,15 @@ fun MaxStreamMediaInfoSheet(
                     ) {
                         Button(
                             onClick = {
+                                localDiagnostic = null
                                 onPlayClick()
-                                onDismissRequest()
                             },
                             shape = MaxStreamTheme.ButtonShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaxStreamTheme.CrimsonAccent,
                                 contentColor = Color.White
                             ),
+                            enabled = !isExtracting,
                             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp),
                             modifier = Modifier
                                 .weight(1f)
@@ -288,19 +310,35 @@ fun MaxStreamMediaInfoSheet(
                                 .shadow(8.dp, MaxStreamTheme.ButtonShape, spotColor = MaxStreamTheme.CrimsonAccent)
                                 .testTag("sheet_play_btn")
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Watch Stream",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                            if (isExtracting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Finding Stream...",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Watch Stream",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                )
+                            }
                         }
 
                         FilledTonalButton(
