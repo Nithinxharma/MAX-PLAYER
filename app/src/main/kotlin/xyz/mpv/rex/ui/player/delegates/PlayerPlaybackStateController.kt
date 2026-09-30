@@ -122,6 +122,19 @@ class PlayerPlaybackStateController(
             hasBeenWatched = isFinished || progress >= (watchedThreshold / 100f),
           ),
         )
+
+        // Sync with SeriesPlaylistEngine for TV show episode progression & continue watching
+        val currentSeries = xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.currentPlaylist.value
+        if (currentSeries != null) {
+          xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.updatePlaybackProgress(
+            context = activity,
+            seriesId = currentSeries.seriesId,
+            seasonNumber = currentSeries.currentSeasonNumber,
+            episodeNumber = currentSeries.currentEpisodeNumber,
+            positionSeconds = currentPos.toLong(),
+            durationSeconds = currentDuration.toLong()
+          )
+        }
       }.onFailure { e ->
         Log.e(TAG, "Error saving playback state", e)
       }

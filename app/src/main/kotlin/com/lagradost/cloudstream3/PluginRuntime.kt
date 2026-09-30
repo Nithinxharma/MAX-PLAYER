@@ -51,6 +51,7 @@ object APIHolder {
 
     fun addPlugin(api: MainAPI) {
         _registerMainApiCallsCount.incrementAndGet()
+        com.lagradost.cloudstream3.network.DynamicDomainManager.applyDynamicDomain(api)
         Log.i("ExtensionManager", "INSTANCE_IDENTITY: APIHolder.addPlugin called on APIHolder@${System.identityHashCode(this)} for API ${api.name} (${api.mainUrl})")
         Log.i("ExtensionManager", "EXTENSION_LOAD: registerMainAPI called: ${api.name} (${api.mainUrl})")
         // Replace existing entry with same name if already present, or add new

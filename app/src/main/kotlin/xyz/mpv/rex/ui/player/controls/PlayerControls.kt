@@ -82,6 +82,9 @@ import androidx.compose.material3.Surface as M3Surface
 import xyz.mpv.rex.ui.player.controls.components.glassSurface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
+import xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine
+import xyz.mpv.rex.cinehub.playlist.model.AutoNextMode
+import xyz.mpv.rex.ui.player.controls.components.UpNextCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -2002,6 +2005,78 @@ fun PlayerControls(
         onConfirmResume = { pos -> viewModel.confirmResume(pos) },
         onRestart = { viewModel.restartFromBeginning() },
         onDismiss = { viewModel.dismissResumePrompt() },
+      )
+    }
+
+    // Up Next TV Episode Card System
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val seriesPlaylist by SeriesPlaylistEngine.currentPlaylist.collectAsState()
+    val upNextState by SeriesPlaylistEngine.upNextState.collectAsState()
+    val tvShowUpNextCard by playerPreferences.tvShowUpNextCard.collectAsState()
+    val tvCountdownDuration by playerPreferences.tvCountdownDuration.collectAsState()
+    val tvAutoNextMode by playerPreferences.tvAutoNextMode.collectAsState()
+
+    // Trigger Up Next Card when nearing completion or credits
+    val currentPos = position ?: 0
+    val currentDur = duration ?: 0
+    LaunchedEffect(currentPos, currentDur, seriesPlaylist, tvShowUpNextCard) {
+      if (seriesPlaylist != null && tvShowUpNextCard && currentDur > 0) {
+        val remainingSec = currentDur - currentPos
+        val isNearEnd = (remainingSec in 1..40) || (currentDur > 60 && currentPos.toFloat() / currentDur >= 0.92f)
+        val next = seriesPlaylist?.nextEpisode
+
+        if (isNearEnd && next != null && !upNextState.isVisible) {
+          SeriesPlaylistEngine.showUpNextCard(
+            nextEpisode = next,
+            countdownSeconds = if (tvCountdownDuration > 0) tvCountdownDuration else 10,
+            mode = tvAutoNextMode
+          )
+        }
+      }
+    }
+
+    // Handle Countdown Timer for Up Next Card
+    LaunchedEffect(upNextState.isVisible, upNextState.countdownRemainingSeconds, upNextState.autoNextMode) {
+      if (upNextState.isVisible && upNextState.autoNextMode == AutoNextMode.Countdown && upNextState.countdownRemainingSeconds > 0) {
+        kotlinx.coroutines.delay(1000L)
+        val newCount = upNextState.countdownRemainingSeconds - 1
+        if (newCount <= 0) {
+          val next = upNextState.nextEpisode
+          SeriesPlaylistEngine.dismissUpNextCard()
+          if (next != null) {
+            SeriesPlaylistEngine.selectEpisode(next.seasonNumber, next.episodeNumber, context)
+            SeriesPlaylistEngine.onPlayEpisodeRequested?.invoke(next)
+          }
+        } else {
+          SeriesPlaylistEngine.updateUpNextCountdown(newCount)
+        }
+      }
+    }
+
+    // Floating Up Next Card Display
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(end = 20.dp, bottom = 80.dp),
+      contentAlignment = Alignment.BottomEnd
+    ) {
+      UpNextCard(
+        isVisible = upNextState.isVisible,
+        nextEpisode = upNextState.nextEpisode,
+        countdownRemainingSeconds = upNextState.countdownRemainingSeconds,
+        totalCountdownSeconds = upNextState.totalCountdownSeconds,
+        autoNextMode = upNextState.autoNextMode,
+        onPlayNow = {
+          val next = upNextState.nextEpisode
+          SeriesPlaylistEngine.dismissUpNextCard()
+          if (next != null) {
+            SeriesPlaylistEngine.selectEpisode(next.seasonNumber, next.episodeNumber, context)
+            SeriesPlaylistEngine.onPlayEpisodeRequested?.invoke(next)
+          }
+        },
+        onDismiss = {
+          SeriesPlaylistEngine.dismissUpNextCard()
+        }
       )
     }
   }

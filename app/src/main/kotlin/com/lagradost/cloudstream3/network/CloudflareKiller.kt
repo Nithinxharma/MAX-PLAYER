@@ -19,13 +19,20 @@ class CloudflareKiller : Interceptor {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        // Check if response is blocked by Cloudflare (403 or 503 with Cloudflare headers/content)
+        // Check if response is blocked by Cloudflare (403, 503, 429, or 200 with JS challenge/turnstile)
         val code = response.code
+        val peek = runCatching { response.peekBody(2048).string() }.getOrDefault("")
         val isCloudflareChallenge = (code == 403 || code == 503 || code == 429) &&
                 (response.header("Server")?.contains("cloudflare", ignoreCase = true) == true ||
                         response.header("cf-ray") != null ||
-                        response.peekBody(1024).string().contains("cf-browser-verification", ignoreCase = true) ||
-                        response.peekBody(2048).string().contains("Just a moment...", ignoreCase = true))
+                        peek.contains("cf-browser-verification", ignoreCase = true) ||
+                        peek.contains("Just a moment...", ignoreCase = true) ||
+                        peek.contains("challenge-running", ignoreCase = true)) ||
+                (code == 200 && (response.header("cf-ray") != null || response.header("Server")?.contains("cloudflare", ignoreCase = true) == true) &&
+                        (peek.contains("Just a moment...", ignoreCase = true) ||
+                                peek.contains("challenge-running", ignoreCase = true) ||
+                                peek.contains("cf-browser-verification", ignoreCase = true) ||
+                                peek.contains("turnstile", ignoreCase = true)))
 
         if (!isCloudflareChallenge) {
             return response
