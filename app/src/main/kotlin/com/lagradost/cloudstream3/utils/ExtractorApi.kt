@@ -168,7 +168,7 @@ suspend fun loadExtractor(
         val mainUrl = extractor.mainUrl
         if (mainUrl.isBlank()) continue
         val domains = mainUrl.split(",").map {
-            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/').trimEnd('*').trimEnd('.').removePrefix("*.")
+            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/')
         }
         val isMatch = domains.any { domain ->
             domain.isNotBlank() && (compareUrl.startsWith(domain) || compareUrl.contains(domain))
@@ -214,21 +214,6 @@ suspend fun loadExtractor(
                     if (e is CancellationException) throw e
                 }
             }
-        }
-    }
-
-    // 4. Dynamic Plugin DEX Self-Healing Discovery Fallback
-    if (!extracted) {
-        try {
-            extracted = xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.discoverAndResolveExtractor(
-                cleanUrl,
-                referer,
-                subtitleCallback,
-                callback
-            )
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            Log.d("ExtractorApi", "Dynamic discovery fallback note: ${e.message}")
         }
     }
 

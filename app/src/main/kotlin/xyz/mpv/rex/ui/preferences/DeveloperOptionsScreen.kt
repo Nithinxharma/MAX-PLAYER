@@ -290,27 +290,6 @@ object DeveloperOptionsScreen : Screen {
                     GroupedListColumn {
                         GroupedPreferenceCard(position = GroupPosition.FIRST) {
                             Preference(
-                                title = { Text("View Diagnostics (Parser & Streams)") },
-                                summary = {
-                                    Text(
-                                        "Detailed HTTP 200 payload previews, CSS selector match counts, candidate links, and loadLinks failure audit",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.BugReport,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(xyz.mpv.rex.cinehub.diagnostic.ParserDiagnosticsViewerScreenRoute)
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
-                            Preference(
                                 title = { Text("CloudStream Diagnostic & Test Center") },
                                 summary = {
                                     Text(

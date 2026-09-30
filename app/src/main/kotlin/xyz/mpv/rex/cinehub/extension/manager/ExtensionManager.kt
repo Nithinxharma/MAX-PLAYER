@@ -66,7 +66,6 @@ class ExtensionManager(
         Log.i("ExtensionManager", "INSTANCE_IDENTITY: ExtensionManager initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         if (!extensionDir.exists()) extensionDir.mkdirs()
         com.lagradost.cloudstream3.AcraApplication.init(context)
-        xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.initialize(context)
 
         // Immediate reactive bridge: when any plugin registers MainAPI, instantly register in ProviderRegistry
         com.lagradost.cloudstream3.APIHolder.onApiAddedListener = { api ->
@@ -677,19 +676,6 @@ class ExtensionManager(
                 }
             }
 
-            // Trigger dynamic indexing and discovery for packaged MainAPI and ExtractorApi classes
-            runCatching {
-                xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.indexAndRegisterPluginClasses(
-                    context = context,
-                    pkgName = ext.pkgName,
-                    version = ext.version,
-                    sourceFile = file,
-                    classLoader = classLoader,
-                    classNames = classNames,
-                    providerRegistry = registry
-                )
-            }
-
             // Synchronize newly added or updated CloudStream APIs from this extension into ProviderRegistry
             val currentApis = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
             for (api in currentApis) {
@@ -1110,8 +1096,6 @@ class ExtensionManager(
             val file = File(extensionDir, "$pkgName.cs3")
             com.lagradost.cloudstream3.APIHolder.removePluginsBySource(file.absolutePath)
             com.lagradost.cloudstream3.APIHolder.removePluginsBySource(file.name)
-            xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.unregisterClassLoader(pkgName)
-            xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.persist(context)
             registry.unregister(pkgName)
             registry.unregister("cs3_${pkgName.lowercase()}")
             if (file.exists()) {

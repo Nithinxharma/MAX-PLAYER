@@ -724,10 +724,6 @@ class PlayerActivity :
     viewModel.setMediaTitle(fileName)
     viewModel.setMediaIdentifier(mediaIdentifier)
 
-    xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.onPlayEpisodeRequested = { episode ->
-      viewModel.playSeriesEpisode(this@PlayerActivity, episode)
-    }
-
     extractAndApplyCustomStreamMetadata(intent)
 
     jellyfinExternalInfo = xyz.mpv.rex.jellyfin.JellyfinExternalHelper.detect(intent)

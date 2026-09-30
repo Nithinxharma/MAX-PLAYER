@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.MediaStore
 import xyz.mpv.rex.utils.media.MediaThumbnailUtils
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,7 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,20 +73,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.runtime.collectAsState
-import xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine
-import xyz.mpv.rex.cinehub.playlist.model.SeriesEpisode
-import xyz.mpv.rex.cinehub.playlist.model.SeriesPlaylist
-import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -155,17 +139,6 @@ fun PlaylistSheet(
 ) {
   val context = LocalContext.current
   val configuration = LocalConfiguration.current
-
-  val seriesPlaylist by SeriesPlaylistEngine.currentPlaylist.collectAsState()
-
-  if (seriesPlaylist != null && seriesPlaylist!!.seasons.isNotEmpty()) {
-    SeriesPlaylistSheetView(
-      playlist = seriesPlaylist!!,
-      onDismissRequest = onDismissRequest,
-      modifier = modifier
-    )
-    return
-  }
 
   val accentColor = MaterialTheme.colorScheme.primary
 
@@ -792,250 +765,4 @@ fun LoadingChip(
         )
       )
   )
-}
-
-/**
- * Smart Season & Episode Selector for TV Shows inside Player Playlist Sheet.
- */
-@Composable
-fun SeriesPlaylistSheetView(
-    playlist: SeriesPlaylist,
-    onDismissRequest: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    var selectedSeasonNum by rememberSaveable(playlist.seriesId) {
-        mutableStateOf(playlist.currentSeasonNumber)
-    }
-
-    val selectedSeason = remember(playlist, selectedSeasonNum) {
-        playlist.getSeason(selectedSeasonNum) ?: playlist.seasons.firstOrNull()
-    }
-
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-
-    PlayerSheet(
-        onDismissRequest = onDismissRequest,
-        modifier = Modifier.fillMaxSize(),
-        customMaxHeight = screenHeight,
-    ) {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(bottom = MaterialTheme.spacing.smaller)
-        ) {
-            // Header
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = playlist.seriesTitle,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${playlist.seasons.size} Seasons • ${playlist.allEpisodes.size} Episodes",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-
-                    IconButton(onClick = onDismissRequest) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
-                    }
-                }
-
-                // Season Selector Horizontal Rail
-                if (playlist.seasons.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        playlist.seasons.forEach { season ->
-                            val isSelected = season.seasonNumber == selectedSeasonNum
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    selectedSeasonNum = season.seasonNumber
-                                },
-                                label = {
-                                    Text(
-                                        text = season.seasonTitle,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 12.sp
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaxStreamTheme.CrimsonAccent,
-                                    selectedLabelColor = Color.White
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Episode List for Selected Season
-            if (selectedSeason == null || selectedSeason.episodes.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No episodes found for this season",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(selectedSeason.episodes, key = { it.episodeId }) { ep ->
-                        val isCurrentPlaying = ep.seasonNumber == playlist.currentSeasonNumber && ep.episodeNumber == playlist.currentEpisodeNumber
-                        val thumbUrl = ep.stillPath ?: playlist.backdropUrl ?: playlist.posterUrl
-
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    SeriesPlaylistEngine.selectEpisode(ep.seasonNumber, ep.episodeNumber, context)
-                                    SeriesPlaylistEngine.onPlayEpisodeRequested?.invoke(ep)
-                                    onDismissRequest()
-                                },
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isCurrentPlaying) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainer,
-                            border = BorderStroke(1.dp, if (isCurrentPlaying) MaxStreamTheme.CrimsonAccent else Color.Transparent)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // 16:9 Thumbnail with Progress Overlay
-                                Box(
-                                    modifier = Modifier
-                                        .width(110.dp)
-                                        .aspectRatio(16f / 9f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.Black.copy(alpha = 0.4f))
-                                ) {
-                                    if (!thumbUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(thumbUrl)
-                                                .crossfade(true)
-                                                .build(),
-                                            contentDescription = ep.title,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-
-                                    if (ep.progressPercent > 0f) {
-                                        LinearProgressIndicator(
-                                            progress = { ep.progressPercent.coerceIn(0f, 1f) },
-                                            modifier = Modifier
-                                                .align(Alignment.BottomCenter)
-                                                .fillMaxWidth()
-                                                .height(3.dp),
-                                            color = MaxStreamTheme.CrimsonAccent,
-                                            trackColor = Color.White.copy(alpha = 0.2f)
-                                        )
-                                    }
-                                }
-
-                                // Episode Info
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(
-                                            text = ep.formattedEpisodeCode,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 11.sp
-                                            ),
-                                            color = if (isCurrentPlaying) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary
-                                        )
-                                        if (ep.isWatched) {
-                                            Icon(
-                                                imageVector = Icons.Default.CheckCircle,
-                                                contentDescription = "Watched",
-                                                tint = Color(0xFF00E676),
-                                                modifier = Modifier.size(13.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Text(
-                                        text = ep.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = if (isCurrentPlaying) FontWeight.Bold else FontWeight.Medium,
-                                            fontSize = 13.sp
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-
-                                    if (ep.runtimeMinutes > 0) {
-                                        Text(
-                                            text = "${ep.runtimeMinutes} min",
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                                            color = MaterialTheme.colorScheme.outline
-                                        )
-                                    }
-                                }
-
-                                if (isCurrentPlaying) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaxStreamTheme.CrimsonAccent
-                                    ) {
-                                        Text(
-                                            text = "PLAYING",
-                                            color = Color.White,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

@@ -2576,22 +2576,6 @@ fun CineDetailView(
                 onDismiss = onDismiss,
                 onLinksLoaded = { links, subs ->
                   isInstantPlayExtracting = false
-                  val provName = item.providerName.ifBlank { resp.apiName }
-                  xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.buildAndSetPlaylist(
-                    context = context,
-                    seriesId = resp.url.ifBlank { resp.name },
-                    seriesTitle = resp.name,
-                    providerEpisodes = resp.episodes,
-                    posterUrl = posterPath,
-                    backdropUrl = backdropPath,
-                    fanartUrl = backdropPath ?: posterPath,
-                    overview = plot,
-                    year = year,
-                    rating = rating,
-                    providerName = provName,
-                    initialSeason = firstEp.season ?: 1,
-                    initialEpisode = firstEp.episode ?: 1
-                  )
                   val epMetadataJson = kotlinx.serialization.json.Json.encodeToString(
                     mapOf(
                       "seriesTitle" to resp.name,
@@ -3770,24 +3754,6 @@ fun CineDetailView(
                           },
                           onLinksLoaded = { links, subs ->
                             extractingEpisodeData = null
-                            xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.buildAndSetPlaylist(
-                              context = context,
-                              seriesId = loadResp.url.ifBlank { loadResp.name },
-                              seriesTitle = loadResp.name,
-                              providerEpisodes = loadResp.episodes,
-                              posterUrl = posterPath,
-                              backdropUrl = backdropPath,
-                              fanartUrl = backdropPath ?: posterPath,
-                              overview = plot,
-                              year = year,
-                              rating = rating,
-                              providerName = provName,
-                              initialSeason = ep.season ?: selectedSeason,
-                              initialEpisode = epNumber
-                            )
-                            if (tmdbSeasonEpisodes.isNotEmpty()) {
-                              xyz.mpv.rex.cinehub.playlist.SeriesPlaylistEngine.enrichWithTmdb(tmdbSeasonEpisodes)
-                            }
                             if (onLinksLoaded != null) {
                               onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
                             } else {

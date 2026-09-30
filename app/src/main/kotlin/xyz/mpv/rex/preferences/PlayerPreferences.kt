@@ -124,14 +124,4 @@ class PlayerPreferences(
 
   // External media controls
   val disableMediaButtons = preferenceStore.getBoolean("disable_media_buttons", false)
-
-  // TV Show Playback Synchronization & Auto Next
-  val tvAutoPlayNextEpisode = preferenceStore.getBoolean("tv_autoplay_next_episode", true)
-  val tvShowUpNextCard = preferenceStore.getBoolean("tv_show_up_next_card", true)
-  val tvCreditDetection = preferenceStore.getBoolean("tv_credit_detection", true)
-  val tvSkipIntro = preferenceStore.getBoolean("tv_skip_intro", true)
-  val tvSkipRecap = preferenceStore.getBoolean("tv_skip_recap", true)
-  val tvSkipCredits = preferenceStore.getBoolean("tv_skip_credits", false)
-  val tvCountdownDuration = preferenceStore.getInt("tv_countdown_duration", 10) // 0 (Off), 5, 10, 15
-  val tvAutoNextMode = preferenceStore.getEnum("tv_auto_next_mode", xyz.mpv.rex.cinehub.playlist.model.AutoNextMode.Countdown)
 }
