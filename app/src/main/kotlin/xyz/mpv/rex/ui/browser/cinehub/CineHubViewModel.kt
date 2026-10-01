@@ -15,6 +15,8 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.mvvm.Resource
+import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -26,10 +28,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * CineHubViewModel manages:
- * 1. Concurrent multi-provider searching across registered Cloudstream APIs.
- * 2. Retrieving full media details and episode listings.
- * 3. Extracting and prioritizing stream links (and subtitles) for REX-Player playback.
+ * CineHubViewModel coordinates with CloudStream SDK via APIRepository:
+ * 1. Concurrent multi-provider searching across registered Cloudstream APIs with timeout safety.
+ * 2. Retrieving full media details, season lists, and episode listings via APIRepository.load().
+ * 3. Extracting and prioritizing stream links and subtitles for REX-Player playback.
  */
 class CineHubViewModel : ViewModel() {
 
@@ -66,7 +68,7 @@ class CineHubViewModel : ViewModel() {
 
     /**
      * 1. Search Function:
-     * Iterates through APIHolder.apis, executes provider.search(query) concurrently
+     * Iterates through APIHolder.apis, executes APIRepository.search(query) concurrently
      * using async(Dispatchers.IO), gracefully handles errors per provider, merges the results,
      * and updates searchResults.
      */
@@ -95,7 +97,15 @@ class CineHubViewModel : ViewModel() {
                 val deferredList = apis.map { provider ->
                     async {
                         try {
-                            provider.searchSafe(trimmed)
+                            val repo = APIRepository(provider)
+                            when (val res = repo.search(trimmed)) {
+                                is Resource.Success -> res.value.list
+                                is Resource.Failure -> {
+                                    Log.w(TAG, "Search failure in provider '${provider.name}': ${res.errorString}")
+                                    provider.searchSafe(trimmed)
+                                }
+                                else -> emptyList()
+                            }
                         } catch (t: Throwable) {
                             Log.w(TAG, "Search error in provider '${provider.name}': ${t.message}")
                             emptyList()
@@ -115,8 +125,8 @@ class CineHubViewModel : ViewModel() {
 
     /**
      * 2. Load Details Function:
-     * Fetches the specific provider by name, calls provider.load(url), and
-     * updates selectedMediaDetails.
+     * Coordinates with CloudStream SDK via APIRepository.load(url) to retrieve
+     * full media metadata, episodes, and seasons.
      */
     fun loadMediaDetails(providerName: String, url: String, fallbackItem: SearchResponse? = null) {
         viewModelScope.launch {
@@ -144,9 +154,17 @@ class CineHubViewModel : ViewModel() {
                 return@launch
             }
 
+            val repo = APIRepository(provider)
             val details = withContext(Dispatchers.IO) {
                 try {
-                    provider.load(url)
+                    when (val res = repo.load(url)) {
+                        is Resource.Success -> res.value
+                        is Resource.Failure -> {
+                            Log.w(TAG, "APIRepository load failed on '$providerName' for $url: ${res.errorString}")
+                            provider.load(url)
+                        }
+                        else -> null
+                    }
                 } catch (t: Throwable) {
                     Log.e(TAG, "Error loading details from '$providerName' for $url: ${t.message}", t)
                     null
@@ -182,7 +200,7 @@ class CineHubViewModel : ViewModel() {
 
     /**
      * 3. Extract Streams Function:
-     * Calls provider.loadLinks(episodeData) and collects all ExtractorLinks
+     * Calls APIRepository.loadLinks(episodeData) and collects all ExtractorLinks
      * and SubtitleFiles emitted by the callbacks.
      */
     fun getStreamLinks(
@@ -205,10 +223,11 @@ class CineHubViewModel : ViewModel() {
 
             val links = mutableListOf<ExtractorLink>()
             val subtitles = mutableListOf<SubtitleFile>()
+            val repo = APIRepository(provider)
 
             withContext(Dispatchers.IO) {
                 try {
-                    provider.loadLinks(
+                    repo.loadLinks(
                         data = episodeData,
                         isCasting = false,
                         subtitleCallback = { sub ->
@@ -291,3 +310,4 @@ class CineHubViewModel : ViewModel() {
             ?: APIHolder.getApi(providerName)
     }
 }
+

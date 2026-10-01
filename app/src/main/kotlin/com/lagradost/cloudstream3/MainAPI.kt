@@ -46,6 +46,21 @@ fun newSubtitleFile(
 ): SubtitleFile = SubtitleFile(lang, url)
 
 @Keep
+enum class ProviderType {
+    MetaProvider,
+    CustomProvider,
+    PluginProvider,
+    TorrentProvider,
+}
+
+@Keep
+enum class VPNStatus {
+    None,
+    MightBeNeeded,
+    Torrent
+}
+
+@Keep
 enum class TvType {
     Movie, TvSeries, Anime, AnimeMovie, OVA, Cartoon, Documentary, AsianDrama, Live, NSFW, Others
 }
@@ -582,7 +597,14 @@ data class HomePageResponse(
 data class SearchResponseList(
     val items: List<SearchResponse>,
     val hasNext: Boolean = false
-)
+) {
+    val list: List<SearchResponse> get() = items
+}
+
+fun newSearchResponseList(items: List<SearchResponse>, hasNext: Boolean = false): SearchResponseList =
+    SearchResponseList(items, hasNext)
+
+fun MainAPI.fixUrl(url: String): String = this.fixUrl(url)
 
 const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
 
@@ -603,9 +625,22 @@ abstract class MainAPI {
     open var hasQuickSearch: Boolean = false
     open val hasDownloadSupport: Boolean = false
     open val mainPage: List<MainPageData> = emptyList()
+    open val providerType: ProviderType = ProviderType.CustomProvider
+    open val vpnStatus: VPNStatus = VPNStatus.None
+    open var loadTimeoutMs: Long? = null
+    open var searchTimeoutMs: Long? = null
+    open var quickSearchTimeoutMs: Long? = null
+    open var getMainPageTimeoutMs: Long? = null
+    open var loadLinksTimeoutMs: Long? = null
+    open var lastHomepageRequest: Long = 0L
+    open var sequentialMainPage: Boolean = false
+    open var sequentialMainPageDelay: Long = 0L
+    open var sequentialMainPageScrollDelay: Long = 0L
 
     open suspend fun search(query: String): List<SearchResponse> = emptyList()
     open suspend fun search(query: String, page: Int): SearchResponseList? = null
+    open suspend fun quickSearch(query: String): List<SearchResponse>? = null
+    open suspend fun extractorVerifierJob(extractorData: String?) {}
     
     open suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? = null
     open suspend fun loadMainPage(page: Int, name: String? = null): HomePageResponse? {
