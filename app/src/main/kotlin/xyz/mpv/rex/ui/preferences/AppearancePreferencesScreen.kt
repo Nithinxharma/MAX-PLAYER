@@ -94,6 +94,7 @@ object AppearancePreferencesScreen : Screen {
         val unlimitedNameLines by preferences.unlimitedNameLines.collectAsState()
         val showUnplayedOldVideoLabel by preferences.showUnplayedOldVideoLabel.collectAsState()
         val showNetworkThumbnails by preferences.showNetworkThumbnails.collectAsState()
+        val useTmdbMetadata by preferences.useTmdbMetadata.collectAsState()
         val matchPlayerControlsToTheme by preferences.matchPlayerControlsToTheme.collectAsState()
         val hidePlayerButtonsBackground by preferences.hidePlayerButtonsBackground.collectAsState()
 
@@ -288,6 +289,27 @@ object AppearancePreferencesScreen : Screen {
                                 icon = Icons.Outlined.Image,
                                 checked = showNetworkThumbnails,
                                 onCheckedChange = { preferences.showNetworkThumbnails.set(it) },
+                                showDivider = false
+                            )
+                        }
+                    }
+
+                    // Metadata Source Section
+                    item {
+                        GlassCategoryHeader(
+                            title = stringResource(id = R.string.pref_appearance_metadata_source_category),
+                            icon = Icons.Outlined.AutoAwesome
+                        )
+                        GlassSettingsSection {
+                            GlassSwitchPreference(
+                                title = stringResource(id = R.string.pref_appearance_use_tmdb_metadata_title),
+                                subtitle = stringResource(id = R.string.pref_appearance_use_tmdb_metadata_summary),
+                                icon = Icons.Outlined.AutoAwesome,
+                                checked = useTmdbMetadata,
+                                onCheckedChange = {
+                                    preferences.useTmdbMetadata.set(it)
+                                    preferences.metadataSource.set(if (it) xyz.mpv.rex.preferences.MetadataSource.TMDB else xyz.mpv.rex.preferences.MetadataSource.PROVIDER)
+                                },
                                 showDivider = false
                             )
                         }
