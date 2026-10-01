@@ -84,6 +84,11 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    match /analytics_events/{eventId} {
+      allow create: if true;
+      allow read, update, delete: if isAuthenticated();
+    }
+
     match /{document=**} {
       allow read, write: if isAuthenticated();
     }

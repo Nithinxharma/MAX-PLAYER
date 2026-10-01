@@ -182,37 +182,13 @@ class APIRepository(val api: MainAPI) {
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
         if (isInvalidData(data)) return false
-        var success = false
-        val extractedLinks = mutableListOf<ExtractorLink>()
-        val safeCallback: (ExtractorLink) -> Unit = { link ->
-            extractedLinks.add(link)
-            callback(link)
-        }
-
-        try {
+        return try {
             withTimeout(getTimeout(api.loadLinksTimeoutMs)) {
-                success = api.loadLinks(data, isCasting, subtitleCallback, safeCallback)
+                api.loadLinks(data, isCasting, subtitleCallback, callback)
             }
         } catch (throwable: Throwable) {
             logError(throwable)
+            false
         }
-
-        // If provider loadLinks returned false or 0 links, attempt fallback universal extractor
-        if ((!success || extractedLinks.isEmpty()) && (data.startsWith("http://") || data.startsWith("https://") || data.startsWith("//"))) {
-            val fixedUrl = com.lagradost.cloudstream3.utils.httpsify(data)
-            try {
-                val fallbackExtracted = com.lagradost.cloudstream3.utils.loadExtractor(
-                    url = fixedUrl,
-                    referer = api.mainUrl,
-                    subtitleCallback = subtitleCallback,
-                    callback = callback
-                )
-                if (fallbackExtracted) success = true
-            } catch (e: Throwable) {
-                logError(e)
-            }
-        }
-
-        return success || extractedLinks.isNotEmpty()
     }
 }

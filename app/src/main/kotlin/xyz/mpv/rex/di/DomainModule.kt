@@ -1,24 +1,52 @@
 package xyz.mpv.rex.di
 
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import org.koin.android.ext.koin.androidContext
+import xyz.mpv.rex.domain.anime4k.Anime4KManager
+import xyz.mpv.rex.domain.hdr.HdrToysManager
+import xyz.mpv.rex.repository.wyzie.WyzieSearchRepository
+import xyz.mpv.rex.ui.player.managers.PlaybackManager
+import xyz.mpv.rex.ui.player.HeadlessPlaybackController
+import okhttp3.OkHttpClient
 import org.koin.dsl.module
-import xyz.mpv.rex.App
-import xyz.mpv.rex.R
-import xyz.mpv.rex.auth.FirebaseAuthManager
-import xyz.mpv.rex.cinehub.extension.manager.ExtensionManager
-import xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService
+import org.koin.android.ext.koin.androidContext
+import java.util.concurrent.TimeUnit
 
-val appModule = module {
+import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerStateManager
+
+val domainModule = module {
     single {
-        val dbId = androidContext().getString(R.string.firestore_database_id)
-        runCatching {
-            FirebaseFirestore.getInstance(dbId)
-        }.getOrElse { FirebaseFirestore.getInstance() }
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
     }
-    single { FirebaseAuth.getInstance() }
-    single { FirebaseAuthManager(androidContext(), get(), get()) }
-    single { FirebaseProviderSyncService(androidContext(), get(), get()) }
-    single { App.instance.extensionManager }
+    single { Anime4KManager(androidContext()) }
+    single { HdrToysManager(androidContext()) }
+    single { WyzieSearchRepository(androidContext(), get(), get(), get()) }
+    single { PlaybackManager(get()) }
+    single { MiniPlayerStateManager() }
+    single { HeadlessPlaybackController(androidContext()) }
+    single { xyz.mpv.rex.jellyfin.api.JellyfinApi(get(), get(), get()) }
+    single { xyz.mpv.rex.jellyfin.remote.JellyfinRemoteClient(get(), get(), get(), androidContext()) }
+    single { xyz.mpv.rex.domain.ytdl.YtDlClient(androidContext(), get()) }
+    single { xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry() }
+    single { xyz.mpv.rex.cinehub.extension.manager.RepositoryManager(get(), get()) }
+    single { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get(), get()) }
+    single { xyz.mpv.rex.ui.preferences.ForcePluginActivationViewModel(androidContext(), get(), get(), get(), get()) }
+    single { xyz.mpv.rex.ui.preferences.PluginExecutionTraceViewModel(androidContext(), get(), get(), get()) }
+    single { xyz.mpv.rex.ui.preferences.RepositoryPresetsViewModel(androidContext(), get()) }
+    single<xyz.mpv.rex.auth.AuthManager> { xyz.mpv.rex.auth.FirebaseAuthManager() }
+    single<xyz.mpv.rex.auth.elevation.AdminAuthorizationProvider> { xyz.mpv.rex.auth.elevation.DefaultAdminAuthorizationProvider(get()) }
+    single<xyz.mpv.rex.auth.elevation.ElevationTokenValidator> { xyz.mpv.rex.auth.elevation.DefaultElevationTokenValidator() }
+    single<xyz.mpv.rex.auth.elevation.AdminSessionManager> { xyz.mpv.rex.auth.elevation.DefaultAdminSessionManager(get(), get(), get()) }
+    single { xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService(androidContext(), get(), get(), get()) }
+    single {
+        val dbId = androidContext().getString(xyz.mpv.rex.R.string.firestore_database_id)
+        com.google.firebase.firestore.FirebaseFirestore.getInstance(dbId)
+    }
+    single { com.google.firebase.auth.FirebaseAuth.getInstance() }
+    single { xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService(androidContext(), get(), get(), get(), get(), get(), getOrNull()) }
+    single { xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService(androidContext(), get(), get()) }
 }
+
+
