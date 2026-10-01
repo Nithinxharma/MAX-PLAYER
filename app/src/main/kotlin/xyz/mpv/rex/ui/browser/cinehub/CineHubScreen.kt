@@ -225,6 +225,47 @@ fun loadExtensionItemDetails(
   }
 }
 
+data class StreamFailureReason(
+  val title: String,
+  val description: String,
+  val provider: String,
+  val url: String
+)
+
+fun diagnoseFailure(providerName: String, url: String, exception: Throwable?, linksCount: Int): StreamFailureReason? {
+  if (linksCount > 0 && exception == null) return null
+  val msg = exception?.message ?: ""
+  val cause = exception?.cause?.message ?: ""
+  val full = "$msg $cause ${exception?.javaClass?.simpleName ?: ""}"
+
+  val (title, desc) = when {
+    exception is java.net.UnknownHostException || full.contains("Unable to resolve host", ignoreCase = true) -> {
+      "DNS Blocked by ISP" to "Unable to connect to host domain. Your internet service provider (Jio/Airtel/Vi) has blocked this website at the DNS level. Try enabling VPN or Cloudflare DNS (1.1.1.1)."
+    }
+    full.contains("403") || full.contains("Cloudflare", ignoreCase = true) || full.contains("Turnstile", ignoreCase = true) || full.contains("Just a moment", ignoreCase = true) -> {
+      "Cloudflare Anti-Bot (403 Forbidden)" to "The website is protected by Cloudflare DDoS / Turnstile challenge, blocking automated requests from extracting media links."
+    }
+    exception is java.net.SocketTimeoutException || full.contains("timeout", ignoreCase = true) -> {
+      "Connection Timeout" to "The provider server took too long to respond. The website might be slow or temporarily overloaded."
+    }
+    exception is java.net.ConnectException || full.contains("Connection refused", ignoreCase = true) -> {
+      "Server Offline / Connection Refused" to "Connection refused by provider server ($url)."
+    }
+    exception is javax.net.ssl.SSLException || full.contains("SSL", ignoreCase = true) -> {
+      "SSL Certificate Error" to "Secure handshake with $url failed ($msg)."
+    }
+    exception != null -> {
+      "Provider Error (${exception.javaClass.simpleName})" to (msg.ifBlank { "Error occurred during provider link extraction." })
+    }
+    linksCount == 0 -> {
+      "No Playable Links (0 Links Found)" to "The provider page opened successfully, but third-party video hosts (HubCloud, Streamwish, Filemoon, Dood, etc.) returned 0 stream links (video may be removed or expired)."
+    }
+    else -> "No Streams Found" to "No playable stream links were found for this media."
+  }
+
+  return StreamFailureReason(title, desc, providerName, url)
+}
+
 fun extractAndPlayMovie(
   context: android.content.Context,
   providerName: String,
@@ -232,6 +273,7 @@ fun extractAndPlayMovie(
   movieTitle: String,
   scope: kotlinx.coroutines.CoroutineScope,
   onDismiss: () -> Unit = {},
+  onFailure: ((StreamFailureReason) -> Unit)? = null,
   onLinksLoaded: (List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>) -> Unit,
 ) {
   scope.launch(Dispatchers.IO) {
@@ -239,6 +281,7 @@ fun extractAndPlayMovie(
       ?: APIHolder.getApi(providerName)
     val links = mutableListOf<com.lagradost.cloudstream3.utils.ExtractorLink>()
     val subtitles = mutableListOf<com.lagradost.cloudstream3.SubtitleFile>()
+    var caughtEx: Throwable? = null
 
     if (api != null) {
       try {
@@ -247,32 +290,43 @@ fun extractAndPlayMovie(
         }) { link ->
           synchronized(links) { links.add(link) }
         }
-      } catch (e: Exception) {
-        android.util.Log.e("CineHub", "Error extracting movie links: ${e.message}")
+      } catch (e: Throwable) {
+        caughtEx = e
+        android.util.Log.e("CineHub", "Error extracting movie links from $providerName ($dataUrl): ${e.message}", e)
       }
     }
 
     if (links.isEmpty()) {
-      val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
-      val provider = registry.getProvider(providerName)
-        ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
-      val streams = provider?.loadStreams(dataUrl) ?: emptyList()
-      for (st in streams) {
-        links.add(
-          com.lagradost.cloudstream3.utils.ExtractorLink(
-            source = provider?.name ?: "Extension",
-            name = st.name,
-            url = st.url,
-            referer = st.headers["Referer"] ?: "",
-            quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
-            isM3u8 = st.isM3u8,
-            headers = st.headers
+      try {
+        val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
+        val provider = registry.getProvider(providerName)
+          ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
+        val streams = provider?.loadStreams(dataUrl) ?: emptyList()
+        for (st in streams) {
+          links.add(
+            com.lagradost.cloudstream3.utils.ExtractorLink(
+              source = provider?.name ?: "Extension",
+              name = st.name,
+              url = st.url,
+              referer = st.headers["Referer"] ?: "",
+              quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
+              isM3u8 = st.isM3u8,
+              headers = st.headers
+            )
           )
-        )
+        }
+      } catch (e: Throwable) {
+        if (caughtEx == null) caughtEx = e
+        android.util.Log.e("CineHub", "Error in fallback movie stream loading from $providerName: ${e.message}", e)
       }
     }
 
+    val failReason = diagnoseFailure(providerName, dataUrl, caughtEx, links.size)
+
     withContext(Dispatchers.Main) {
+      if (failReason != null) {
+        onFailure?.invoke(failReason)
+      }
       onLinksLoaded(links, subtitles)
     }
   }
@@ -286,6 +340,7 @@ fun extractAndPlayEpisode(
   seriesTitle: String,
   scope: kotlinx.coroutines.CoroutineScope,
   onDismiss: () -> Unit = {},
+  onFailure: ((StreamFailureReason) -> Unit)? = null,
   onLinksLoaded: (List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>) -> Unit,
 ) {
   scope.launch(Dispatchers.IO) {
@@ -293,6 +348,7 @@ fun extractAndPlayEpisode(
       ?: APIHolder.getApi(providerName)
     val links = mutableListOf<com.lagradost.cloudstream3.utils.ExtractorLink>()
     val subtitles = mutableListOf<com.lagradost.cloudstream3.SubtitleFile>()
+    var caughtEx: Throwable? = null
 
     if (api != null) {
       try {
@@ -301,32 +357,43 @@ fun extractAndPlayEpisode(
         }) { link ->
           synchronized(links) { links.add(link) }
         }
-      } catch (e: Exception) {
-        android.util.Log.e("CineHub", "Error extracting episode links: ${e.message}")
+      } catch (e: Throwable) {
+        caughtEx = e
+        android.util.Log.e("CineHub", "Error extracting episode links from $providerName ($data): ${e.message}", e)
       }
     }
 
     if (links.isEmpty()) {
-      val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
-      val provider = registry.getProvider(providerName)
-        ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
-      val streams = provider?.loadStreams(data) ?: emptyList()
-      for (st in streams) {
-        links.add(
-          com.lagradost.cloudstream3.utils.ExtractorLink(
-            source = provider?.name ?: "Extension",
-            name = st.name,
-            url = st.url,
-            referer = st.headers["Referer"] ?: "",
-            quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
-            isM3u8 = st.isM3u8,
-            headers = st.headers
+      try {
+        val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
+        val provider = registry.getProvider(providerName)
+          ?: registry.getAllProviders().firstOrNull { it.name.equals(providerName, true) }
+        val streams = provider?.loadStreams(data) ?: emptyList()
+        for (st in streams) {
+          links.add(
+            com.lagradost.cloudstream3.utils.ExtractorLink(
+              source = provider?.name ?: "Extension",
+              name = st.name,
+              url = st.url,
+              referer = st.headers["Referer"] ?: "",
+              quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
+              isM3u8 = st.isM3u8,
+              headers = st.headers
+            )
           )
-        )
+        }
+      } catch (e: Throwable) {
+        if (caughtEx == null) caughtEx = e
+        android.util.Log.e("CineHub", "Error in fallback episode stream loading from $providerName: ${e.message}", e)
       }
     }
 
+    val failReason = diagnoseFailure(providerName, data, caughtEx, links.size)
+
     withContext(Dispatchers.Main) {
+      if (failReason != null) {
+        onFailure?.invoke(failReason)
+      }
       onLinksLoaded(links, subtitles)
     }
   }
@@ -2425,8 +2492,10 @@ fun CineDetailView(
   val actorsList = (tmdbEnrichedMovie?.actors?.takeIf { it.isNotEmpty() } ?: (item as? MovieItem)?.actors?.takeIf { it.isNotEmpty() } ?: tmdbEnrichedTvShow?.actors?.takeIf { it.isNotEmpty() } ?: (item as? TvShowItem)?.actors?.takeIf { it.isNotEmpty() }).orEmpty()
 
   var isInstantPlayExtracting by remember { mutableStateOf(false) }
+  var streamFailureReason by remember { mutableStateOf<StreamFailureReason?>(null) }
 
   val onInstantPlayClick: () -> Unit = {
+    streamFailureReason = null
     when (item) {
       is MovieItem -> {
         if (item.videoFilePath.startsWith("ext_stream:")) {
@@ -2437,7 +2506,13 @@ fun CineDetailView(
           scope.launch(Dispatchers.IO) {
             val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
             val provider = registry.getProvider(providerId)
-            val streams = provider?.loadStreams(dataUrl) ?: emptyList()
+            var caughtEx: Throwable? = null
+            val streams = try {
+              provider?.loadStreams(dataUrl) ?: emptyList()
+            } catch (t: Throwable) {
+              caughtEx = t
+              emptyList()
+            }
             val stream = streams.firstOrNull()
             val extractorLinks = streams.map { s ->
               com.lagradost.cloudstream3.utils.ExtractorLink(
@@ -2449,6 +2524,7 @@ fun CineDetailView(
                 headers = s.headers
               )
             }
+            val fail = diagnoseFailure(provider?.name ?: providerId, dataUrl, caughtEx, streams.size)
             withContext(Dispatchers.Main) {
               isInstantPlayExtracting = false
               if (stream != null && stream.url.isNotBlank()) {
@@ -2468,7 +2544,7 @@ fun CineDetailView(
                   allLinks = extractorLinks
                 )
               } else {
-                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                streamFailureReason = fail
               }
             }
           }
@@ -2533,6 +2609,7 @@ fun CineDetailView(
               movieTitle = resp.name,
               scope = scope,
               onDismiss = onDismiss,
+              onFailure = { streamFailureReason = it },
               onLinksLoaded = { links, subs ->
                 isInstantPlayExtracting = false
                 if (onLinksLoaded != null) {
@@ -2574,6 +2651,7 @@ fun CineDetailView(
                 seriesTitle = resp.name,
                 scope = scope,
                 onDismiss = onDismiss,
+                onFailure = { streamFailureReason = it },
                 onLinksLoaded = { links, subs ->
                   isInstantPlayExtracting = false
                   val epMetadataJson = kotlinx.serialization.json.Json.encodeToString(
@@ -2626,6 +2704,7 @@ fun CineDetailView(
           movieTitle = item.name,
           scope = scope,
           onDismiss = onDismiss,
+          onFailure = { streamFailureReason = it },
           onLinksLoaded = { links, subs ->
             isInstantPlayExtracting = false
             if (onLinksLoaded != null) {
@@ -3549,10 +3628,127 @@ fun CineDetailView(
           val provName = if (item is ExtensionMediaDetails) item.providerName.ifBlank { loadResp.apiName } else loadResp.apiName
           val context = LocalContext.current
 
+          // Diagnostic Error Banner when Play fails
+          streamFailureReason?.let { failure ->
+            Card(
+              shape = RoundedCornerShape(16.dp),
+              colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f)
+              ),
+              border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+            ) {
+              Column(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                  ) {
+                    Icon(
+                      imageVector = Icons.Default.WarningAmber,
+                      contentDescription = "Error",
+                      tint = MaterialTheme.colorScheme.error,
+                      modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                      text = failure.title,
+                      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                      color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                  }
+                  IconButton(
+                    onClick = { streamFailureReason = null },
+                    modifier = Modifier.size(24.dp)
+                  ) {
+                    Icon(
+                      imageVector = Icons.Default.Close,
+                      contentDescription = "Dismiss",
+                      tint = MaterialTheme.colorScheme.onErrorContainer,
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
+                }
+
+                Text(
+                  text = failure.description,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.95f)
+                )
+
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = Color.Black.copy(alpha = 0.25f),
+                  modifier = Modifier.fillMaxWidth()
+                ) {
+                  Text(
+                    text = "Provider: ${failure.provider}\nURL: ${failure.url}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                      fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                      fontSize = 11.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(8.dp)
+                  )
+                }
+
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  Button(
+                    onClick = {
+                      streamFailureReason = null
+                      onInstantPlayClick()
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier
+                      .weight(1f)
+                      .height(38.dp)
+                  ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Retry", fontWeight = FontWeight.Bold)
+                  }
+
+                  FilledTonalButton(
+                    onClick = {
+                      val clip = android.content.ClipData.newPlainText(
+                        "Stream Error",
+                        "Title: ${failure.title}\nReason: ${failure.description}\nProvider: ${failure.provider}\nURL: ${failure.url}"
+                      )
+                      (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
+                      Toast.makeText(context, "Error reason copied", Toast.LENGTH_SHORT).show()
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(38.dp)
+                  ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Copy Reason")
+                  }
+                }
+              }
+            }
+          }
+
           if (loadResp is MovieLoadResponse) {
             var isExtractingMovie by remember { mutableStateOf(false) }
             Button(
               onClick = {
+                streamFailureReason = null
                 isExtractingMovie = true
                 extractAndPlayMovie(
                   context = context,
@@ -3561,6 +3757,7 @@ fun CineDetailView(
                   movieTitle = loadResp.name,
                   scope = scope,
                   onDismiss = onDismiss,
+                  onFailure = { streamFailureReason = it },
                   onLinksLoaded = { links, subs ->
                     isExtractingMovie = false
                     if (onLinksLoaded != null) {
@@ -3598,8 +3795,6 @@ fun CineDetailView(
                         detailPendingYear = loadResp.year?.toString()
                         detailPendingRating = loadResp.score?.score
                         detailPendingProvider = provName
-                      } else if (links.isEmpty()) {
-                        Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
                       }
                     }
                   }
@@ -3740,6 +3935,7 @@ fun CineDetailView(
                     modifier = Modifier
                       .fillMaxWidth()
                       .clickable(enabled = extractingEpisodeData == null) {
+                        streamFailureReason = null
                         extractingEpisodeData = ep.data
                         extractAndPlayEpisode(
                           context = context,
@@ -3752,6 +3948,7 @@ fun CineDetailView(
                             extractingEpisodeData = null
                             onDismiss()
                           },
+                          onFailure = { streamFailureReason = it },
                           onLinksLoaded = { links, subs ->
                             extractingEpisodeData = null
                             if (onLinksLoaded != null) {
