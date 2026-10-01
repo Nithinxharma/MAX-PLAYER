@@ -85,6 +85,7 @@ object CloudStreamTestCenterScreen : Screen {
 
         var selectedTab by remember { mutableIntStateOf(0) }
         val tabs = listOf(
+            "CS3 Query Terminal",
             "Extension Diagnostics",
             "Overview & Auto",
             "Force Activation",
@@ -156,27 +157,32 @@ object CloudStreamTestCenterScreen : Screen {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     when (selectedTab) {
-                        0 -> ExtensionDiagnosticsCenterView(
+                        0 -> CloudStreamQueryTerminalView(
+                            registry = registry,
+                            extensionManager = extensionManager,
+                            okHttpClient = client
+                        )
+                        1 -> ExtensionDiagnosticsCenterView(
                             onNavigateBack = { backstack.removeLastOrNull() }
                         )
-                        1 -> OverviewAndAutoTestSection(viewModel, onNavigateToTab = { target ->
+                        2 -> OverviewAndAutoTestSection(viewModel, onNavigateToTab = { target ->
                             val mapped = when (target) {
-                                1 -> 4 // Repositories
-                                2 -> 5 // Extensions
-                                3 -> 6 // Providers
-                                else -> target + 1
+                                1 -> 5 // Repositories
+                                2 -> 6 // Extensions
+                                3 -> 7 // Providers
+                                else -> target + 2
                             }
                             selectedTab = mapped
                         })
-                        2 -> xyz.mpv.rex.ui.preferences.ForcePluginActivationScreen(showTopBar = false, onNavigateToTrace = { selectedTab = 3 })
-                        3 -> xyz.mpv.rex.ui.preferences.PluginExecutionTraceScreen(showTopBar = false)
-                        4 -> RepositoriesSection(viewModel)
-                        5 -> ExtensionsSection(viewModel)
-                        6 -> ProvidersSection(viewModel)
-                        7 -> SearchSection(viewModel, onSelectForMetadata = { selectedTab = 8 })
-                        8 -> MetadataSection(viewModel, onSelectForExtraction = { selectedTab = 9 })
-                        9 -> StreamsAndPlaybackSection(viewModel)
-                        10 -> LiveLogsSection(viewModel)
+                        3 -> xyz.mpv.rex.ui.preferences.ForcePluginActivationScreen(showTopBar = false, onNavigateToTrace = { selectedTab = 4 })
+                        4 -> xyz.mpv.rex.ui.preferences.PluginExecutionTraceScreen(showTopBar = false)
+                        5 -> RepositoriesSection(viewModel)
+                        6 -> ExtensionsSection(viewModel)
+                        7 -> ProvidersSection(viewModel)
+                        8 -> SearchSection(viewModel, onSelectForMetadata = { selectedTab = 9 })
+                        9 -> MetadataSection(viewModel, onSelectForExtraction = { selectedTab = 10 })
+                        10 -> StreamsAndPlaybackSection(viewModel)
+                        11 -> LiveLogsSection(viewModel)
                     }
                 }
             }
