@@ -1012,11 +1012,9 @@ class ExtensionManager(
         try {
             var downloadUrl = plugin.url.trim()
             if (downloadUrl.isBlank()) {
-                val seed = xyz.mpv.rex.cinehub.provider.server.KnownExtensionCatalog.findSeedPlugin(plugin.name)
-                    ?: xyz.mpv.rex.cinehub.provider.server.KnownExtensionCatalog.findSeedPlugin(plugin.internalName)
-                if (seed != null && seed.url.isNotBlank()) {
-                    downloadUrl = seed.url
-                    Log.i("ExtensionManager", "Resolved download URL for ${plugin.name} from seed catalog: $downloadUrl")
+                val existing = db.extensionDao().getExtension(plugin.internalName)
+                if (existing != null && !existing.repositoryUrl.isNullOrBlank()) {
+                    downloadUrl = existing.repositoryUrl.trim()
                 }
             }
 

@@ -135,10 +135,7 @@ data class PlanConfig(
                     id = "vip",
                     name = "VIP",
                     description = "Exclusive high-speed providers and VIP catalog",
-                    allowedExtensions = listOf(
-                        "allmoviesforyou", "moviesmod", "topmovies", "streamwish",
-                        "phisher", "castletv"
-                    ),
+                    allowedExtensions = emptyList(),
                     allowAllExtensions = false,
                     inherits = "premium",
                     price = "₹299",
@@ -149,9 +146,7 @@ data class PlanConfig(
                     id = "premium",
                     name = "Premium",
                     description = "Popular high-speed scrapers and movie/TV providers",
-                    allowedExtensions = listOf(
-                        "uhdmovies", "moviesmod"
-                    ),
+                    allowedExtensions = emptyList(),
                     allowAllExtensions = false,
                     inherits = "free",
                     price = "₹99",
@@ -162,9 +157,7 @@ data class PlanConfig(
                     id = "free",
                     name = "Free",
                     description = "Baseline curated providers for standard streaming",
-                    allowedExtensions = listOf(
-                        "bollyflix", "vega", "superstream"
-                    ),
+                    allowedExtensions = emptyList(),
                     allowAllExtensions = false,
                     inherits = null,
                     price = "₹0",

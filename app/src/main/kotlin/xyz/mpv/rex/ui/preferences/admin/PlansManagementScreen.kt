@@ -322,8 +322,10 @@ fun PlansManagementScreen(
 
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
+                    var isResetting by remember { mutableStateOf(false) }
                     OutlinedButton(
                         onClick = {
+                            isResetting = true
                             scope.launch(Dispatchers.IO) {
                                 val defaults = listOf("free", "premium", "vip", "admin").map { PlanConfig.defaultForPlan(it) }
                                 for (d in defaults) {
@@ -331,16 +333,24 @@ fun PlansManagementScreen(
                                 }
                                 loadData()
                                 withContext(Dispatchers.Main) {
+                                    isResetting = false
                                     Toast.makeText(context, "Reset default plans in Firestore", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         },
+                        enabled = !isResetting,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Outlined.Restore, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Seed / Reset Default Plans in Firestore")
+                        if (isResetting) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Saving Default Plans...")
+                        } else {
+                            Icon(Icons.Outlined.Restore, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Seed / Reset Default Plans in Firestore")
+                        }
                     }
                 }
             }
@@ -354,17 +364,19 @@ fun PlansManagementScreen(
             allExtensions = allExtensions,
             allPlans = plans,
             onDismiss = { editingPlan = null },
-            onSave = { updatedPlan ->
+            onSave = { updatedPlan, onResult ->
                 scope.launch(Dispatchers.IO) {
                     val ok = syncService.savePlan(updatedPlan)
                     withContext(Dispatchers.Main) {
                         if (ok) {
-                            Toast.makeText(context, "Saved plan ${updatedPlan.name}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Saved plan ${updatedPlan.name} to Firestore", Toast.LENGTH_SHORT).show()
                             loadData()
+                            onResult(true, null)
+                            editingPlan = null
                         } else {
-                            Toast.makeText(context, "Failed saving plan", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Failed to save plan to Firebase", Toast.LENGTH_LONG).show()
+                            onResult(false, "Failed to save to Firestore. Check connection or permissions.")
                         }
-                        editingPlan = null
                     }
                 }
             },
@@ -390,9 +402,10 @@ fun PlansManagementScreen(
         var newId by remember { mutableStateOf("") }
         var newName by remember { mutableStateOf("") }
         var newDesc by remember { mutableStateOf("") }
+        var isCreating by remember { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
+            onDismissRequest = { if (!isCreating) showCreateDialog = false },
             title = { Text("Create New Plan") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -401,6 +414,7 @@ fun PlansManagementScreen(
                         onValueChange = { newId = it.lowercase(Locale.ROOT).replace(" ", "_") },
                         label = { Text("Plan ID (e.g. enterprise, tester)") },
                         singleLine = true,
+                        enabled = !isCreating,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -408,20 +422,24 @@ fun PlansManagementScreen(
                         onValueChange = { newName = it },
                         label = { Text("Plan Name (e.g. Enterprise)") },
                         singleLine = true,
+                        enabled = !isCreating,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = newDesc,
                         onValueChange = { newDesc = it },
                         label = { Text("Description") },
+                        enabled = !isCreating,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
                 Button(
+                    enabled = !isCreating && newId.isNotBlank() && newName.isNotBlank(),
                     onClick = {
                         if (newId.isNotBlank() && newName.isNotBlank()) {
+                            isCreating = true
                             val newPlan = PlanConfig(
                                 id = newId.trim(),
                                 name = newName.trim(),
@@ -430,21 +448,33 @@ fun PlansManagementScreen(
                                 allowAllExtensions = false
                             )
                             scope.launch(Dispatchers.IO) {
-                                syncService.savePlan(newPlan)
+                                val ok = syncService.savePlan(newPlan)
                                 withContext(Dispatchers.Main) {
+                                    isCreating = false
                                     showCreateDialog = false
-                                    loadData()
-                                    editingPlan = newPlan
+                                    if (ok) {
+                                        Toast.makeText(context, "Plan '${newPlan.name}' created in Firebase", Toast.LENGTH_SHORT).show()
+                                        loadData()
+                                        editingPlan = newPlan
+                                    } else {
+                                        Toast.makeText(context, "Failed to create plan in Firebase", Toast.LENGTH_LONG).show()
+                                    }
                                 }
                             }
                         }
                     }
                 ) {
-                    Text("Create & Configure")
+                    if (isCreating) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Creating...")
+                    } else {
+                        Text("Create & Configure")
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) {
+                TextButton(enabled = !isCreating, onClick = { showCreateDialog = false }) {
                     Text("Cancel")
                 }
             }
@@ -459,7 +489,7 @@ private fun PlanEditorDialog(
     allExtensions: List<FirestoreExtension>,
     allPlans: List<PlanConfig> = emptyList(),
     onDismiss: () -> Unit,
-    onSave: (PlanConfig) -> Unit,
+    onSave: (PlanConfig, (Boolean, String?) -> Unit) -> Unit,
     onDelete: (String) -> Unit
 ) {
     var name by remember { mutableStateOf(plan.name) }
@@ -468,6 +498,8 @@ private fun PlanEditorDialog(
     var selectedInherits by remember { mutableStateOf<String?>(plan.inherits) }
     var selectedExtensions by remember { mutableStateOf(plan.allowedExtensions.map { it.lowercase(Locale.ROOT) }.toSet()) }
     var searchQuery by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val filteredExtensions = remember(allExtensions, searchQuery) {
         if (searchQuery.isBlank()) allExtensions
@@ -743,6 +775,23 @@ private fun PlanEditorDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                if (errorMessage != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = errorMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -750,6 +799,7 @@ private fun PlanEditorDialog(
                 ) {
                     if (plan.id != "free" && plan.id != "admin") {
                         TextButton(
+                            enabled = !isSaving,
                             onClick = { onDelete(plan.id) },
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
@@ -762,11 +812,18 @@ private fun PlanEditorDialog(
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onDismiss) {
+                        TextButton(enabled = !isSaving, onClick = onDismiss) {
                             Text("Cancel")
                         }
                         Button(
+                            enabled = !isSaving,
                             onClick = {
+                                if (name.isBlank()) {
+                                    errorMessage = "Plan display name cannot be blank."
+                                    return@Button
+                                }
+                                isSaving = true
+                                errorMessage = null
                                 val updated = plan.copy(
                                     name = name.trim(),
                                     description = description.trim(),
@@ -774,11 +831,22 @@ private fun PlanEditorDialog(
                                     inherits = selectedInherits?.takeIf { it.isNotBlank() },
                                     allowedExtensions = selectedExtensions.toList()
                                 )
-                                onSave(updated)
+                                onSave(updated) { success, error ->
+                                    isSaving = false
+                                    if (!success) {
+                                        errorMessage = error ?: "Failed to save plan in Firebase."
+                                    }
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaxStreamTheme.CrimsonAccent)
                         ) {
-                            Text("Save Plan")
+                            if (isSaving) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Saving...")
+                            } else {
+                                Text("Save Plan")
+                            }
                         }
                     }
                 }

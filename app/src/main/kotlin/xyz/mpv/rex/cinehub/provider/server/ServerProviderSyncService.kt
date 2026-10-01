@@ -195,24 +195,13 @@ class ServerProviderSyncService(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not reach remote manifest, using built-in managed defaults: ${e.message}")
+            Log.w(TAG, "Could not reach remote manifest: ${e.message}")
         }
 
         return@withContext ProviderManifest(
             schemaVersion = 1,
-            providers = listOf(
-                defaultCastle,
-                ManagedProvider(
-                    id = "superstream",
-                    name = "SuperStream",
-                    version = "1.2.0",
-                    versionCode = 12,
-                    downloadUrl = "https://raw.githubusercontent.com/recloudstream/extensions/master/SuperStream.cs3",
-                    enabled = true,
-                    description = "Fast OTT movie and series streaming index."
-                )
-            ),
-            revokedProviders = listOf("malicious_sample_plugin", "dead_feed_v1")
+            providers = emptyList(),
+            revokedProviders = emptyList()
         )
     }
 

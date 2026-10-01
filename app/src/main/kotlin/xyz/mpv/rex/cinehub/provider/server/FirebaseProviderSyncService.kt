@@ -375,20 +375,19 @@ class FirebaseProviderSyncService(
             val blockedSet = permissions.blockedExtensions.map { it.trim().lowercase(Locale.ROOT) }.toSet()
             val customSet = permissions.customExtensions.map { it.trim().lowercase(Locale.ROOT) }.toSet()
 
-            // STEP 6: Query and index extension catalog from ALL sources:
-            // 6a. Built-in seed catalog (Instant zero-delay availability)
-            // 6b. Firestore `extensions` collection (Fleet-wide server management)
-            // 6c. Active repositories (Parallel non-blocking fetch)
+            // STEP 6: Query and index extension catalog dynamically from:
+            // 6a. Firestore `extensions` collection (Fleet-wide server management)
+            // 6b. Active repositories (Parallel non-blocking fetch)
+            // 6c. Room cached plugins & installed extensions
             _syncStatus.value = "Building unified extension catalog..."
             val allCatalogPlugins = mutableListOf<AvailablePlugin>()
             val globallyDisabledKeys = mutableSetOf<String>()
 
-            // 6a. Add Built-in Seed Plugins first
-            allCatalogPlugins.addAll(KnownExtensionCatalog.SEED_PLUGINS)
-
-            // 6b. Fetch Firestore `extensions` collection
+            // 6a. Fetch Firestore `extensions` collection
             try {
-                val extensionsSnap = firestore.collection(EXTENSIONS_COLLECTION).get().await()
+                val extensionsSnap = withTimeoutOrNull(5000L) {
+                    firestore.collection(EXTENSIONS_COLLECTION).get().await()
+                }
                 if (extensionsSnap != null && !extensionsSnap.isEmpty) {
                     for (doc in extensionsSnap.documents) {
                         val ext = FirestoreExtension.fromSnapshot(doc)
@@ -403,15 +402,7 @@ class FirebaseProviderSyncService(
                             globallyDisabledKeys.add(normalizeExtensionIdentifier(docNameKey))
                             Log.i(TAG, "EXTENSION_SYNC: Extension ${ext.name} is globally DISABLED by server.")
                         } else {
-                            var plugin = ext.toAvailablePlugin()
-                            // If missing direct download url, resolve from seed or repo
-                            if (plugin.url.isBlank()) {
-                                val seed = KnownExtensionCatalog.findSeedPlugin(plugin.name)
-                                    ?: KnownExtensionCatalog.findSeedPlugin(plugin.internalName)
-                                if (seed != null && seed.url.isNotBlank()) {
-                                    plugin = plugin.copy(url = seed.url)
-                                }
-                            }
+                            val plugin = ext.toAvailablePlugin()
                             allCatalogPlugins.add(plugin)
                         }
                     }
@@ -420,7 +411,7 @@ class FirebaseProviderSyncService(
                 Log.w(TAG, "Error querying extensions collection: ${e.message}")
             }
 
-            // 6c. Parallel non-blocking fetch from registered repository manifests
+            // 6b. Parallel non-blocking fetch from registered repository manifests
             val allRepoUrls = mutableSetOf<String>()
             RepositoryManager.BUILT_IN_PRESETS.forEach { allRepoUrls.add(it.url) }
             runCatching {
@@ -441,14 +432,36 @@ class FirebaseProviderSyncService(
                 }
             }
 
-            // Enrich any plugins that are missing direct download URLs from matching repo/seed plugins
+            // 6c. Include installed extensions from local DB
+            runCatching {
+                val installed = db.extensionDao().getAllInstalledExtensionsSync()
+                for (inst in installed) {
+                    allCatalogPlugins.add(
+                        AvailablePlugin(
+                            name = inst.name,
+                            internalName = inst.pkgName,
+                            version = inst.version,
+                            versionCode = inst.versionCode,
+                            description = inst.description,
+                            url = inst.repositoryUrl ?: "",
+                            iconUrl = inst.iconUrl,
+                            lang = inst.lang,
+                            repositoryUrl = inst.repositoryUrl ?: "",
+                            isInstalled = true,
+                            isEnabled = inst.isEnabled
+                        )
+                    )
+                }
+            }
+
+            // Enrich any plugins that are missing direct download URLs from matching repo plugins
             val enrichedCatalog = mutableListOf<AvailablePlugin>()
             for (p in allCatalogPlugins) {
                 var current = p
                 if (current.url.isBlank()) {
                     val fallback = allCatalogPlugins.firstOrNull { 
                         it.url.isNotBlank() && matchesExtensionOrProvider(current.name, it) 
-                    } ?: KnownExtensionCatalog.findSeedPlugin(current.name)
+                    }
                     if (fallback != null && fallback.url.isNotBlank()) {
                         current = current.copy(url = fallback.url)
                     }
@@ -623,7 +636,9 @@ class FirebaseProviderSyncService(
      */
     suspend fun fetchAllPlans(): List<PlanConfig> = withContext(Dispatchers.IO) {
         try {
-            val snapshot = firestore.collection(PLANS_COLLECTION).get().await()
+            val snapshot = withTimeoutOrNull(6000L) {
+                firestore.collection(PLANS_COLLECTION).get().await()
+            }
             val plans = mutableListOf<PlanConfig>()
             if (snapshot != null && !snapshot.isEmpty) {
                 for (doc in snapshot.documents) {
@@ -657,13 +672,18 @@ class FirebaseProviderSyncService(
             val planId = plan.id.trim().lowercase(Locale.ROOT)
             if (planId.isBlank()) return@withContext false
             resolvedPlanInheritanceCache.clear()
-            firestore.collection(PLANS_COLLECTION).document(planId)
+            
+            // Initiate Firestore write (commits locally immediately and syncs with cloud)
+            val task = firestore.collection(PLANS_COLLECTION).document(planId)
                 .set(plan.toMap(), SetOptions.merge())
-                .await()
+            
+            withTimeoutOrNull(5000L) {
+                task.await()
+            }
             Log.i(TAG, "ADMIN_ACTION: Saved plan $planId to Firestore.")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving plan ${plan.id}", e)
+            Log.e(TAG, "Error saving plan ${plan.id}: ${e.message}", e)
             false
         }
     }
@@ -676,11 +696,15 @@ class FirebaseProviderSyncService(
             val cleanId = planId.trim().lowercase(Locale.ROOT)
             if (cleanId.isBlank() || cleanId == "free" || cleanId == "admin") return@withContext false
             resolvedPlanInheritanceCache.clear()
-            firestore.collection(PLANS_COLLECTION).document(cleanId).delete().await()
+            
+            val task = firestore.collection(PLANS_COLLECTION).document(cleanId).delete()
+            withTimeoutOrNull(5000L) {
+                task.await()
+            }
             Log.i(TAG, "ADMIN_ACTION: Deleted plan $cleanId from Firestore.")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Error deleting plan $planId", e)
+            Log.e(TAG, "Error deleting plan $planId: ${e.message}", e)
             false
         }
     }
@@ -690,7 +714,9 @@ class FirebaseProviderSyncService(
      */
     suspend fun fetchUserPermissions(uid: String): UserPermissions = withContext(Dispatchers.IO) {
         try {
-            val doc = firestore.collection(PERMISSIONS_COLLECTION).document(uid).get().await()
+            val doc = withTimeoutOrNull(6000L) {
+                firestore.collection(PERMISSIONS_COLLECTION).document(uid).get().await()
+            }
             UserPermissions.fromSnapshot(doc)
         } catch (e: Exception) {
             Log.w(TAG, "Error fetching permissions for $uid: ${e.message}")
@@ -703,46 +729,31 @@ class FirebaseProviderSyncService(
      */
     suspend fun saveUserPermissions(uid: String, permissions: UserPermissions): Boolean = withContext(Dispatchers.IO) {
         try {
-            firestore.collection(PERMISSIONS_COLLECTION).document(uid)
+            if (uid.isBlank()) return@withContext false
+            val task = firestore.collection(PERMISSIONS_COLLECTION).document(uid)
                 .set(permissions.toMap(), SetOptions.merge())
-                .await()
+            withTimeoutOrNull(5000L) {
+                task.await()
+            }
+            if (auth.currentUser?.uid == uid) {
+                _userPermissions.value = permissions
+                _userPlan.value = permissions.plan
+            }
             Log.i(TAG, "ADMIN_ACTION: Saved permissions for user $uid -> Plan: ${permissions.plan}")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving permissions for user $uid", e)
+            Log.e(TAG, "Error saving permissions for user $uid: ${e.message}", e)
             false
         }
     }
 
     /**
-     * Fetches all available extensions in the system with full metadata.
+     * Fetches all available extensions in the system dynamically with full metadata.
      */
     suspend fun fetchAllAvailableExtensions(): List<FirestoreExtension> = withContext(Dispatchers.IO) {
         val result = mutableMapOf<String, FirestoreExtension>()
 
-        // 1. Populate from Seed Catalog
-        for (seed in KnownExtensionCatalog.SEED_PLUGINS) {
-            val key = normalizeExtensionIdentifier(seed.internalName)
-            result[key] = FirestoreExtension(
-                id = key,
-                name = seed.name,
-                internalName = seed.internalName,
-                repository = "Verified Community",
-                repositoryUrl = seed.repositoryUrl,
-                url = seed.url,
-                tvUrl = seed.tvUrl,
-                iconUrl = seed.iconUrl,
-                version = seed.version,
-                versionCode = seed.versionCode,
-                description = seed.description,
-                lang = seed.lang ?: "en",
-                authors = seed.authors,
-                tvTypes = seed.tvTypes,
-                enabled = true
-            )
-        }
-
-        // 2. Fill from all built-in preset catalogs & user repos in parallel
+        // 1. Fill from all built-in preset catalogs & user repos in parallel
         val allRepoUrls = mutableSetOf<String>()
         RepositoryManager.BUILT_IN_PRESETS.forEach { allRepoUrls.add(it.url) }
         runCatching {
@@ -783,9 +794,34 @@ class FirebaseProviderSyncService(
             }
         }
 
+        // 2. Include installed extensions from local DB
+        runCatching {
+            val installed = db.extensionDao().getAllInstalledExtensionsSync()
+            for (inst in installed) {
+                val key = normalizeExtensionIdentifier(inst.pkgName.ifBlank { inst.name })
+                val existing = result[key]
+                if (existing == null) {
+                    result[key] = FirestoreExtension(
+                        id = key,
+                        name = inst.name,
+                        internalName = inst.pkgName,
+                        repository = "Installed",
+                        url = inst.repositoryUrl ?: inst.localFilePath ?: "",
+                        version = inst.version,
+                        versionCode = inst.versionCode,
+                        description = inst.description,
+                        lang = inst.lang ?: "en",
+                        enabled = inst.isEnabled
+                    )
+                }
+            }
+        }
+
         // 3. Merge / override from Firestore
         try {
-            val snap = firestore.collection(EXTENSIONS_COLLECTION).get().await()
+            val snap = withTimeoutOrNull(5000L) {
+                firestore.collection(EXTENSIONS_COLLECTION).get().await()
+            }
             if (snap != null && !snap.isEmpty) {
                 for (doc in snap.documents) {
                     val ext = FirestoreExtension.fromSnapshot(doc)
@@ -813,12 +849,18 @@ class FirebaseProviderSyncService(
         try {
             val cleanPlan = planId.trim().lowercase(Locale.ROOT)
             val cleanExt = extensionId.trim().lowercase(Locale.ROOT)
-            val doc = firestore.collection(PLANS_COLLECTION).document(cleanPlan).get().await()
+            if (cleanPlan.isBlank() || cleanExt.isBlank()) return@withContext false
+
+            val doc = withTimeoutOrNull(4000L) {
+                firestore.collection(PLANS_COLLECTION).document(cleanPlan).get().await()
+            }
             val plan = PlanConfig.fromSnapshot(doc) ?: PlanConfig.defaultForPlan(cleanPlan)
 
             val newAllowed = plan.allowedExtensions.toMutableList()
             if (enable) {
-                if (!newAllowed.contains(cleanExt)) newAllowed.add(cleanExt)
+                if (!newAllowed.any { it.equals(cleanExt, ignoreCase = true) }) {
+                    newAllowed.add(cleanExt)
+                }
             } else {
                 newAllowed.removeAll { it.equals(cleanExt, ignoreCase = true) }
             }

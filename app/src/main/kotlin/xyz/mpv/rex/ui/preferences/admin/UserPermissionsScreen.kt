@@ -360,18 +360,19 @@ fun UserPermissionsScreen(
                 selectedUser = null
                 userPermissions = null
             },
-            onSave = { updatedPerms ->
+            onSave = { updatedPerms, onResult ->
                 scope.launch(Dispatchers.IO) {
-                    isSaving = true
                     val ok = syncService.saveUserPermissions(user.uid, updatedPerms)
                     withContext(Dispatchers.Main) {
-                        isSaving = false
                         if (ok) {
-                            Toast.makeText(context, "Permissions saved for ${user.name ?: user.uid}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Permissions saved for ${user.name ?: user.uid} in Firebase", Toast.LENGTH_SHORT).show()
+                            onResult(true, null)
                             selectedUser = null
                             userPermissions = null
+                            loadData()
                         } else {
-                            Toast.makeText(context, "Failed saving user permissions", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Failed saving user permissions to Firebase", Toast.LENGTH_LONG).show()
+                            onResult(false, "Failed to save permissions to Firestore. Check connection.")
                         }
                     }
                 }
@@ -389,7 +390,7 @@ private fun UserPermissionsEditorDialog(
     allExtensions: List<FirestoreExtension>,
     extensionNameMap: Map<String, String>,
     onDismiss: () -> Unit,
-    onSave: (UserPermissions) -> Unit
+    onSave: (UserPermissions, (Boolean, String?) -> Unit) -> Unit
 ) {
     var selectedPlanId by remember { mutableStateOf(permissions.plan.ifBlank { "free" }) }
     var isAccountEnabled by remember { mutableStateOf(permissions.enabled) }
@@ -398,6 +399,8 @@ private fun UserPermissionsEditorDialog(
 
     var showAddCustomDialog by remember { mutableStateOf(false) }
     var showAddBlockedDialog by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // Calculate final resolved extensions for live preview
     val selectedPlan = plans.firstOrNull { it.id.equals(selectedPlanId, ignoreCase = true) } ?: PlanConfig.defaultForPlan(selectedPlanId)
@@ -630,28 +633,59 @@ private fun UserPermissionsEditorDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                if (errorMessage != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = errorMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(enabled = !isSaving, onClick = onDismiss) {
                         Text("Cancel")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
+                        enabled = !isSaving,
                         onClick = {
+                            isSaving = true
+                            errorMessage = null
                             val updated = permissions.copy(
                                 plan = selectedPlanId.trim().lowercase(Locale.ROOT),
                                 enabled = isAccountEnabled,
                                 customExtensions = customExtensions.distinct(),
                                 blockedExtensions = blockedExtensions.distinct()
                             )
-                            onSave(updated)
+                            onSave(updated) { success, error ->
+                                isSaving = false
+                                if (!success) {
+                                    errorMessage = error ?: "Failed to save permissions in Firebase."
+                                }
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaxStreamTheme.CrimsonAccent)
                     ) {
-                        Text("Save Permissions")
+                        if (isSaving) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Saving...")
+                        } else {
+                            Text("Save Permissions")
+                        }
                     }
                 }
             }
