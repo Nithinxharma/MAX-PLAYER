@@ -1,32 +1,32 @@
 package xyz.mpv.rex.auth.model
 
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.PropertyName
-import com.google.firebase.firestore.ServerTimestamp
-import java.util.Date
 
-/**
- * Data representation of a Max Stream authenticated user in Firestore (`users/{uid}`).
- * Designed with flexible field-mapping and safe fallback defaults for backward compatibility.
- */
-@IgnoreExtraProperties
+object UserRole {
+    const val USER = "user"
+    const val VIP = "vip"
+    const val MODERATOR = "moderator"
+    const val ADMIN = "admin"
+    const val OWNER = "owner"
+}
+
 data class UserProfile(
     @get:PropertyName("uid")
     @set:PropertyName("uid")
     var uid: String = "",
 
-    @get:PropertyName("name")
-    @set:PropertyName("name")
-    var name: String? = null,
-
     @get:PropertyName("email")
     @set:PropertyName("email")
-    var email: String? = null,
+    var email: String = "",
 
-    @get:PropertyName("photo")
-    @set:PropertyName("photo")
-    var photo: String? = null,
+    @get:PropertyName("displayName")
+    @set:PropertyName("displayName")
+    var displayName: String = "",
+
+    @get:PropertyName("photoUrl")
+    @set:PropertyName("photoUrl")
+    var photoUrl: String = "",
 
     @get:PropertyName("role")
     @set:PropertyName("role")
@@ -40,95 +40,59 @@ data class UserProfile(
     @set:PropertyName("premium")
     var premium: Boolean = false,
 
-    @get:PropertyName("providerAccess")
-    @set:PropertyName("providerAccess")
-    var providerAccess: List<String> = listOf("castletv"),
+    @get:PropertyName("isAdmin")
+    @set:PropertyName("isAdmin")
+    var isAdmin: Boolean = false,
 
-    @get:PropertyName("installedProviders")
-    @set:PropertyName("installedProviders")
-    var installedProviders: Map<String, Long> = mapOf("castletv" to 14L),
-
-    @ServerTimestamp
     @get:PropertyName("createdAt")
     @set:PropertyName("createdAt")
-    var createdAt: Date? = null,
+    var createdAt: Long = System.currentTimeMillis(),
 
-    @ServerTimestamp
-    @get:PropertyName("lastLogin")
-    @set:PropertyName("lastLogin")
-    var lastLogin: Date? = null
+    @get:PropertyName("lastLoginAt")
+    @set:PropertyName("lastLoginAt")
+    var lastLoginAt: Long = System.currentTimeMillis()
 ) {
-    val photoUrl: String?
-        get() = photo
+    val isAdministrator: Boolean
+        get() = role.equals(UserRole.ADMIN, ignoreCase = true) ||
+                role.equals(UserRole.OWNER, ignoreCase = true) ||
+                isAdmin ||
+                email.equals("sabhiron5@gmail.com", ignoreCase = true)
 
     companion object {
-        /**
-         * Robust parser that extracts UserProfile even if fields in Firestore use alternative keys
-         * (e.g. displayName vs name, photoUrl vs photo, isAdmin vs role, isPremium vs premium).
-         */
         fun fromSnapshot(doc: DocumentSnapshot): UserProfile {
-            val uid = doc.getString("uid") ?: doc.id
-            val name = doc.getString("name") 
-                ?: doc.getString("displayName") 
-                ?: doc.getString("username")
-            val email = doc.getString("email")
-            val photo = doc.getString("photo") 
-                ?: doc.getString("photoUrl") 
-                ?: doc.getString("avatar")
-                ?: doc.getString("profileImage")
-
-            // Determine role: check 'role', 'userRole', or boolean 'isAdmin'
-            val rawRole = doc.getString("role") ?: doc.getString("userRole")
+            val email = doc.getString("email") ?: ""
+            val rawRole = doc.getString("role") ?: doc.getString("userRole") ?: UserRole.USER
             val isAdminBoolean = doc.getBoolean("isAdmin") ?: false
-            val isExplicitAdminEmail = email?.trim()?.equals("sabhiron5@gmail.com", ignoreCase = true) == true
-            
+            val isOwnerAccount = email.equals("sabhiron5@gmail.com", ignoreCase = true)
+
             val resolvedRole = when {
-                !rawRole.isNullOrBlank() -> rawRole
-                isExplicitAdminEmail -> UserRole.OWNER
-                isAdminBoolean -> UserRole.ADMIN
-                else -> UserRole.USER
+                isOwnerAccount -> UserRole.OWNER
+                rawRole.equals(UserRole.OWNER, ignoreCase = true) -> UserRole.OWNER
+                rawRole.equals(UserRole.ADMIN, ignoreCase = true) || isAdminBoolean -> UserRole.ADMIN
+                rawRole.equals(UserRole.VIP, ignoreCase = true) -> UserRole.VIP
+                else -> rawRole
             }
 
-            // Determine plan: check 'plan', 'userPlan', 'subscriptionPlan', or role
-            val rawPlan = doc.getString("plan")
-                ?: doc.getString("userPlan")
-                ?: doc.getString("subscriptionPlan")
-
-            // Determine premium: check 'premium' or 'isPremium'
-            val resolvedPremium = doc.getBoolean("premium") 
-                ?: doc.getBoolean("isPremium") 
-                ?: (UserRole.isAdmin(resolvedRole) || isExplicitAdminEmail)
-
+            val rawPlan = doc.getString("plan") ?: if (isOwnerAccount) "admin" else "free"
             val resolvedPlan = when {
-                !rawPlan.isNullOrBlank() -> rawPlan
-                UserRole.isAdmin(resolvedRole) || isExplicitAdminEmail -> "admin"
-                resolvedPremium -> "premium"
-                else -> "free"
+                isOwnerAccount -> "admin"
+                resolvedRole == UserRole.ADMIN || resolvedRole == UserRole.OWNER -> "admin"
+                else -> rawPlan
             }
 
-            @Suppress("UNCHECKED_CAST")
-            val rawAccess = doc.get("providerAccess") as? List<String> ?: listOf("castletv")
-
-            @Suppress("UNCHECKED_CAST")
-            val rawInstalled = (doc.get("installedProviders") as? Map<String, Any>)?.mapValues {
-                (it.value as? Number)?.toLong() ?: 1L
-            } ?: mapOf("castletv" to 14L)
-
-            val createdAt = doc.getDate("createdAt")
-            val lastLogin = doc.getDate("lastLogin")
+            val isPremium = doc.getBoolean("premium") ?: (resolvedRole != UserRole.USER || isOwnerAccount)
 
             return UserProfile(
-                uid = uid,
-                name = name,
+                uid = doc.getString("uid") ?: doc.id,
                 email = email,
-                photo = photo,
+                displayName = doc.getString("displayName") ?: doc.getString("name") ?: (if (email.contains("@")) email.substringBefore("@") else "User"),
+                photoUrl = doc.getString("photoUrl") ?: doc.getString("avatarUrl") ?: doc.getString("profileImage") ?: "",
                 role = resolvedRole,
                 plan = resolvedPlan,
-                premium = resolvedPremium,
-                providerAccess = rawAccess,
-                installedProviders = rawInstalled,
-                createdAt = createdAt,
-                lastLogin = lastLogin
+                premium = isPremium,
+                isAdmin = resolvedRole == UserRole.ADMIN || resolvedRole == UserRole.OWNER || isAdminBoolean || isOwnerAccount,
+                createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
+                lastLoginAt = doc.getLong("lastLoginAt") ?: System.currentTimeMillis()
             )
         }
     }

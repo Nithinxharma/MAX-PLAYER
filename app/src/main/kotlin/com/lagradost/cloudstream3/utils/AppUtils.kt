@@ -2,80 +2,10 @@ package com.lagradost.cloudstream3.utils
 
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.cloudstream3.mapper
-import kotlin.reflect.KClass
 
 object AppUtils {
-    
-    fun Any.toJson(): String {
-        return mapper.writeValueAsString(this)
-    }
-
-    fun Any.toJsonLiteral(): String {
-        return mapper.writeValueAsString(this)
-    }
-
-    fun <T : Any> parseJson(value: String, kClass: KClass<T>): T {
-        return mapper.readValue(value, kClass.java)
-    }
-
-    fun <T> parseJson(value: String, clazz: Class<T>): T {
-        return mapper.readValue(value, clazz)
-    }
-
-    fun <T> tryParseJson(value: String?, clazz: Class<T>): T? {
-        if (value.isNullOrBlank()) return null
-        return try {
-            mapper.readValue(value, clazz)
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    inline fun <reified T : Any> parseJson(value: String): T {
-        return mapper.readValue(value)
-    }
-
-    inline fun <reified T> tryParseJson(value: String?): T? {
-        if (value.isNullOrBlank()) return null
-        return try {
-            mapper.readValue(value)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    inline fun <reified T> String.parsedSafe(): T? {
-        return tryParseJson(this)
-    }
-
-    fun base64Decode(string: String): String = com.lagradost.cloudstream3.base64Decode(string)
-    fun base64DecodeArray(string: String): ByteArray = com.lagradost.cloudstream3.base64DecodeArray(string)
-    fun base64Encode(bytes: ByteArray): String = com.lagradost.cloudstream3.base64Encode(bytes)
+    fun Any.toJson(): String = mapper.writeValueAsString(this)
+    inline fun <reified T : Any> parseJson(value: String): T = mapper.readValue(value)
+    inline fun <reified T> tryParseJson(value: String?): T? =
+        if (value.isNullOrBlank()) null else runCatching { mapper.readValue<T>(value) }.getOrNull()
 }
-
-fun Any.toJson(): String {
-    return mapper.writeValueAsString(this)
-}
-
-inline fun <reified T> tryParseJson(value: String?): T? {
-    if (value.isNullOrBlank()) return null
-    return try {
-        mapper.readValue(value)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
-    }
-}
-
-fun <T> tryParseJson(value: String?, clazz: Class<T>): T? = AppUtils.tryParseJson(value, clazz)
-fun <T : Any> parseJson(value: String, kClass: KClass<T>): T = AppUtils.parseJson(value, kClass)
-fun <T> parseJson(value: String, clazz: Class<T>): T = AppUtils.parseJson(value, clazz)
-inline fun <reified T : Any> parseJson(value: String): T = AppUtils.parseJson(value)
-
-inline fun <reified T> String.parsedSafe(): T? = tryParseJson<T>(this)
-
-fun base64Decode(string: String): String = com.lagradost.cloudstream3.base64Decode(string)
-fun base64DecodeArray(string: String): ByteArray = com.lagradost.cloudstream3.base64DecodeArray(string)
-fun base64Encode(bytes: ByteArray): String = com.lagradost.cloudstream3.base64Encode(bytes)
-

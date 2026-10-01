@@ -1,344 +1,122 @@
 package xyz.mpv.rex
 
-import android.app.Activity
 import android.os.Bundle
-import android.util.Log
-import android.content.Intent
-import androidx.activity.compose.BackHandler
-import androidx.core.net.toUri
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideIn
-import androidx.compose.animation.slideOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntOffset
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation3.runtime.NavBackStack
-import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.ui.NavDisplay
-import xyz.mpv.rex.preferences.AppearancePreferences
-import xyz.mpv.rex.preferences.preference.collectAsState
-import xyz.mpv.rex.presentation.Screen
-import xyz.mpv.rex.repository.NetworkRepository
-import xyz.mpv.rex.utils.update.UpdateDialog
-import xyz.mpv.rex.utils.update.UpdateViewModel
-import xyz.mpv.rex.ui.browser.MainScreen
-import xyz.mpv.rex.ui.theme.DarkMode
-import xyz.mpv.rex.ui.theme.MpvexTheme
-import xyz.mpv.rex.ui.utils.LocalBackStack
-import xyz.mpv.rex.utils.permission.PermissionUtils
-import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayer
-import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerDefaults
-import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerStateManager
-import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
-import xyz.mpv.rex.ui.splash.SplashScreen
-import xyz.mpv.rex.ui.welcome.WelcomeScreen
-import xyz.mpv.rex.ui.auth.LoginScreen
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
-import androidx.compose.runtime.staticCompositionLocalOf
+import xyz.mpv.rex.auth.FirebaseAuthManager
+import xyz.mpv.rex.cinehub.diagnostic.CloudStreamQueryTerminalView
+import xyz.mpv.rex.cinehub.extension.manager.ExtensionManager
+import xyz.mpv.rex.ui.extensions.ExtensionsScreen
+import xyz.mpv.rex.ui.home.HomeScreen
+import xyz.mpv.rex.ui.player.PlayerScreen
+import xyz.mpv.rex.ui.profile.ProfileScreen
+import xyz.mpv.rex.ui.search.SearchScreen
+import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 
-val LocalUpdateViewModel = staticCompositionLocalOf<UpdateViewModel?> { null }
+enum class ScreenTab(val title: String, val icon: ImageVector) {
+    HOME("Home", Icons.Default.Home),
+    SEARCH("Search", Icons.Default.Search),
+    EXTENSIONS("Extensions", Icons.Default.Extension),
+    TERMINAL("Test Center", Icons.Default.Terminal),
+    PROFILE("Profile", Icons.Default.Person)
+}
 
-/**
- * Main entry point for the application
- */
-class MainActivity : androidx.appcompat.app.AppCompatActivity() {
-  private val appearancePreferences by inject<AppearancePreferences>()
-  private val networkRepository by inject<NetworkRepository>()
-  private val miniPlayerStateManager by inject<MiniPlayerStateManager>()
-  
-  // Create a coroutine scope tied to the activity lifecycle
-  private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+class MainActivity : ComponentActivity() {
+    private val extensionManager: ExtensionManager by inject()
+    private val authManager: FirebaseAuthManager by inject()
 
-  // Register the ActivityResultLauncher at class level
-  private val mediaAccessLauncher = registerForActivityResult(
-    ActivityResultContracts.StartIntentSenderForResult()
-  ) { result ->
-    PermissionUtils.handleMediaAccessResult(result.resultCode)
-  }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
-  override fun attachBaseContext(newBase: android.content.Context) {
-    super.attachBaseContext(xyz.mpv.rex.utils.locale.LocaleHelper.wrapContext(newBase))
-  }
+        setContent {
+            MaxStreamTheme {
+                var currentTab by remember { mutableStateOf(ScreenTab.HOME) }
+                var playingMedia by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-  override fun onCreate(savedInstanceState: Bundle?) {
-    android.util.Log.d("APP_STARTUP", "APP_STAGE_1_MAIN_ACTIVITY_CREATED")
-    try {
-      installSplashScreen()
-    super.onCreate(savedInstanceState)
-    
-    PermissionUtils.setMediaAccessLauncher(mediaAccessLauncher)
+                BackHandler(enabled = playingMedia != null || currentTab != ScreenTab.HOME) {
+                    if (playingMedia != null) {
+                        playingMedia = null
+                    } else if (currentTab != ScreenTab.HOME) {
+                        currentTab = ScreenTab.HOME
+                    }
+                }
 
-    // Register proxy lifecycle observer for network streaming
-    lifecycle.addObserver(xyz.mpv.rex.ui.browser.networkstreaming.proxy.ProxyLifecycleObserver())
-
-    setContent {
-      android.util.Log.d("APP_STARTUP", "APP_STAGE_2_SETCONTENT")
-      // Set up theme and edge-to-edge display
-      // Enforce Dark Mode edge-to-edge display
-      val isDarkMode = true
-      enableEdgeToEdge(
-        SystemBarStyle.auto(
-          lightScrim = Color.Transparent.toArgb(),
-          darkScrim = Color.Transparent.toArgb(),
-        ) { isDarkMode },
-      )
-
-      // Auto-connect to saved network connections
-      LaunchedEffect(Unit) {
-        autoConnectToNetworks()
-      }
-
-      MpvexTheme {
-        Surface {
-          Navigator()
-        }
-      }
-    }
-    } catch (e: Throwable) {
-      android.util.Log.e("APP_STARTUP", "Crash in MainActivity.onCreate", e)
-      throw e
-    }
-  }
-
-  override fun onDestroy() {
-    try {
-      super.onDestroy()
-    } catch (e: Exception) {
-      Log.e("MainActivity", "Error during onDestroy", e)
-    }
-  }
-
-  /**
-   * Auto-connect to network connections that are marked for auto-connection
-   */
-  private suspend fun autoConnectToNetworks() {
-    // Delay auto-connect to let UI settle first
-    kotlinx.coroutines.delay(500)
-    
-    // Use coroutineScope for properly structured concurrency
-    withContext(Dispatchers.IO) {
-      try {
-        val autoConnectConnections = networkRepository.getAutoConnectConnections()
-        autoConnectConnections.forEach { connection ->
-          withContext(Dispatchers.Main) {
-            Log.d("MainActivity", "Auto-connecting to: ${connection.name}")
-          }
-          networkRepository.connect(connection)
-            .onSuccess {
-              withContext(Dispatchers.Main) {
-                Log.d("MainActivity", "Auto-connected successfully: ${connection.name}")
-              }
+                if (playingMedia != null) {
+                    PlayerScreen(
+                        videoTitle = playingMedia!!.first,
+                        videoUrl = playingMedia!!.second,
+                        onBack = { playingMedia = null }
+                    )
+                } else {
+                    Scaffold(
+                        bottomBar = {
+                            NavigationBar(
+                                containerColor = MaxStreamTheme.MidnightSurface,
+                                contentColor = MaxStreamTheme.TextPrimary
+                            ) {
+                                ScreenTab.values().forEach { tab ->
+                                    NavigationBarItem(
+                                        selected = currentTab == tab,
+                                        onClick = { currentTab = tab },
+                                        icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) },
+                                        label = { Text(tab.title) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = MaxStreamTheme.CrimsonAccent,
+                                            selectedTextColor = MaxStreamTheme.CrimsonAccent,
+                                            indicatorColor = MaxStreamTheme.ElevatedSurface,
+                                            unselectedIconColor = MaxStreamTheme.TextSecondary,
+                                            unselectedTextColor = MaxStreamTheme.TextSecondary
+                                        )
+                                    )
+                                }
+                            }
+                        },
+                        containerColor = MaxStreamTheme.AbyssBackground,
+                        contentWindowInsets = WindowInsets.safeDrawing
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            when (currentTab) {
+                                ScreenTab.HOME -> HomeScreen(
+                                    onPlayMedia = { title, url -> playingMedia = title to url },
+                                    onNavigateToSearch = { currentTab = ScreenTab.SEARCH },
+                                    onOpenTestCenter = { currentTab = ScreenTab.TERMINAL }
+                                )
+                                ScreenTab.SEARCH -> SearchScreen(
+                                    onPlayMedia = { title, url -> playingMedia = title to url }
+                                )
+                                ScreenTab.EXTENSIONS -> ExtensionsScreen(
+                                    extensionManager = extensionManager,
+                                    onOpenTestCenter = { currentTab = ScreenTab.TERMINAL }
+                                )
+                                ScreenTab.TERMINAL -> CloudStreamQueryTerminalView(
+                                    onBack = { currentTab = ScreenTab.HOME }
+                                )
+                                ScreenTab.PROFILE -> ProfileScreen(
+                                    authManager = authManager
+                                )
+                            }
+                        }
+                    }
+                }
             }
-            .onFailure { e ->
-              withContext(Dispatchers.Main) {
-                Log.e("MainActivity", "Auto-connect failed for ${connection.name}: ${e.message}")
-              }
-            }
         }
-      } catch (e: Exception) {
-        withContext(Dispatchers.Main) {
-          Log.e("MainActivity", "Error during auto-connect", e)
-        }
-      }
     }
-  }
-
-  /**
-   * Navigator that handles screen transitions and provides shared states
-   */
-  @Composable
-  fun Navigator() {
-    android.util.Log.d("APP_STARTUP", "APP_STAGE_3_NAVHOST_CREATED")
-    val context = LocalContext.current
-    val initialScreen = remember { SplashScreen }
-    val backstack = rememberNavBackStack(initialScreen)
-
-    @Suppress("UNCHECKED_CAST")
-    val typedBackstack = backstack as NavBackStack<Screen>
-
-    val currentVersion = BuildConfig.VERSION_NAME.replace("-dev", "")
-
-    // Conditionally initialize update feature based on build config
-    val updateViewModel: UpdateViewModel? = if (BuildConfig.ENABLE_UPDATE_FEATURE) {
-      viewModel(context as ComponentActivity)
-    } else {
-      null
-    }
-    val updateState by (updateViewModel?.updateState ?: MutableStateFlow(UpdateViewModel.UpdateState.Idle)).collectAsState()
-    val isDownloading by (updateViewModel?.isDownloading ?: MutableStateFlow(false)).collectAsState()
-    val downloadProgress by (updateViewModel?.downloadProgress ?: MutableStateFlow(0f)).collectAsState()
-    val miniPlayerState by miniPlayerStateManager.state.collectAsState()
-    val hideNavigationBar by MainScreen.shouldHideNavigationBar.collectAsState()
-    val currentRoute = typedBackstack.lastOrNull()
-    val isMainScreen = currentRoute == MainScreen
-    val isWelcomeScreen = currentRoute == WelcomeScreen
-    val isSplashScreen = currentRoute == SplashScreen
-    val isLoginScreen = currentRoute == LoginScreen
-    
-    val targetBottomPadding = if (isMainScreen && !hideNavigationBar) {
-      if (miniPlayerState.isExpanded) 8.dp else 88.dp
-    } else 8.dp
-    val animatedBottomPadding by androidx.compose.animation.core.animateDpAsState(
-      targetValue = targetBottomPadding,
-      animationSpec = tween(220),
-      label = "miniPlayerBottomPadding"
-    )
-
-    val targetMiniPlayerHeight = if (miniPlayerState.isPlaybackActive && !isSplashScreen && !isLoginScreen) MiniPlayerDefaults.CompactHeight else 0.dp
-    val miniPlayerHeight by androidx.compose.animation.core.animateDpAsState(
-      targetValue = targetMiniPlayerHeight,
-      animationSpec = tween(220),
-      label = "miniPlayerHeight"
-    )
-    val navBarHeight = if (isMainScreen && !hideNavigationBar) 80.dp else 0.dp
-    val totalNavigationBarHeight = navBarHeight + miniPlayerHeight
-
-    BackHandler(enabled = isMainScreen || isWelcomeScreen || isSplashScreen || isLoginScreen) {
-      (context as? Activity)?.moveTaskToBack(true)
-    }
-
-    // Provide shared states to all screens
-    CompositionLocalProvider(
-      LocalBackStack provides typedBackstack,
-      LocalUpdateViewModel provides updateViewModel,
-      LocalNavigationBarHeight provides totalNavigationBarHeight
-    ) {
-      Box(modifier = Modifier.fillMaxSize()) {
-        NavDisplay(
-          backStack = typedBackstack,
-          onBack = { typedBackstack.removeLastOrNull() },
-          entryProvider = { route -> NavEntry(route) { route.Content() } },
-          popTransitionSpec = {
-            (
-              fadeIn(animationSpec = tween(220)) +
-                slideIn(animationSpec = tween(220)) { IntOffset(-it.width / 2, 0) }
-            ) togetherWith (
-                fadeOut(animationSpec = tween(220)) +
-                  slideOut(animationSpec = tween(220)) { IntOffset(it.width / 2, 0) }
-            )
-          },
-          transitionSpec = {
-            (
-              fadeIn(animationSpec = tween(220)) +
-                slideIn(animationSpec = tween(220)) { IntOffset(it.width / 2, 0) }
-            ) togetherWith (
-                fadeOut(animationSpec = tween(220)) +
-                  slideOut(animationSpec = tween(220)) { IntOffset(-it.width / 2, 0) }
-            )
-          },
-          predictivePopTransitionSpec = {
-            (
-              fadeIn(animationSpec = tween(220)) +
-                scaleIn(
-                  animationSpec = tween(220, delayMillis = 30),
-                  initialScale = .9f,
-                  TransformOrigin(-1f, .5f),
-                )
-            ) togetherWith (
-                fadeOut(animationSpec = tween(220)) +
-                  scaleOut(
-                    animationSpec = tween(220, delayMillis = 30),
-                    targetScale = .9f,
-                    TransformOrigin(-1f, .5f),
-                  )
-            )
-          },
-        )
-
-        MiniPlayer(
-          stateManager = miniPlayerStateManager,
-          modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .navigationBarsPadding()
-            .padding(bottom = animatedBottomPadding)
-        )
-      }
-
-      // Display Update Dialog when appropriate (only if update feature is enabled)
-      if (BuildConfig.ENABLE_UPDATE_FEATURE && updateViewModel != null) {
-        when (updateState) {
-          is UpdateViewModel.UpdateState.Available -> {
-            val release = (updateState as UpdateViewModel.UpdateState.Available).release
-            UpdateDialog(
-              release = release,
-              isDownloading = isDownloading,
-              progress = downloadProgress,
-              actionLabel = if (isDownloading) "Downloading..." else "Download",
-              currentVersion = currentVersion,
-              onDismiss = { updateViewModel.dismiss() },
-              onAction = { 
-                // Redirect to GitHub releases page as requested by user
-                context.startActivity(
-                  Intent(
-                    Intent.ACTION_VIEW, 
-                    (release.htmlUrl ?: "https://github.com/MaxStreamApp/MAX-STREAM/releases/latest").toUri()
-                  )
-                )
-                // updateViewModel.downloadUpdate(release) // Kept in code but disabled for now
-              },
-              onIgnore = { updateViewModel.ignoreVersion(release.tagName.removePrefix("v")) }
-            )
-          }
-          is UpdateViewModel.UpdateState.ReadyToInstall -> {
-            val release = (updateState as UpdateViewModel.UpdateState.ReadyToInstall).release
-            UpdateDialog(
-              release = release,
-              isDownloading = isDownloading,
-              progress = downloadProgress,
-              actionLabel = "Install",
-              currentVersion = currentVersion,
-              onDismiss = { updateViewModel.dismiss() },
-              onAction = { 
-                // Redirect to GitHub releases page as requested by user
-                context.startActivity(
-                  Intent(
-                    Intent.ACTION_VIEW, 
-                    (release.htmlUrl ?: "https://github.com/MaxStreamApp/MAX-STREAM/releases/latest").toUri()
-                  )
-                )
-                // updateViewModel.installUpdate(release) // Kept in code but disabled for now
-              },
-              onIgnore = { updateViewModel.ignoreVersion(release.tagName.removePrefix("v")) }
-            )
-          }
-          else -> {}
-        }
-      }
-    }
-  }
 }

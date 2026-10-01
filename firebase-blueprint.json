@@ -34,36 +34,6 @@
         "lastWatchedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "title", "positionMs"]
-    },
-    "BookmarkItem": {
-      "title": "BookmarkItem",
-      "description": "User saved watchlist and favorite media items",
-      "type": "object",
-      "properties": {
-        "bookmarkId": { "type": "string" },
-        "userId": { "type": "string" },
-        "mediaId": { "type": "string" },
-        "title": { "type": "string" },
-        "url": { "type": "string" },
-        "posterUrl": { "type": "string" },
-        "type": { "type": "string" },
-        "providerName": { "type": "string" },
-        "addedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["userId", "title"]
-    },
-    "CustomRepository": {
-      "title": "CustomRepository",
-      "description": "User custom CloudStream plugin repository URLs",
-      "type": "object",
-      "properties": {
-        "repoId": { "type": "string" },
-        "userId": { "type": "string" },
-        "name": { "type": "string" },
-        "url": { "type": "string" },
-        "addedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["userId", "name", "url"]
     }
   },
   "firestore": {
@@ -74,14 +44,6 @@
     "/users/{userId}/watch_history/{historyId}": {
       "schema": { "$ref": "#/entities/WatchHistoryItem" },
       "description": "User cloud synced playback history"
-    },
-    "/users/{userId}/bookmarks/{bookmarkId}": {
-      "schema": { "$ref": "#/entities/BookmarkItem" },
-      "description": "User cloud synced bookmarks"
-    },
-    "/users/{userId}/repositories/{repoId}": {
-      "schema": { "$ref": "#/entities/CustomRepository" },
-      "description": "User cloud synced extension repositories"
     }
   }
 }

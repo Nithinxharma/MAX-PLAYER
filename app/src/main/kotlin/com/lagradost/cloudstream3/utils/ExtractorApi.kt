@@ -1,155 +1,37 @@
 package com.lagradost.cloudstream3.utils
 
 import android.util.Log
-import com.lagradost.cloudstream3.APIHolder
-import com.lagradost.cloudstream3.SubtitleFile
-import kotlinx.coroutines.CancellationException
+import com.lagradost.cloudstream3.app
+import java.util.concurrent.CopyOnWriteArrayList
 
-val INFER_TYPE: ExtractorLinkType = ExtractorLinkType.VIDEO
+abstract class ExtractorApi {
+    abstract val name: String
+    abstract val mainUrl: String
+    open val requiresReferer: Boolean = false
 
-fun getQualityFromName(qualityName: String?): Int {
-    if (qualityName == null) return Qualities.Unknown.value
-    val num = Regex("(\\d{3,4})").find(qualityName)?.value?.toIntOrNull()
-    return num ?: when {
-        qualityName.contains("4k", ignoreCase = true) || qualityName.contains("2160", ignoreCase = true) -> Qualities.P2160.value
-        qualityName.contains("1080", ignoreCase = true) || qualityName.contains("fhd", ignoreCase = true) -> Qualities.P1080.value
-        qualityName.contains("720", ignoreCase = true) || qualityName.contains("hd", ignoreCase = true) -> Qualities.P720.value
-        qualityName.contains("480", ignoreCase = true) || qualityName.contains("sd", ignoreCase = true) -> Qualities.P480.value
-        qualityName.contains("360", ignoreCase = true) -> Qualities.P360.value
-        qualityName.contains("240", ignoreCase = true) -> Qualities.P240.value
-        qualityName.contains("144", ignoreCase = true) -> Qualities.P144.value
-        else -> Qualities.Unknown.value
+    open suspend fun getUrl(
+        url: String,
+        referer: String? = null,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val links = getUrl(url, referer)
+        links.forEach { callback(it) }
+    }
+
+    open suspend fun getUrl(
+        url: String,
+        referer: String? = null
+    ): List<ExtractorLink> {
+        return emptyList()
     }
 }
 
-fun httpsify(url: String): String {
-    return if (url.startsWith("//")) "https:$url" else url
-}
+val extractorApis: CopyOnWriteArrayList<ExtractorApi> = CopyOnWriteArrayList()
 
-fun getPacked(string: String): String? {
-    val regex = Regex("""eval\(function\(p,a,c,k,e,[rd]\).*?\.split\(['"]\|['"]\).*?\)\)""", setOf(RegexOption.DOT_MATCHES_ALL))
-    return regex.find(string)?.value
-}
-
-fun getAndUnpack(string: String): String {
-    val packed = getPacked(string) ?: string
-    val jsUnpacked = JsUnpacker(packed).unpack()
-    if (!jsUnpacked.isNullOrBlank()) {
-        return jsUnpacked
-    }
-    return unpack(packed)
-}
-
-private fun unpack(packed: String): String {
-    val regex = Regex("""\}\s*\(\s*(['"])(.*?)\1\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(['"])(.*?)\5\.split\(['"]\|['"]\)""", setOf(RegexOption.DOT_MATCHES_ALL))
-    val match = regex.find(packed) ?: return packed
-    val payload = match.groupValues[2]
-    val radix = match.groupValues[3].toIntOrNull() ?: 36
-    val keywords = match.groupValues[6].split("|")
-
-    val wordRegex = Regex("""\b\w+\b""")
-    return wordRegex.replace(payload) { m ->
-        val word = m.value
-        val idx = baseDecode(word, radix)
-        if (idx != null && idx in keywords.indices && keywords[idx].isNotEmpty()) {
-            keywords[idx]
-        } else {
-            word
-        }
-    }
-}
-
-private fun baseDecode(numStr: String, base: Int): Int? {
-    if (base < 2 || base > 62) return null
-    var result = 0
-    for (ch in numStr) {
-        val digit = when (ch) {
-            in '0'..'9' -> ch - '0'
-            in 'a'..'z' -> ch - 'a' + 10
-            in 'A'..'Z' -> ch - 'A' + 36
-            else -> return null
-        }
-        if (digit >= base) return null
-        result = result * base + digit
-    }
-    return result
-}
-
-suspend fun newExtractorLink(
-    source: String,
-    name: String,
-    url: String,
-    type: ExtractorLinkType = INFER_TYPE,
-    initializer: suspend ExtractorLink.() -> Unit = {}
-): ExtractorLink {
-    val link = ExtractorLink(
-        source = source,
-        name = name,
-        url = url,
-        referer = "",
-        quality = Qualities.Unknown.value,
-        type = type
-    )
-    initializer(link)
-    return link
-}
-
-fun ExtractorApi.fixUrl(url: String): String {
-    if (url.startsWith("http") || url.startsWith("{\"")) {
-        return url
-    }
-    if (url.isEmpty()) {
-        return ""
-    }
-    return if (url.startsWith("//")) {
-        "https:$url"
-    } else if (url.startsWith('/')) {
-        mainUrl + url
-    } else {
-        "$mainUrl/$url"
-    }
-}
-
-fun getExtractorApiFromName(name: String): ExtractorApi? {
-    val apis = APIHolder.extractorApis
-    return apis.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: apis.firstOrNull()
-}
-
-fun requireReferer(name: String): Boolean {
-    return getExtractorApiFromName(name)?.requiresReferer ?: false
-}
-
-private val schemaStripRegex = Regex("""^(https?:)?//(www\.)?""")
-
-fun getExtractorForUrl(url: String): ExtractorApi? {
-    val cleanUrl = url.trim()
-    val compareUrl = cleanUrl.lowercase().replace(schemaStripRegex, "").trimEnd('/')
-    val extractors = APIHolder.extractorApis.toList().reversed()
-
-    // 1. Direct domain / prefix matching
-    for (extractor in extractors) {
-        val mainUrl = extractor.mainUrl
-        if (mainUrl.isBlank()) continue
-        val domains = mainUrl.split(",").map {
-            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/').trimEnd('*').trimEnd('.')
-        }
-        val isMatch = domains.any { domain ->
-            domain.isNotBlank() && (compareUrl.startsWith(domain) || compareUrl.contains(domain))
-        }
-        if (isMatch) return extractor
-    }
-
-    // 2. Levenshtein mirror matching
-    for (extractor in extractors) {
-        val cleanMain = extractor.mainUrl.lowercase().replace(schemaStripRegex, "").substringBefore('/').trimEnd('*').trimEnd('.')
-        val cleanHost = compareUrl.substringBefore('/')
-        if (cleanMain.isNotBlank() && cleanHost.isNotBlank()) {
-            val ratio = Levenshtein.partialRatio(cleanMain, cleanHost)
-            if (ratio > 80) return extractor
-        }
-    }
-
-    return null
+fun registerExtractor(extractor: ExtractorApi) {
+    extractorApis.removeAll { it.name.equals(extractor.name, ignoreCase = true) }
+    extractorApis.add(extractor)
 }
 
 suspend fun loadExtractor(
@@ -158,144 +40,126 @@ suspend fun loadExtractor(
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
 ): Boolean {
+    if (url.isBlank()) return false
+    Log.d("CloudStreamExtractor", "loadExtractor: $url (referer: $referer)")
+
+    // Check direct video streams (m3u8, mp4, etc.)
     val cleanUrl = url.trim()
-    val compareUrl = cleanUrl.lowercase().replace(schemaStripRegex, "").trimEnd('/')
-    val extractors = APIHolder.extractorApis.toList().reversed()
-    var extracted = false
-
-    // 1. Direct domain / prefix matching
-    for (extractor in extractors) {
-        val mainUrl = extractor.mainUrl
-        if (mainUrl.isBlank()) continue
-        val domains = mainUrl.split(",").map {
-            it.trim().lowercase().replace(schemaStripRegex, "").trimEnd('/')
+    if (cleanUrl.contains(".m3u8", ignoreCase = true)) {
+        val m3u8Links = M3u8Helper.m3u8Generation(
+            M3u8Stream(cleanUrl, if (referer != null) mapOf("Referer" to referer) else emptyMap()),
+            returnAll = true
+        )
+        if (m3u8Links.isNotEmpty()) {
+            m3u8Links.forEach { callback(it) }
+            return true
         }
-        val isMatch = domains.any { domain ->
-            domain.isNotBlank() && (compareUrl.startsWith(domain) || compareUrl.contains(domain))
-        }
-        if (isMatch) {
-            try {
-                extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
-                extracted = true
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                Log.w("ExtractorApi", "Extractor ${extractor.name} failed for $cleanUrl", e)
-            }
-        }
-    }
-
-    // 2. Levenshtein mirror matching (for mirrors like example.sx, example.to, example.me)
-    if (!extracted) {
-        for (extractor in extractors) {
-            val cleanMain = extractor.mainUrl.lowercase().replace(schemaStripRegex, "").substringBefore('/')
-            val cleanHost = compareUrl.substringBefore('/')
-            if (cleanMain.isNotBlank() && cleanHost.isNotBlank()) {
-                val ratio = Levenshtein.partialRatio(cleanMain, cleanHost)
-                if (ratio > 80) {
-                    try {
-                        extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
-                        extracted = true
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. Fallback: Universal / generic extractors
-    if (!extracted) {
-        for (extractor in extractors) {
-            if (extractor.mainUrl.isBlank()) {
-                try {
-                    extractor.getSafeUrl(cleanUrl, referer, subtitleCallback, callback)
-                    extracted = true
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                }
-            }
-        }
-    }
-
-    // 4. Dynamic Plugin DEX Self-Healing Discovery Fallback
-    if (!extracted) {
-        try {
-            extracted = xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.discoverAndResolveExtractor(
-                cleanUrl,
-                referer,
-                subtitleCallback,
-                callback
+    } else if (cleanUrl.endsWith(".mp4", ignoreCase = true) || cleanUrl.endsWith(".mkv", ignoreCase = true)) {
+        callback(
+            ExtractorLink(
+                source = "Direct",
+                name = "Direct Video (1080p)",
+                url = cleanUrl,
+                referer = referer ?: "",
+                quality = Qualities.P1080.value,
+                type = ExtractorLinkType.VIDEO,
+                headers = if (referer != null) mapOf("Referer" to referer) else emptyMap()
             )
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            Log.d("ExtractorApi", "Dynamic discovery fallback note: ${e.message}")
+        )
+        return true
+    }
+
+    // Try registered extractors
+    for (extractor in extractorApis) {
+        val domain = extractor.mainUrl.replace("https://", "").replace("http://", "").trimEnd('/')
+        if (cleanUrl.contains(domain, ignoreCase = true)) {
+            try {
+                extractor.getUrl(cleanUrl, referer, subtitleCallback, callback)
+                return true
+            } catch (t: Throwable) {
+                Log.e("CloudStreamExtractor", "Extractor ${extractor.name} failed: ${t.message}", t)
+            }
         }
     }
 
-    return extracted
+    // Fallback: Generic iframe & video tag scraper for unsupported embeds
+    return try {
+        val headers = mutableMapOf<String, String>()
+        if (!referer.isNullOrBlank()) headers["Referer"] = referer
+        val doc = app.get(cleanUrl, headers = headers).document
+
+        // Check for unpacked packed scripts
+        val scripts = doc.select("script").map { it.data() }
+        var foundLink = false
+        for (script in scripts) {
+            val unpacked = if (script.contains("eval(function(p,a,c,k,e,d)")) {
+                Unpacker.unpack(script) ?: script
+            } else {
+                script
+            }
+
+            // Look for file: "..." or sources: [{file: "..."}]
+            val fileMatches = Regex("""(?:file|source|src)\s*:\s*["'](https?://[^"']+\.(?:m3u8|mp4)[^"']*)["']""").findAll(unpacked)
+            for (match in fileMatches) {
+                val streamUrl = match.groupValues[1]
+                if (streamUrl.contains(".m3u8")) {
+                    M3u8Helper.m3u8Generation(M3u8Stream(streamUrl, headers), returnAll = true).forEach {
+                        callback(it)
+                    }
+                    foundLink = true
+                } else {
+                    callback(
+                        ExtractorLink(
+                            source = "Scraped",
+                            name = "Video",
+                            url = streamUrl,
+                            referer = cleanUrl,
+                            quality = Qualities.P720.value,
+                            type = ExtractorLinkType.VIDEO
+                        )
+                    )
+                    foundLink = true
+                }
+            }
+        }
+
+        // Check video src or source src elements
+        val videoSrc = doc.select("video source[src], video[src]").firstOrNull()?.attr("src")
+        if (!videoSrc.isNullOrBlank()) {
+            val resolved = if (videoSrc.startsWith("//")) "https:$videoSrc" else videoSrc
+            callback(
+                ExtractorLink(
+                    source = "Scraped",
+                    name = "HTML5 Video",
+                    url = resolved,
+                    referer = cleanUrl,
+                    quality = Qualities.P720.value,
+                    type = if (resolved.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                )
+            )
+            foundLink = true
+        }
+
+        foundLink
+    } catch (e: Exception) {
+        Log.e("CloudStreamExtractor", "Generic embed scrape failed for $cleanUrl: ${e.message}")
+        false
+    }
 }
 
 suspend fun loadExtractor(
     url: String,
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
-): Boolean {
-    return loadExtractor(url, null, subtitleCallback, callback)
-}
+): Boolean = loadExtractor(url, null, subtitleCallback, callback)
 
 suspend fun loadExtractor(
     url: String,
-    referer: String?,
+    referer: String? = null,
     callback: (ExtractorLink) -> Unit
-): Boolean {
-    return loadExtractor(url, referer, {}, callback)
-}
+): Boolean = loadExtractor(url, referer, {}, callback)
 
 suspend fun loadExtractor(
     url: String,
     callback: (ExtractorLink) -> Unit
-): Boolean {
-    return loadExtractor(url, null, {}, callback)
-}
-
-abstract class ExtractorApi {
-    open val name: String = ""
-    open val mainUrl: String = ""
-    open val requiresReferer: Boolean = false
-    open var sourcePlugin: String? = null
-
-    open suspend fun getUrl(url: String, referer: String? = null): List<ExtractorLink>? {
-        return emptyList()
-    }
-
-    open suspend fun getUrl(
-        url: String,
-        referer: String? = null,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        getUrl(url, referer)?.forEach(callback)
-    }
-
-    open suspend fun getSafeUrl(
-        url: String,
-        referer: String? = null,
-        subtitleCallback: (SubtitleFile) -> Unit = {},
-        callback: (ExtractorLink) -> Unit
-    ) {
-        try {
-            getUrl(url, referer, subtitleCallback, callback)
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            Log.w("ExtractorApi", "Extractor $name failed for $url: ${e.message}")
-        }
-    }
-
-    open fun getExtractorUrl(id: String): String = id
-
-    companion object {
-        fun getExtractorForUrl(url: String): ExtractorApi? = com.lagradost.cloudstream3.utils.getExtractorForUrl(url)
-    }
-}
-
-
+): Boolean = loadExtractor(url, null, {}, callback)

@@ -1,164 +1,59 @@
 package com.lagradost.cloudstream3.utils
 
+import androidx.annotation.Keep
+
+@Keep
+enum class ExtractorLinkType {
+    VIDEO, TORRENT, M3U8, DASH, MAGNET
+}
+
+val INFER_TYPE = ExtractorLinkType.VIDEO
+
+fun httpsify(url: String): String = if (url.startsWith("//")) "https:$url" else url
+
+@Keep
 enum class Qualities(val value: Int) {
-    Unknown(0), P144(144), P240(240), P360(360), P480(480), P720(720), P1080(1080), P1440(1440), P2160(2160);
-    companion object {
-        fun getStringByInt(quality: Int?): String {
-            return when (quality) {
-                null, 0 -> "Auto"
-                2160 -> "4K"
-                else -> "${quality}p"
-            }
-        }
+    Unknown(0),
+    P144(144),
+    P240(240),
+    P360(360),
+    P480(480),
+    P720(720),
+    P1080(1080),
+    P2160(2160)
+}
+
+fun getQualityFromName(qualityName: String?): Int {
+    if (qualityName == null) return Qualities.Unknown.value
+    return when {
+        qualityName.contains("4k", ignoreCase = true) || qualityName.contains("2160", ignoreCase = true) -> Qualities.P2160.value
+        qualityName.contains("1080", ignoreCase = true) -> Qualities.P1080.value
+        qualityName.contains("720", ignoreCase = true) -> Qualities.P720.value
+        qualityName.contains("480", ignoreCase = true) -> Qualities.P480.value
+        qualityName.contains("360", ignoreCase = true) -> Qualities.P360.value
+        qualityName.contains("240", ignoreCase = true) -> Qualities.P240.value
+        else -> Qualities.Unknown.value
     }
 }
 
-enum class ExtractorLinkType {
-    VIDEO, M3U8, DASH, TORRENT, MAGNET
-}
-
-interface IDownloadableMinimum {
-    val url: String
-    var referer: String
-    var headers: Map<String, String>
-}
-
-enum class ExtractorLinkFlag {
-    None,
-    RequiresUserAgent,
-    RequiresReferer,
-    IPRestricted
-}
-
-data class AudioFile(
+@Keep
+data class ExtractorLink(
+    val source: String,
+    val name: String,
     val url: String,
+    val referer: String = "",
+    val quality: Int = Qualities.Unknown.value,
+    val type: ExtractorLinkType = INFER_TYPE,
+    val headers: Map<String, String> = emptyMap(),
+    val extractorData: String? = null,
+    val isM3u8: Boolean = url.contains(".m3u8", ignoreCase = true) || type == ExtractorLinkType.M3U8
+)
+
+@Keep
+data class SubtitleFile(
     val lang: String,
-    val isM3u8: Boolean = false,
+    val url: String,
     val headers: Map<String, String> = emptyMap()
 )
 
-open class ExtractorLink(
-    open val source: String,
-    open val name: String,
-    override val url: String,
-    override var referer: String,
-    open var quality: Int,
-    open var type: ExtractorLinkType = ExtractorLinkType.VIDEO,
-    override var headers: Map<String, String> = mapOf(),
-    open var extractorData: String? = null,
-    open var errorMessage: String? = null,
-    open var audioTracks: List<AudioFile> = emptyList(),
-    open var flags: Set<ExtractorLinkFlag> = emptySet()
-) : IDownloadableMinimum {
-
-    // Overloaded legacy constructor using Boolean isM3u8
-    constructor(
-        source: String,
-        name: String,
-        url: String,
-        referer: String,
-        quality: Int,
-        isM3u8: Boolean = false,
-        headers: Map<String, String> = mapOf(),
-        extractorData: String? = null,
-        errorMessage: String? = null
-    ) : this(
-        source = source,
-        name = name,
-        url = url,
-        referer = referer,
-        quality = quality,
-        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
-        headers = headers,
-        extractorData = extractorData,
-        errorMessage = errorMessage,
-        flags = emptySet()
-    )
-
-    val isM3u8: Boolean get() = type == ExtractorLinkType.M3U8
-    val isDash: Boolean get() = type == ExtractorLinkType.DASH
-    val isTorrent: Boolean get() = type == ExtractorLinkType.TORRENT
-    val isMagnet: Boolean get() = type == ExtractorLinkType.MAGNET
-}
-
-fun newExtractorLink(
-    source: String,
-    name: String,
-    url: String,
-    type: ExtractorLinkType = ExtractorLinkType.VIDEO
-): ExtractorLink = ExtractorLink(
-    source = source,
-    name = name,
-    url = url,
-    referer = "",
-    quality = Qualities.Unknown.value,
-    type = type
-)
-
-data class PlayListItem(
-    val url: String,
-    val isM3u8: Boolean
-)
-
-data class ExtractorLinkPlayList(
-    override val source: String,
-    override val name: String,
-    val playlist: List<PlayListItem>,
-    override var referer: String,
-    override var quality: Int,
-    override var type: ExtractorLinkType = ExtractorLinkType.VIDEO,
-    override var headers: Map<String, String> = mapOf(),
-    override var extractorData: String? = null,
-    override var audioTracks: List<AudioFile> = emptyList(),
-) : ExtractorLink(
-    source = source,
-    name = name,
-    url = "",
-    referer = referer,
-    quality = quality,
-    type = type,
-    headers = headers,
-    extractorData = extractorData,
-    audioTracks = audioTracks
-)
-
-data class DrmExtractorLink(
-    override val source: String,
-    override val name: String,
-    override val url: String,
-    override var referer: String = "",
-    override var quality: Int = Qualities.Unknown.value,
-    override var type: ExtractorLinkType = ExtractorLinkType.VIDEO,
-    override var headers: Map<String, String> = mapOf(),
-    override var extractorData: String? = null,
-    val kid: String? = null,
-    val key: String? = null,
-    val kType: String? = null
-) : ExtractorLink(
-    source = source,
-    name = name,
-    url = url,
-    referer = referer,
-    quality = quality,
-    type = type,
-    headers = headers,
-    extractorData = extractorData
-)
-
-suspend fun newDrmExtractorLink(
-    source: String,
-    name: String,
-    url: String,
-    type: ExtractorLinkType = ExtractorLinkType.VIDEO,
-    initializer: suspend DrmExtractorLink.() -> Unit = {}
-): DrmExtractorLink {
-    val link = DrmExtractorLink(
-        source = source,
-        name = name,
-        url = url,
-        type = type
-    )
-    initializer(link)
-    return link
-}
-
+fun newSubtitleFile(lang: String, url: String): SubtitleFile = SubtitleFile(lang, url)

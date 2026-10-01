@@ -1,118 +1,140 @@
 package xyz.mpv.rex.cinehub.extension.registry
 
 import android.util.Log
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import xyz.mpv.rex.cinehub.extension.api.CineHubProvider
-import java.util.concurrent.ConcurrentHashMap
+import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.extractors.DefaultExtractors
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.SubtitleFile
+import com.lagradost.cloudstream3.utils.loadExtractor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.CopyOnWriteArrayList
 
-/**
- * ProviderRegistry manages registered CineHub content providers,
- * active states, and lifecycle.
- */
-class ProviderRegistry {
+object ProviderRegistry {
     private val TAG = "ProviderRegistry"
-    private val allProviders = ConcurrentHashMap<String, CineHubProvider>()
-    private val enabledProviderIds = ConcurrentHashMap.newKeySet<String>()
-
-    private val _activeProviders = MutableStateFlow<List<CineHubProvider>>(emptyList())
-    val activeProviders: StateFlow<List<CineHubProvider>> = _activeProviders.asStateFlow()
-
-    private val _registeredProviders = MutableStateFlow<List<CineHubProvider>>(emptyList())
-    val registeredProviders: StateFlow<List<CineHubProvider>> = _registeredProviders.asStateFlow()
+    private val activeProviders = CopyOnWriteArrayList<MainAPI>()
 
     init {
-        Log.i(TAG, "INSTANCE_IDENTITY: ProviderRegistry initialized. identityHashCode=${System.identityHashCode(this)}")
+        DefaultExtractors.registerAll()
     }
 
-    fun register(provider: CineHubProvider, isEnabledByDefault: Boolean = true) {
-        Log.i(TAG, "INSTANCE_IDENTITY: ProviderRegistry.register called on ProviderRegistry@${System.identityHashCode(this)} for provider ${provider.name} (id=${provider.id})")
-        allProviders[provider.id] = provider
-        if (isEnabledByDefault) {
-            enabledProviderIds.add(provider.id)
-        }
-        Log.i(TAG, "Registered provider: ${provider.name} (id=${provider.id}), isEnabledByDefault=$isEnabledByDefault [Total: ${allProviders.size}, Enabled: ${enabledProviderIds.size}]")
-        updateFlows()
+    fun register(api: MainAPI) {
+        activeProviders.removeAll { it.name.equals(api.name, ignoreCase = true) }
+        activeProviders.add(api)
+        APIHolder.addProvider(api)
+        Log.i(TAG, "Registered provider: ${api.name} (${api.mainUrl})")
     }
 
-    fun unregister(identifier: String) {
-        val matchingIds = findMatchingProviderIds(identifier)
-        for (id in matchingIds) {
-            allProviders.remove(id)
-            enabledProviderIds.remove(id)
-        }
-        allProviders.remove(identifier)
-        enabledProviderIds.remove(identifier)
-        Log.i(TAG, "Unregistered provider identifier: $identifier [Removed: ${matchingIds.size}]")
-        updateFlows()
+    fun unregister(name: String) {
+        activeProviders.removeAll { it.name.equals(name, ignoreCase = true) }
+        APIHolder.removeProvider(name)
+        Log.i(TAG, "Unregistered provider: $name")
     }
 
-    fun setProviderEnabled(identifier: String, enabled: Boolean) {
-        val matchingIds = findMatchingProviderIds(identifier)
-        if (matchingIds.isNotEmpty()) {
-            for (id in matchingIds) {
-                if (enabled) {
-                    enabledProviderIds.add(id)
-                } else {
-                    enabledProviderIds.remove(id)
-                }
+    fun getAll(): List<MainAPI> = activeProviders.toList()
+
+    fun get(name: String): MainAPI? =
+        activeProviders.find { it.name.equals(name, ignoreCase = true) }
+
+    suspend fun searchAll(
+        query: String,
+        timeoutMs: Long = 15000L
+    ): Map<String, List<SearchResponse>> = coroutineScope {
+        val providers = getAll()
+        val results = mutableMapOf<String, List<SearchResponse>>()
+
+        val tasks = providers.map { provider ->
+            async(Dispatchers.IO) {
+                val list = withTimeoutOrNull(timeoutMs) {
+                    try {
+                        Log.d(TAG, "Searching '${query}' on [${provider.name}]")
+                        provider.search(query) ?: provider.quickSearch(query) ?: emptyList()
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Search failed on [${provider.name}]: ${t.message}", t)
+                        emptyList()
+                    }
+                } ?: emptyList()
+                provider.name to list
             }
-            Log.i(TAG, "setProviderEnabled($identifier, $enabled) matched IDs: $matchingIds")
-        } else {
-            // Direct key fallback if registered under direct ID
-            if (enabled) {
-                if (allProviders.containsKey(identifier)) {
-                    enabledProviderIds.add(identifier)
-                }
-            } else {
-                enabledProviderIds.remove(identifier)
+        }
+
+        tasks.awaitAll().forEach { (name, list) ->
+            if (list.isNotEmpty()) {
+                results[name] = list
             }
-            Log.w(TAG, "setProviderEnabled($identifier, $enabled) fallback executed. Matching ID count: 0")
         }
-        updateFlows()
+
+        results
     }
 
-    fun isProviderEnabled(identifier: String): Boolean {
-        if (enabledProviderIds.contains(identifier)) return true
-        val matchingIds = findMatchingProviderIds(identifier)
-        return matchingIds.any { enabledProviderIds.contains(it) }
+    suspend fun searchSingle(
+        providerName: String,
+        query: String,
+        timeoutMs: Long = 15000L
+    ): List<SearchResponse> = withContext(Dispatchers.IO) {
+        val provider = get(providerName) ?: return@withContext emptyList()
+        withTimeoutOrNull(timeoutMs) {
+            try {
+                provider.search(query) ?: provider.quickSearch(query) ?: emptyList()
+            } catch (t: Throwable) {
+                Log.e(TAG, "Search error for ${provider.name}: ${t.message}", t)
+                emptyList()
+            }
+        } ?: emptyList()
     }
 
-    fun getProvider(identifier: String): CineHubProvider? {
-        return allProviders[identifier] ?: run {
-            val matchingIds = findMatchingProviderIds(identifier)
-            matchingIds.firstNotNullOfOrNull { allProviders[it] }
+    suspend fun loadDetails(
+        providerName: String,
+        url: String,
+        timeoutMs: Long = 20000L
+    ): LoadResponse? = withContext(Dispatchers.IO) {
+        val provider = get(providerName) ?: return@withContext null
+        withTimeoutOrNull(timeoutMs) {
+            try {
+                provider.load(url)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Load details failed for [${provider.name}] on $url: ${t.message}", t)
+                null
+            }
         }
     }
 
-    fun getEnabledProviders(): List<CineHubProvider> {
-        return allProviders.values.filter { enabledProviderIds.contains(it.id) }
-    }
+    suspend fun extractLinks(
+        providerName: String,
+        data: String,
+        onSubtitle: (SubtitleFile) -> Unit,
+        onLink: (ExtractorLink) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        val provider = get(providerName)
+        val extractedLinks = mutableListOf<ExtractorLink>()
+        val interceptedOnLink: (ExtractorLink) -> Unit = { link ->
+            extractedLinks.add(link)
+            onLink(link)
+        }
 
-    fun getAllProviders(): List<CineHubProvider> {
-        return allProviders.values.toList()
-    }
+        var providerHandled = false
+        if (provider != null) {
+            try {
+                Log.d(TAG, "Invoking loadLinks on [${provider.name}] with data: $data")
+                providerHandled = provider.loadLinks(data, false, onSubtitle, interceptedOnLink)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Provider loadLinks failed: ${t.message}", t)
+            }
+        }
 
-    private fun findMatchingProviderIds(identifier: String): Set<String> {
-        val clean = identifier.trim()
-        val normalized = clean.lowercase().replace("\\s+".toRegex(), "_")
-        return allProviders.values.filter { provider ->
-            val pId = provider.id.lowercase()
-            val pName = provider.name.lowercase()
-            pId == clean.lowercase() ||
-            pName == clean.lowercase() ||
-            pId == "cs3_$normalized" ||
-            pId == "cs3_${clean.lowercase()}" ||
-            pName.replace("\\s+".toRegex(), "_") == normalized ||
-            pName.contains(clean.removePrefix("cs3_").removeSuffix("Provider"), ignoreCase = true) ||
-            clean.contains(provider.name, ignoreCase = true)
-        }.map { it.id }.toSet()
-    }
+        // If provider returned false or no links were discovered, run universal fallback extractor
+        if (!providerHandled || extractedLinks.isEmpty()) {
+            Log.d(TAG, "Running universal loadExtractor fallback on: $data")
+            loadExtractor(data, null, onSubtitle, interceptedOnLink)
+        }
 
-    private fun updateFlows() {
-        val all = allProviders.values.toList()
-        _registeredProviders.value = all
-        _activeProviders.value = all.filter { enabledProviderIds.contains(it.id) }
+        extractedLinks.isNotEmpty()
     }
 }
