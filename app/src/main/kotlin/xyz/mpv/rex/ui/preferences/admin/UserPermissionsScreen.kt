@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -270,22 +271,37 @@ fun UserPermissionsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                // User Avatar / Icon
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isAdminRole) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.25f)
-                                            else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (isAdminRole) Icons.Default.AdminPanelSettings else Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = if (isAdminRole) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary
+                                // User Avatar / Image
+                                if (!user.photo.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = user.photo,
+                                        contentDescription = "Avatar",
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .border(
+                                                1.5.dp,
+                                                if (isAdminRole) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                                CircleShape
+                                            )
                                     )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isAdminRole) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.25f)
+                                                else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isAdminRole) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = if (isAdminRole) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
 
                                 Column(modifier = Modifier.weight(1f)) {
@@ -430,18 +446,50 @@ private fun UserPermissionsEditorDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            text = "Edit User Permissions",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        val emailOrUid = user.email?.takeIf { it.isNotBlank() } ?: user.uid.take(12)
-                        Text(
-                            text = "${user.name ?: "User"} ($emailOrUid)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (!user.photo.isNullOrBlank()) {
+                            AsyncImage(
+                                model = user.photo,
+                                contentDescription = "Avatar",
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+
+                        Column {
+                            Text(
+                                text = "Edit User Permissions",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            val emailOrUid = user.email?.takeIf { it.isNotBlank() } ?: user.uid.take(12)
+                            Text(
+                                text = "${user.name ?: "User"} ($emailOrUid)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Close")

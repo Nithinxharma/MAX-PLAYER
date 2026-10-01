@@ -106,7 +106,9 @@ class FirebaseProviderSyncService(
     private val _syncedRepositoriesCount = MutableStateFlow(0)
     val syncedRepositoriesCount: StateFlow<Int> = _syncedRepositoriesCount.asStateFlow()
 
-    private val _userPlan = MutableStateFlow("free")
+    private val isInitialAdmin = auth.currentUser?.email?.trim()?.equals("sabhiron5@gmail.com", ignoreCase = true) == true
+
+    private val _userPlan = MutableStateFlow(if (isInitialAdmin) "admin" else "free")
     val userPlan: StateFlow<String> = _userPlan.asStateFlow()
 
     private val _userPermissions = MutableStateFlow<UserPermissions?>(null)

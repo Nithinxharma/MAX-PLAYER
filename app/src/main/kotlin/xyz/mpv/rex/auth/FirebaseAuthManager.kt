@@ -46,24 +46,39 @@ class FirebaseAuthManager(
     // Firebase Web Client ID for OAuth Token Exchange
     val defaultWebClientId = "533471513816-kdnn248ctlum2dn6c3jr3m517jhm0l3d.apps.googleusercontent.com"
 
-    private val _firebaseUser = MutableStateFlow<FirebaseUser?>(auth.currentUser)
+    private val initialUser = auth.currentUser
+    private val isInitialAdmin = initialUser?.email?.trim()?.equals("sabhiron5@gmail.com", ignoreCase = true) == true
+
+    private val _firebaseUser = MutableStateFlow<FirebaseUser?>(initialUser)
     override val firebaseUser: StateFlow<FirebaseUser?> = _firebaseUser.asStateFlow()
 
     private val _authState = MutableStateFlow<AuthState>(
-        if (auth.currentUser != null) AuthState.Authenticated else AuthState.Unauthenticated
+        if (initialUser != null) AuthState.Authenticated else AuthState.Unauthenticated
     )
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    private val _userProfile = MutableStateFlow<UserProfile?>(null)
+    private val _userProfile = MutableStateFlow<UserProfile?>(
+        if (initialUser != null) {
+            UserProfile(
+                uid = initialUser.uid,
+                name = initialUser.displayName ?: "MaxStream User",
+                email = initialUser.email ?: "",
+                photo = initialUser.photoUrl?.toString(),
+                role = if (isInitialAdmin) UserRole.OWNER else UserRole.USER,
+                plan = if (isInitialAdmin) "admin" else "free",
+                premium = isInitialAdmin
+            )
+        } else null
+    )
     override val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
 
-    private val _userRole = MutableStateFlow<String>(UserRole.USER)
+    private val _userRole = MutableStateFlow<String>(if (isInitialAdmin) UserRole.OWNER else UserRole.USER)
     override val userRole: StateFlow<String> = _userRole.asStateFlow()
 
-    private val _isAdmin = MutableStateFlow<Boolean>(false)
+    private val _isAdmin = MutableStateFlow<Boolean>(isInitialAdmin)
     override val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
 
-    private val _isPremium = MutableStateFlow<Boolean>(false)
+    private val _isPremium = MutableStateFlow<Boolean>(isInitialAdmin)
     override val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
 
     override val currentUser: FirebaseUser?
