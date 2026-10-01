@@ -176,8 +176,9 @@ class App : Application(), ImageLoaderFactory {
       try {
         val firebaseApp = FirebaseApp.getInstance()
         val auth = FirebaseAuth.getInstance()
-        val firestore = FirebaseFirestore.getInstance()
-        Log.d("FirebaseTest", "[Firebase] Initialized (${firebaseApp.name}) Auth UID: ${auth.currentUser?.uid ?: "Anonymous/None"} Firestore: Ready")
+        val dbId = getString(R.string.firestore_database_id)
+        val firestore = FirebaseFirestore.getInstance(dbId)
+        Log.d("FirebaseTest", "[Firebase] Initialized (${firebaseApp.name}) Auth UID: ${auth.currentUser?.uid ?: "None"} Firestore DB: $dbId Ready")
       } catch (e: Throwable) {
         Log.e("FirebaseTest", "[Firebase] Initialization check: ${e.message}", e)
       }

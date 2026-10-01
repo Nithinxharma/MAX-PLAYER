@@ -40,7 +40,10 @@ val domainModule = module {
     single<xyz.mpv.rex.auth.elevation.ElevationTokenValidator> { xyz.mpv.rex.auth.elevation.DefaultElevationTokenValidator() }
     single<xyz.mpv.rex.auth.elevation.AdminSessionManager> { xyz.mpv.rex.auth.elevation.DefaultAdminSessionManager(get(), get(), get()) }
     single { xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService(androidContext(), get(), get(), get()) }
-    single { com.google.firebase.firestore.FirebaseFirestore.getInstance() }
+    single {
+        val dbId = androidContext().getString(xyz.mpv.rex.R.string.firestore_database_id)
+        com.google.firebase.firestore.FirebaseFirestore.getInstance(dbId)
+    }
     single { com.google.firebase.auth.FirebaseAuth.getInstance() }
     single { xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService(androidContext(), get(), get(), get(), get(), get(), getOrNull()) }
     single { xyz.mpv.rex.cinehub.provider.server.FirebaseAutoDiscoveryService(androidContext(), get(), get()) }

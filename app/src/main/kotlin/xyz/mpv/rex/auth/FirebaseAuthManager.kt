@@ -33,7 +33,11 @@ import xyz.mpv.rex.auth.model.UserRole
  */
 class FirebaseAuthManager(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val firestore: FirebaseFirestore = runCatching {
+        val ctx = xyz.mpv.rex.App.instance
+        val dbId = ctx.getString(xyz.mpv.rex.R.string.firestore_database_id)
+        FirebaseFirestore.getInstance(dbId)
+    }.getOrElse { FirebaseFirestore.getInstance() }
 ) : AuthManager {
 
     private val tag = "Auth"

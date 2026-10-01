@@ -39,7 +39,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
  */
 class AnalyticsManager(
     private val context: Context,
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val firestore: FirebaseFirestore = runCatching {
+        val dbId = context.getString(xyz.mpv.rex.R.string.firestore_database_id)
+        FirebaseFirestore.getInstance(dbId)
+    }.getOrElse { FirebaseFirestore.getInstance() },
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) {
     companion object {

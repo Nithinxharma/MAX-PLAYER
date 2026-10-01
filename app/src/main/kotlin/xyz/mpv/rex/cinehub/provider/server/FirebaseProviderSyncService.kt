@@ -52,7 +52,10 @@ import java.util.concurrent.TimeUnit
  */
 class FirebaseProviderSyncService(
     private val context: Context,
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val firestore: FirebaseFirestore = runCatching {
+        val dbId = context.getString(xyz.mpv.rex.R.string.firestore_database_id)
+        FirebaseFirestore.getInstance(dbId)
+    }.getOrElse { FirebaseFirestore.getInstance() },
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val db: MpvExDatabase,
     private val extensionManager: ExtensionManager,
