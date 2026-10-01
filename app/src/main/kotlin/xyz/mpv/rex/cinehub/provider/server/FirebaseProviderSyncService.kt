@@ -325,15 +325,28 @@ class FirebaseProviderSyncService(
                 null
             }
 
-            val userRole = userDoc?.getString("role")?.trim()?.lowercase(Locale.ROOT) ?: "user"
-            val isUserPremium = userDoc?.getBoolean("premium") ?: false
-            val isAdminUser = userRole == "admin" || userRole == "super_admin" || userRole == "developer" || userRole == "owner"
+            val userEmail = userDoc?.getString("email") ?: auth.currentUser?.email ?: ""
+            val isExplicitAdminEmail = userEmail.trim().equals("sabhiron5@gmail.com", ignoreCase = true)
+            val rawRole = userDoc?.getString("role")?.trim()?.lowercase(Locale.ROOT)
+            val isAdminBoolean = userDoc?.getBoolean("isAdmin") ?: false
+            val userRole = when {
+                !rawRole.isNullOrBlank() && rawRole != "user" -> rawRole
+                isExplicitAdminEmail -> "owner"
+                isAdminBoolean -> "admin"
+                else -> rawRole ?: "user"
+            }
+            val isUserPremium = userDoc?.getBoolean("premium") ?: (isExplicitAdminEmail || userRole == "admin" || userRole == "owner")
+            val isAdminUser = userRole == "admin" || userRole == "super_admin" || userRole == "developer" || userRole == "owner" || isExplicitAdminEmail
+
+            val docPlan = userDoc?.getString("plan")?.trim()?.lowercase(Locale.ROOT)
 
             // Parse UserPermissions
             val permissions = if (userPermissionsDoc != null && userPermissionsDoc.exists()) {
-                UserPermissions.fromSnapshot(userPermissionsDoc)
+                val parsed = UserPermissions.fromSnapshot(userPermissionsDoc)
+                if (isAdminUser && parsed.plan.isBlank()) parsed.copy(plan = "admin") else parsed
             } else {
                 val inferredPlan = when {
+                    !docPlan.isNullOrBlank() && docPlan != "free" -> docPlan
                     isAdminUser -> "admin"
                     userRole == "vip" -> "vip"
                     isUserPremium || userRole == "premium" -> "premium"
@@ -351,13 +364,14 @@ class FirebaseProviderSyncService(
 
             // STEP 3: Determine effective plan (free, premium, vip, admin)
             val effectivePlan = when {
-                permissions.plan.isNotBlank() -> permissions.plan.lowercase(Locale.ROOT)
+                !docPlan.isNullOrBlank() && docPlan != "free" -> docPlan
+                permissions.plan.isNotBlank() && permissions.plan != "free" -> permissions.plan.lowercase(Locale.ROOT)
                 isAdminUser -> "admin"
                 isUserPremium -> "premium"
-                else -> "free"
+                else -> permissions.plan.ifBlank { "free" }.lowercase(Locale.ROOT)
             }
             _userPlan.value = effectivePlan
-            Log.i(TAG, "EXTENSION_SYNC: User $uid effective plan: $effectivePlan (role: $userRole)")
+            Log.i(TAG, "EXTENSION_SYNC: User $uid effective plan: $effectivePlan (role: $userRole, email: $userEmail)")
 
             if (!permissions.enabled) {
                 _syncStatus.value = "Access Disabled by Server"
@@ -649,7 +663,17 @@ class FirebaseProviderSyncService(
                 }
             }
             if (plans.isEmpty()) {
-                listOf("free", "premium", "vip", "admin").map { PlanConfig.defaultForPlan(it) }
+                val defaultPlans = listOf("free", "premium", "vip", "admin").map { PlanConfig.defaultForPlan(it) }
+                scope.launch {
+                    defaultPlans.forEach { p ->
+                        try {
+                            firestore.collection(PLANS_COLLECTION).document(p.id).set(p.toMap(), SetOptions.merge())
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed auto-seeding plan ${p.id}: ${e.message}")
+                        }
+                    }
+                }
+                defaultPlans
             } else {
                 plans.sortedBy { 
                     when (it.id) {

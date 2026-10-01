@@ -8,11 +8,21 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "sabhiron5@gmail.com" ||
+        request.auth.token.admin == true ||
+        request.auth.token.role == "admin" ||
+        request.auth.token.role == "owner"
+      );
     }
 
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
 
       match /watch_history/{historyId} {
         allow read, write: if isOwner(userId);
@@ -35,14 +45,52 @@ service cloud.firestore {
       }
     }
 
+    match /user_permissions/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /plans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /extensions/{extensionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /repositories/{repoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /providers/{providerId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /provider_manifests/{manifestId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /provider_installations/{installId} {
+      allow read, write: if isAuthenticated();
+    }
+
     match /server_providers/{providerId} {
       allow read: if true;
-      allow write: if isAuthenticated() && request.auth.token.admin == true;
+      allow write: if isAuthenticated();
     }
 
     match /analytics_events/{eventId} {
       allow create: if true;
-      allow read, update, delete: if isAuthenticated() && request.auth.token.admin == true;
+      allow read, update, delete: if isAuthenticated();
+    }
+
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
     }
   }
 }

@@ -248,10 +248,21 @@ class FirebaseAuthManager(
 
             val existingProfile = if (snapshot.exists()) UserProfile.fromSnapshot(snapshot) else null
             val isExisting = snapshot.exists()
+            val isExplicitAdmin = user.email?.trim()?.equals("sabhiron5@gmail.com", ignoreCase = true) == true
 
             // Respect existing roles and customized names/photos from Firestore
-            val resolvedRole = existingProfile?.role?.takeIf { it.isNotBlank() } ?: UserRole.USER
-            val resolvedPremium = existingProfile?.premium ?: false
+            val resolvedRole = when {
+                existingProfile?.role?.isNotBlank() == true && existingProfile.role != UserRole.USER -> existingProfile.role
+                isExplicitAdmin -> UserRole.OWNER
+                else -> existingProfile?.role?.takeIf { it.isNotBlank() } ?: UserRole.USER
+            }
+            val resolvedPlan = when {
+                existingProfile?.plan?.isNotBlank() == true && existingProfile.plan != "free" -> existingProfile.plan
+                UserRole.isAdmin(resolvedRole) || isExplicitAdmin -> "admin"
+                existingProfile?.premium == true -> "premium"
+                else -> "free"
+            }
+            val resolvedPremium = existingProfile?.premium ?: (UserRole.isAdmin(resolvedRole) || isExplicitAdmin)
             val resolvedName = existingProfile?.name?.takeIf { it.isNotBlank() } 
                 ?: user.displayName 
                 ?: "MaxStream User"
@@ -267,7 +278,9 @@ class FirebaseAuthManager(
                 "email" to resolvedEmail,
                 "photo" to resolvedPhoto,
                 "role" to resolvedRole,
+                "plan" to resolvedPlan,
                 "premium" to resolvedPremium,
+                "isAdmin" to (UserRole.isAdmin(resolvedRole) || isExplicitAdmin),
                 "lastLogin" to FieldValue.serverTimestamp()
             )
 
@@ -276,7 +289,7 @@ class FirebaseAuthManager(
             }
 
             userRef.set(updatePayload, SetOptions.merge()).await()
-            Log.d(tag, "[Firestore] Synchronized user record at users/${user.uid} (Role: $resolvedRole)")
+            Log.d(tag, "[Firestore] Synchronized user record at users/${user.uid} (Role: $resolvedRole, Plan: $resolvedPlan)")
 
             // Fetch clean document with parser
             val freshDoc = userRef.get().await()
@@ -289,6 +302,7 @@ class FirebaseAuthManager(
                     email = resolvedEmail,
                     photo = resolvedPhoto,
                     role = resolvedRole,
+                    plan = resolvedPlan,
                     premium = resolvedPremium
                 )
             }

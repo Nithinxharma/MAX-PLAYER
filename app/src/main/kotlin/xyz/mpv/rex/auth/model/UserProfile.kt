@@ -32,6 +32,10 @@ data class UserProfile(
     @set:PropertyName("role")
     var role: String = UserRole.USER,
 
+    @get:PropertyName("plan")
+    @set:PropertyName("plan")
+    var plan: String = "free",
+
     @get:PropertyName("premium")
     @set:PropertyName("premium")
     var premium: Boolean = false,
@@ -76,16 +80,31 @@ data class UserProfile(
             // Determine role: check 'role', 'userRole', or boolean 'isAdmin'
             val rawRole = doc.getString("role") ?: doc.getString("userRole")
             val isAdminBoolean = doc.getBoolean("isAdmin") ?: false
+            val isExplicitAdminEmail = email?.trim()?.equals("sabhiron5@gmail.com", ignoreCase = true) == true
+            
             val resolvedRole = when {
                 !rawRole.isNullOrBlank() -> rawRole
+                isExplicitAdminEmail -> UserRole.OWNER
                 isAdminBoolean -> UserRole.ADMIN
                 else -> UserRole.USER
             }
 
+            // Determine plan: check 'plan', 'userPlan', 'subscriptionPlan', or role
+            val rawPlan = doc.getString("plan")
+                ?: doc.getString("userPlan")
+                ?: doc.getString("subscriptionPlan")
+
             // Determine premium: check 'premium' or 'isPremium'
             val resolvedPremium = doc.getBoolean("premium") 
                 ?: doc.getBoolean("isPremium") 
-                ?: false
+                ?: (UserRole.isAdmin(resolvedRole) || isExplicitAdminEmail)
+
+            val resolvedPlan = when {
+                !rawPlan.isNullOrBlank() -> rawPlan
+                UserRole.isAdmin(resolvedRole) || isExplicitAdminEmail -> "admin"
+                resolvedPremium -> "premium"
+                else -> "free"
+            }
 
             @Suppress("UNCHECKED_CAST")
             val rawAccess = doc.get("providerAccess") as? List<String> ?: listOf("castletv")
@@ -104,6 +123,7 @@ data class UserProfile(
                 email = email,
                 photo = photo,
                 role = resolvedRole,
+                plan = resolvedPlan,
                 premium = resolvedPremium,
                 providerAccess = rawAccess,
                 installedProviders = rawInstalled,
