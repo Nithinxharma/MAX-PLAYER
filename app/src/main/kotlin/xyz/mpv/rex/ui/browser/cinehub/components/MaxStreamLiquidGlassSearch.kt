@@ -1,14 +1,14 @@
 package xyz.mpv.rex.ui.browser.cinehub.components
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,8 +30,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,10 +61,11 @@ import androidx.compose.ui.unit.sp
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 
 /**
- * Liquid Glass Morphing Search Bar:
- * - Collapsed: Elegant frosted glass pill button with specular highlights and subtle glow.
- * - Expanded: Fluidly expands to a full-width liquid glass search input with auto-focus, clear, and close actions.
- * - Fully adaptive for both Dark and Light themes.
+ * Ultra-Polished Liquid Glass Morphing Search Bar:
+ * - Collapsed: Elegant frosted glass pill capsule with specular highlights and luminous accent glow.
+ * - Expanded: Seamlessly expands into a full-width liquid glass search bar with single unified clear/close action.
+ * - Single Unified Action: Zero dual close buttons; smoothly animates between clear query and collapse actions.
+ * - Responsive glass styling with iridescent border highlights for Dark and Light themes.
  */
 @Composable
 fun MaxStreamLiquidGlassSearch(
@@ -72,30 +74,41 @@ fun MaxStreamLiquidGlassSearch(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "Search movies, series, actors…"
+    placeholder: String = "Search titles, movies, series & anime…"
 ) {
     val isDark = isSystemInDarkTheme()
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
-    val placeholderTextColor = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-    val glassBg = if (isDark) {
-        Color(0x331C2438)
+    val placeholderTextColor = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+    
+    val collapsedGlassBg = if (isDark) {
+        Color(0x35141A2E)
     } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
     }
-    val glassBorder = if (isDark) {
-        Color(0x38FFFFFF)
+    
+    val expandedGlassBg = if (isDark) {
+        Color(0x5511172A)
     } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
     }
+
+    val glassBorderColor by animateColorAsState(
+        targetValue = if (isExpanded) {
+            if (isDark) MaxStreamTheme.CrimsonAccent.copy(alpha = 0.85f) else MaterialTheme.colorScheme.primary
+        } else {
+            if (isDark) Color.White.copy(alpha = 0.18f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+        },
+        label = "glass_search_border_color"
+    )
 
     val activeBorderBrush = if (isDark) {
         Brush.horizontalGradient(
             listOf(
                 MaxStreamTheme.CrimsonAccent,
-                MaxStreamTheme.ElectricCyan.copy(alpha = 0.8f),
+                MaxStreamTheme.ElectricCyan.copy(alpha = 0.9f),
                 MaxStreamTheme.CrimsonAccent
             )
         )
@@ -127,13 +140,13 @@ fun MaxStreamLiquidGlassSearch(
             )
     ) {
         if (!isExpanded) {
-            // Collapsed Liquid Glass Pill Button
+            // Collapsed Liquid Glass Pill Capsule
             Surface(
                 onClick = { onExpandedChange(true) },
                 shape = RoundedCornerShape(24.dp),
-                color = glassBg,
-                border = androidx.compose.foundation.BorderStroke(1.dp, glassBorder),
-                shadowElevation = if (isDark) 6.dp else 2.dp,
+                color = collapsedGlassBg,
+                border = androidx.compose.foundation.BorderStroke(1.dp, glassBorderColor),
+                shadowElevation = if (isDark) 8.dp else 2.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
@@ -159,24 +172,32 @@ fun MaxStreamLiquidGlassSearch(
                             fontWeight = FontWeight.Medium
                         ),
                         color = if (query.isNotBlank()) primaryTextColor else placeholderTextColor,
+                        maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
-                    // Glass Accent Glow Dot
+                    // Decorative Liquid Specular Dot
                     Box(
                         modifier = Modifier
-                            .size(9.dp)
+                            .size(8.dp)
                             .clip(CircleShape)
-                            .background(MaxStreamTheme.CrimsonAccent)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(
+                                        MaxStreamTheme.ElectricCyan,
+                                        MaxStreamTheme.CrimsonAccent
+                                    )
+                                )
+                            )
                     )
                 }
             }
         } else {
-            // Expanded Full Liquid Glass Search Input with glowing border
+            // Expanded Full Liquid Glass Search Input with glowing iridescent border
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = if (isDark) Color(0x66161B2E) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.90f),
+                color = expandedGlassBg,
                 border = androidx.compose.foundation.BorderStroke(1.5.dp, activeBorderBrush),
-                shadowElevation = 12.dp,
+                shadowElevation = if (isDark) 14.dp else 4.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -189,9 +210,9 @@ fun MaxStreamLiquidGlassSearch(
                         .padding(horizontal = 12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Search,
+                        imageVector = Icons.Rounded.Search,
                         contentDescription = "Search",
-                        tint = MaxStreamTheme.CrimsonAccent,
+                        tint = if (isDark) MaxStreamTheme.ElectricCyan else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -206,7 +227,8 @@ fun MaxStreamLiquidGlassSearch(
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontSize = 14.sp
                                 ),
-                                color = placeholderTextColor
+                                color = placeholderTextColor,
+                                maxLines = 1
                             )
                         }
                         BasicTextField(
@@ -218,7 +240,7 @@ fun MaxStreamLiquidGlassSearch(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
                             ),
-                            cursorBrush = SolidColor(MaxStreamTheme.CrimsonAccent),
+                            cursorBrush = SolidColor(if (isDark) MaxStreamTheme.CrimsonAccent else MaterialTheme.colorScheme.primary),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                             modifier = Modifier
@@ -228,36 +250,44 @@ fun MaxStreamLiquidGlassSearch(
                         )
                     }
 
-                    if (query.isNotEmpty()) {
-                        IconButton(
-                            onClick = { onQueryChange("") },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear",
-                                tint = primaryTextColor.copy(alpha = 0.7f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    // Collapse button
+                    // Single Unified Action Button (No Dual Close Buttons!)
+                    // - When query is non-empty: Clears search text
+                    // - When query is empty: Collapses the search bar
                     IconButton(
                         onClick = {
-                            onExpandedChange(false)
-                            if (query.isEmpty()) {
+                            if (query.isNotEmpty()) {
+                                onQueryChange("")
+                            } else {
+                                onExpandedChange(false)
                                 focusManager.clearFocus()
                             }
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close Search",
-                            tint = primaryTextColor.copy(alpha = 0.5f),
-                            modifier = Modifier.size(18.dp)
-                        )
+                        AnimatedContent(
+                            targetState = query.isNotEmpty(),
+                            transitionSpec = {
+                                (fadeIn(animationSpec = spring()) + scaleIn(initialScale = 0.8f))
+                                    .togetherWith(fadeOut(animationSpec = spring()) + scaleOut(targetScale = 0.8f))
+                            },
+                            label = "search_trailing_icon"
+                        ) { hasQuery ->
+                            if (hasQuery) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Cancel,
+                                    contentDescription = "Clear Search",
+                                    tint = primaryTextColor.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Close Search",
+                                    tint = primaryTextColor.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -429,9 +429,7 @@ fun LiveTvTabScreen(
                 totalCount = allChannels.size,
                 onCancelSelection = {},
                 isHomeScreen = true,
-                onSearchClick = {
-                    isSearchExpanded = !isSearchExpanded
-                },
+                onSearchClick = null,
                 onSettingsClick = null
             )
         },

@@ -27,8 +27,8 @@
     <string name="pref_appearance_tab_recents_summary">Quickly resume previous video sessions</string>
     <string name="pref_appearance_tab_playlists_title">Playlists</string>
     <string name="pref_appearance_tab_playlists_summary">Show local custom video playlists</string>
-    <string name="pref_appearance_tab_network_title">Network Streaming</string>
-    <string name="pref_appearance_tab_network_summary">Access SMB, FTP, and WebDAV drives</string>
+    <string name="pref_appearance_tab_network_title">Network &amp; Direct Play</string>
+    <string name="pref_appearance_tab_network_summary">Access SMB, FTP, WebDAV drives &amp; URL playback</string>
     <string name="cinehub">MaxStream</string>
     <string name="cinetv">CineTV</string>
     <string name="pref_appearance_tab_cinehub_title">MaxStream</string>
@@ -894,7 +894,7 @@
     <string name="search_all_videos">Search all videos…</string>
 
     <!-- Network Streaming Screen Strings -->
-    <string name="stream_link">Stream Link</string>
+    <string name="stream_link">Direct URL Playback</string>
     <string name="video_url_placeholder">https://example.com/video.mp4</string>
     <string name="paste">Paste</string>
     <string name="play">Play</string>

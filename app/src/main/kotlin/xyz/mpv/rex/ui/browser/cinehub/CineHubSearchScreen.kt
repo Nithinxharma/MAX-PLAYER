@@ -164,7 +164,7 @@ fun CineHubSearchScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (selectedDetails != null) selectedDetails!!.name else "Search Max Stream",
+                        text = if (selectedDetails != null) selectedDetails!!.name else "Explore Universe",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
