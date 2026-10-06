@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Sync
+import xyz.mpv.rex.cinehub.data.UniversalMetadataSyncService
 import xyz.mpv.rex.auth.AuthManager
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.foundation.border
@@ -541,14 +542,15 @@ object CineHubScreen : Screen {
 
             val localMovieMatch = localMovies.find { it.videoFilePath == path || it.title.equals(title, ignoreCase = true) }
             val localTvMatch = localTvShows.find { it.folderPath == path || it.title.equals(title, ignoreCase = true) }
-            val resolvedFanart = localMovieMatch?.backdropPath ?: localMovieMatch?.posterPath
+            val fallbackFanart = localMovieMatch?.backdropPath ?: localMovieMatch?.posterPath
               ?: localTvMatch?.backdropPath ?: localTvMatch?.posterPath ?: path
+            val resolvedFanart = UniversalMetadataSyncService.getLandscapeFanartSync(title, fallbackFanart)
 
             cwMap[path] = xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem(
               id = path,
               title = title,
               episodeInfo = epInfo,
-              landscapeImageUrl = resolvedFanart,
+              landscapeImageUrl = resolvedFanart ?: fallbackFanart,
               currentPositionSeconds = lastPos,
               totalDurationSeconds = totalDur,
               watchProgressFraction = fraction,
@@ -567,13 +569,14 @@ object CineHubScreen : Screen {
               val epInfo = epMatch?.let { "S${it.groupValues[1]} E${it.groupValues[2]}" }
 
               val localMovieMatch = localMovies.find { it.videoFilePath == titleOrPath || it.title.equals(titleOrPath, ignoreCase = true) }
-              val resolvedFanart = localMovieMatch?.backdropPath ?: localMovieMatch?.posterPath ?: titleOrPath
+              val fallbackFanart = localMovieMatch?.backdropPath ?: localMovieMatch?.posterPath ?: titleOrPath
+              val resolvedFanart = UniversalMetadataSyncService.getLandscapeFanartSync(titleOrPath, fallbackFanart)
 
               cwMap[titleOrPath] = xyz.mpv.rex.ui.browser.cinehub.components.ContinueWatchingMediaItem(
                 id = titleOrPath,
                 title = titleOrPath,
                 episodeInfo = epInfo,
-                landscapeImageUrl = resolvedFanart,
+                landscapeImageUrl = resolvedFanart ?: fallbackFanart,
                 currentPositionSeconds = state.lastPosition.toLong(),
                 totalDurationSeconds = stateTotal,
                 watchProgressFraction = fraction,
@@ -631,13 +634,14 @@ object CineHubScreen : Screen {
             val isNew = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.detectIsNew(item.year?.toString())
 
             val highResFanart = xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamMetadataHelper.toHighResFanart(item.posterUrl)
+            val resolvedBackdrop = UniversalMetadataSyncService.getLandscapeFanartSync(item.title, highResFanart ?: item.posterUrl)
             result.add(
               CarouselMovie(
                 id = item.id,
                 title = item.title,
                 subtitle = subtitle,
                 posterUrl = item.posterUrl,
-                backdropUrl = highResFanart ?: item.posterUrl,
+                backdropUrl = resolvedBackdrop ?: highResFanart ?: item.posterUrl,
                 rating = item.rating,
                 year = item.year?.toString(),
                 quality = detectedQuality,

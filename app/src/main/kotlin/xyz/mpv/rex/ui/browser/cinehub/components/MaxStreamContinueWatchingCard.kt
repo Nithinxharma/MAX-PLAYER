@@ -300,23 +300,25 @@ fun MaxStreamContinueWatchingCard(
             overflow = TextOverflow.Ellipsis
         )
 
+        if (!item.episodeInfo.isNullOrBlank()) {
+            Text(
+                text = item.episodeInfo,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = secondaryTextColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (!item.episodeInfo.isNullOrBlank()) {
-                Text(
-                    text = item.episodeInfo,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 11.sp
-                    ),
-                    color = secondaryTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-            } else if (item.timestampFormatted.isNotBlank()) {
+            if (item.timestampFormatted.isNotBlank()) {
                 Text(
                     text = item.timestampFormatted,
                     style = MaterialTheme.typography.bodySmall.copy(
@@ -327,6 +329,8 @@ fun MaxStreamContinueWatchingCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
+            } else {
+                Spacer(modifier = Modifier.width(1.dp))
             }
 
             val percent = (item.watchProgressFraction * 100).toInt().coerceIn(0, 100)
@@ -334,7 +338,7 @@ fun MaxStreamContinueWatchingCard(
                 Text(
                     text = "$percent%",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold
                     ),
                     color = MaxStreamTheme.CrimsonAccent
