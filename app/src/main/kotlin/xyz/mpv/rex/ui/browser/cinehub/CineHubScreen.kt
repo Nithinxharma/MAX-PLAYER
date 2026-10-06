@@ -741,24 +741,11 @@ object CineHubScreen : Screen {
               onClick = {
                 xyz.mpv.rex.ui.browser.MainScreen.requestTab(1)
               },
-              modifier = Modifier.testTag("cinehub_library_shortcut_button"),
+              modifier = Modifier.testTag("cinehub_my_media_shortcut_button"),
             ) {
               Icon(
                 imageVector = Icons.Rounded.Bookmark,
-                contentDescription = "Movie Library",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-              )
-            }
-            IconButton(
-              onClick = {
-                xyz.mpv.rex.ui.browser.MainScreen.requestTab(2)
-              },
-              modifier = Modifier.testTag("cinehub_downloads_shortcut_button"),
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.CloudDownload,
-                contentDescription = "Download Manager",
+                contentDescription = "My Media Hub",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
               )

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
@@ -200,17 +201,14 @@ object MainScreen : Screen {
     val shortsLabel = stringResource(R.string.shorts)
     val cineHubLabel = stringResource(R.string.cinehub)
     val cineTvLabel = stringResource(R.string.cinetv)
-    val libraryLabel = "Library"
-    val downloadsLabel = "Downloads"
-    val recentsLabel = stringResource(R.string.recents)
-    val playlistsLabel = stringResource(R.string.playlists)
+    val myMediaLabel = "My Media"
     val networkLabel = stringResource(R.string.network)
 
     val isCineHubTabVisible = enableTabCineHub && enableCineHubIntegration
 
     val visibleTabs = remember(
-      isShortsEnabled, isCineHubTabVisible, enableTabLibrary, enableTabDownloads, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      cineHubLabel, cineTvLabel, libraryLabel, downloadsLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, isCineHubTabVisible, enableTabLibrary, enableTabCineTv, enableTabNetwork,
+      cineHubLabel, cineTvLabel, myMediaLabel, networkLabel
     ) {
       buildList {
         // Max Stream (CineHub) is the primary launch destination
@@ -223,15 +221,8 @@ object MainScreen : Screen {
         }
         if (enableTabLibrary) {
           add(
-            VisibleTab("library", libraryLabel, icon = Icons.Rounded.Bookmark) {
-              xyz.mpv.rex.ui.browser.cinehub.CineHubLibraryScreen.Content()
-            }
-          )
-        }
-        if (enableTabDownloads) {
-          add(
-            VisibleTab("downloads", downloadsLabel, icon = Icons.Rounded.CloudDownload) {
-              xyz.mpv.rex.ui.browser.cinehub.CineDownloadManagerScreen.Content()
+            VisibleTab("my_media", myMediaLabel, icon = Icons.Rounded.VideoLibrary) {
+              xyz.mpv.rex.ui.browser.cinehub.CineHubUnifiedMediaScreen.Content()
             }
           )
         }
@@ -256,20 +247,6 @@ object MainScreen : Screen {
                   context.startActivity(playerIntent)
                 }
               )
-            }
-          )
-        }
-        if (enableTabRecents) {
-          add(
-            VisibleTab("recents", recentsLabel, icon = Icons.Rounded.History) {
-              RecentlyPlayedScreen.Content()
-            }
-          )
-        }
-        if (enableTabPlaylists) {
-          add(
-            VisibleTab("playlists", playlistsLabel, icon = Icons.AutoMirrored.Rounded.PlaylistPlay) {
-              PlaylistScreen.Content()
             }
           )
         }
