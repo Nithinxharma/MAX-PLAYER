@@ -562,9 +562,9 @@ class FirebaseProviderSyncService(
                         !targetNormNameSet.contains(installedNormName) &&
                         !targetPluginsToInstall.any { matchesExtensionOrProvider(installed.pkgName, it) || matchesExtensionOrProvider(installed.name, it) }
 
-                if (isExplicitlyBlocked || isDisallowed) {
-                    _syncStatus.value = "Uninstalling unassigned/blocked extension: ${installed.name}..."
-                    Log.i(TAG, "EXTENSION_SYNC: Removing extension ${installed.name} (blocked=$isExplicitlyBlocked, disallowed=$isDisallowed)")
+                if (isExplicitlyBlocked) {
+                    _syncStatus.value = "Uninstalling explicitly blocked extension: ${installed.name}..."
+                    Log.i(TAG, "EXTENSION_SYNC: Removing explicitly blocked extension ${installed.name}")
                     try {
                         extensionManager.uninstallExtension(installed.pkgName)
                     } catch (e: Exception) {

@@ -90,6 +90,22 @@ class M3u8Helper {
         val headers: Map<String, String> = emptyMap()
     )
 
+    suspend fun M3u8Stream.generateM3u8(
+        source: String,
+        name: String = source,
+        quality: Int? = this.quality,
+        headers: Map<String, String> = this.headers
+    ): List<ExtractorLink> {
+        return M3u8Helper.generateM3u8(
+            source = source,
+            streamUrl = this.streamUrl,
+            referer = headers["Referer"] ?: headers["referer"] ?: "",
+            quality = quality,
+            headers = headers,
+            name = name
+        )
+    }
+
     suspend fun m3u8Generation(m3u8: M3u8Stream, returnThis: Boolean? = true): List<M3u8Stream> {
         val links = PlaylistUtils.extractM3u8ToLinks(
             source = "M3U8",

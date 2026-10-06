@@ -119,6 +119,7 @@ data class CineHubSearchItem(
     val providerId: String,
     val providerName: String,
     val posterUrl: String? = null,
+    val backdropUrl: String? = null,
     val type: TvType = TvType.Movie,
     val year: Int? = null,
     val rating: Double? = null

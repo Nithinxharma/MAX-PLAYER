@@ -40,6 +40,7 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
         if (page != null && page.items.isNotEmpty()) {
             for (group in page.items) {
                 if (group.list.isNotEmpty()) {
+                    val isHoriz = group.isHorizontalImages
                     lists.add(
                         CineHubHomePageList(
                             title = group.name,
@@ -51,6 +52,7 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
                                     providerId = id,
                                     providerName = api.name,
                                     posterUrl = item.posterUrl,
+                                    backdropUrl = if (isHoriz) item.posterUrl else null,
                                     type = item.type?.toRexType() ?: TvType.Movie
                                 )
                             }
@@ -69,6 +71,7 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
                     res?.items?.forEach { group ->
                         if (group.list.isNotEmpty()) {
                             val groupTitle = if (group.name.isNotBlank()) group.name else item.name
+                            val isHoriz = group.isHorizontalImages || item.horizontalImages
                             lists.add(
                                 CineHubHomePageList(
                                     title = groupTitle,
@@ -80,6 +83,7 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
                                             providerId = id,
                                             providerName = api.name,
                                             posterUrl = si.posterUrl,
+                                            backdropUrl = if (isHoriz) si.posterUrl else null,
                                             type = si.type?.toRexType() ?: TvType.Movie
                                         )
                                     }
@@ -136,8 +140,12 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
             providerId = id,
             providerName = api.name,
             posterUrl = res.posterUrl,
+            backdropUrl = res.backgroundPosterUrl ?: res.posterUrl,
             overview = res.plot,
             year = res.year,
+            rating = res.score?.score,
+            genres = res.tags ?: emptyList(),
+            cast = res.actors?.map { it.actor.name } ?: emptyList(),
             type = res.type.toRexType(),
             episodes = episodes
         )
@@ -152,25 +160,22 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
         val links = mutableListOf<CineHubStreamLink>()
         runCatching {
             api.loadLinks(data, false, subtitleCallback = {}) { extractor ->
-                links.add(
-                    CineHubStreamLink(
-                        name = extractor.name,
-                        url = extractor.url,
-                        quality = "${extractor.quality}p",
-                        isM3u8 = extractor.isM3u8,
-                        headers = buildMap {
-                            if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
-                            putAll(extractor.headers)
-                        }
-                    )
-                )
-            }
-        }
-
-        // Fallback 1: Attempt direct loadExtractor on data if links is empty and data is a valid URL
-        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
-            runCatching {
-                com.lagradost.cloudstream3.utils.loadExtractor(data, subtitleCallback = {}) { extractor ->
+                if (extractor is com.lagradost.cloudstream3.utils.ExtractorLinkPlayList) {
+                    for (item in extractor.playlist) {
+                        links.add(
+                            CineHubStreamLink(
+                                name = extractor.name,
+                                url = item.url,
+                                quality = "${extractor.quality}p",
+                                isM3u8 = item.isM3u8,
+                                headers = buildMap {
+                                    if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
+                                    putAll(extractor.headers)
+                                }
+                            )
+                        )
+                    }
+                } else if (extractor.url.isNotBlank()) {
                     links.add(
                         CineHubStreamLink(
                             name = extractor.name,
@@ -183,6 +188,43 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
                             }
                         )
                     )
+                }
+            }
+        }
+
+        // Fallback 1: Attempt direct loadExtractor on data if links is empty and data is a valid URL
+        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
+            runCatching {
+                com.lagradost.cloudstream3.utils.loadExtractor(data, subtitleCallback = {}) { extractor ->
+                    if (extractor is com.lagradost.cloudstream3.utils.ExtractorLinkPlayList) {
+                        for (item in extractor.playlist) {
+                            links.add(
+                                CineHubStreamLink(
+                                    name = extractor.name,
+                                    url = item.url,
+                                    quality = "${extractor.quality}p",
+                                    isM3u8 = item.isM3u8,
+                                    headers = buildMap {
+                                        if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
+                                        putAll(extractor.headers)
+                                    }
+                                )
+                            )
+                        }
+                    } else if (extractor.url.isNotBlank()) {
+                        links.add(
+                            CineHubStreamLink(
+                                name = extractor.name,
+                                url = extractor.url,
+                                quality = "${extractor.quality}p",
+                                isM3u8 = extractor.isM3u8,
+                                headers = buildMap {
+                                    if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
+                                    putAll(extractor.headers)
+                                }
+                            )
+                        )
+                    }
                 }
             }
         }

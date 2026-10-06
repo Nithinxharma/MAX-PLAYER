@@ -293,6 +293,13 @@ abstract class ExtractorApi {
 
     open fun getExtractorUrl(id: String): String = id
 
+    open fun fixUrl(url: String): String {
+        if (url.startsWith("http") || url.startsWith("{\"")) return url
+        if (url.isEmpty()) return ""
+        if (url.startsWith("//")) return "https:$url"
+        return if (url.startsWith('/')) "$mainUrl$url" else "$mainUrl/$url"
+    }
+
     companion object {
         fun getExtractorForUrl(url: String): ExtractorApi? = com.lagradost.cloudstream3.utils.getExtractorForUrl(url)
     }

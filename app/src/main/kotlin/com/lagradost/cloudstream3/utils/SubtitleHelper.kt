@@ -51,4 +51,6 @@ object SubtitleHelper {
     fun fromTagToEnglishLanguageName(tag: String?): String? = fromTwoLettersToLanguage(tag)
     fun fromCodeToOpenSubtitlesTag(code: String?): String? = code?.lowercase()
     fun fromCodeToLangTagIETF(code: String?): String? = code?.lowercase()
+    fun fromThreeLettersToLanguage(threeLetters: String?): String? = fromTwoLettersToLanguage(threeLetters)
+    fun getLanguageName(code: String?): String = fromTwoLettersToLanguage(code) ?: code ?: "Unknown"
 }

@@ -16,16 +16,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 
-@SuppressLint("StaticFieldLeak")
-object AcraApplication {
-    lateinit var context: Context
-        private set
-
-    fun init(appContext: Context) {
-        context = appContext.applicationContext
-    }
-}
-
 object APIHolder {
     val unixTimeMS: Long get() = System.currentTimeMillis()
     val unixTime: Long get() = unixTimeMS / 1000L
@@ -95,6 +85,12 @@ object APIHolder {
 
     fun getApi(name: String): MainAPI? = apiMap[name]
     fun getApiFromNameNull(name: String?): MainAPI? = if (name != null) apiMap[name] ?: allProviders.find { it.name.equals(name, ignoreCase = true) } else null
+    fun getApiFromNameOrNull(name: String?): MainAPI? = getApiFromNameNull(name)
+    fun getApiFromName(name: String): MainAPI = getApiFromNameNull(name) ?: throw ErrorLoadingException("No API found with name $name")
+
+    fun getExtractorApiFromName(name: String): ExtractorApi? = extractorApis.find { it.name.equals(name, ignoreCase = true) }
+    fun getExtractorApiFromNameNull(name: String?): ExtractorApi? = if (name != null) extractorApis.find { it.name.equals(name, ignoreCase = true) } else null
+    fun getExtractorForUrl(url: String): ExtractorApi? = com.lagradost.cloudstream3.utils.getExtractorForUrl(url)
 
     fun removePluginsBySource(sourceFilename: String) {
         allProviders.removeAll { it.sourcePlugin == sourceFilename }

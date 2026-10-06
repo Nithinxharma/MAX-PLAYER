@@ -35,3 +35,6 @@ object StringUtils {
     )
     fun String.decodeUri(): String = decodeUrl()
 }
+
+fun String.decodeUrl(): String = StringUtils.run { this@decodeUrl.decodeUrl() }
+fun String.encodeUrl(): String = StringUtils.run { this@encodeUrl.encodeUrl() }

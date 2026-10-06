@@ -48,6 +48,18 @@ class ServerProviderSyncService(
         private const val TAG = "ServerProviderSync"
         private const val MANIFEST_URL = "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json"
         
+        // Comprehensive community repository list to source all verified extensions
+        private val COMMUNITY_REPOS = listOf(
+            "https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json",
+            "https://raw.githubusercontent.com/self-similarity/MegaRepo/builds/repo.json",
+            "https://raw.githubusercontent.com/phisher98/cloudstream-extensions-phisher/refs/heads/builds/repo.json",
+            "https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json",
+            "https://raw.githubusercontent.com/CakesTwix/cloudstream-extensions-uk/master/repo.json",
+            "https://raw.githubusercontent.com/saimuelbr/saimuelrepo/refs/heads/main/builds/repo.json",
+            "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
+            "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json"
+        )
+
         // Pinned CastleTV Provider identification
         const val CASTLE_TV_ID = "castletv"
         const val CASTLE_TV_NAME = "CastleTV"
@@ -175,68 +187,118 @@ class ServerProviderSyncService(
             description = "High-definition Live TV, Sports, and Movies feed."
         )
 
-        try {
-            val request = Request.Builder()
-                .url(MANIFEST_URL)
-                .header("User-Agent", "MaxStream-Client/1.0")
-                .build()
+        val aggregatedProviders = mutableListOf<ManagedProvider>()
 
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful && response.body != null) {
-                    val bodyString = response.body!!.string()
-                    val parsed = parseRepositoryToManifest(bodyString)
-                    // Ensure CastleTV is always present in managed list
-                    val providersWithCastle = if (parsed.providers.none { it.id.equals(CASTLE_TV_ID, ignoreCase = true) }) {
-                        listOf(defaultCastle) + parsed.providers
-                    } else {
-                        parsed.providers
+        for (repoUrl in COMMUNITY_REPOS) {
+            try {
+                val request = Request.Builder()
+                    .url(repoUrl)
+                    .header("User-Agent", "Mozilla/5.0 (MaxStream-Client/1.0)")
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful && response.body != null) {
+                        val bodyString = response.body!!.string()
+                        val parsed = parseRepositoryToManifest(bodyString, repoUrl)
+                        aggregatedProviders.addAll(parsed.providers)
                     }
-                    return@withContext parsed.copy(providers = providersWithCastle)
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not reach remote manifest $repoUrl: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not reach remote manifest: ${e.message}")
+        }
+
+        val providersWithCastle = if (aggregatedProviders.none { it.id.equals(CASTLE_TV_ID, ignoreCase = true) }) {
+            listOf(defaultCastle) + aggregatedProviders
+        } else {
+            aggregatedProviders
         }
 
         return@withContext ProviderManifest(
             schemaVersion = 1,
-            providers = emptyList(),
+            providers = providersWithCastle.distinctBy { it.id.lowercase() },
             revokedProviders = emptyList()
         )
     }
 
-    private fun parseRepositoryToManifest(rawJson: String): ProviderManifest {
+    private fun parseRepositoryToManifest(rawJson: String, baseUrl: String = MANIFEST_URL): ProviderManifest {
         val providers = mutableListOf<ManagedProvider>()
         return try {
             val root = JSONObject(rawJson)
+
+            // 1. Direct plugins or providers
             val plugins = root.optJSONArray("plugins") ?: root.optJSONArray("providers")
             if (plugins != null) {
-                for (i in 0 until plugins.length()) {
-                    val p = plugins.optJSONObject(i) ?: continue
-                    val internalName = p.optString("internalName", p.optString("name", "plugin_$i"))
-                    val name = p.optString("name", internalName)
-                    val url = p.optString("url", "")
-                    val version = p.optString("version", "1.0.0")
-                    val versionCode = p.optInt("versionCode", 1)
+                parsePluginsArray(plugins, baseUrl, providers)
+            }
 
-                    if (url.isNotBlank()) {
-                        providers.add(
-                            ManagedProvider(
-                                id = internalName,
-                                name = name,
-                                version = version,
-                                versionCode = versionCode,
-                                downloadUrl = url,
-                                enabled = true
-                            )
-                        )
+            // 2. pluginLists format (CloudStream repo.json standard)
+            val pluginLists = root.optJSONArray("pluginLists")
+            if (pluginLists != null) {
+                for (i in 0 until pluginLists.length()) {
+                    val listUrl = pluginLists.getString(i)
+                    runCatching {
+                        val req = Request.Builder()
+                            .url(listUrl)
+                            .header("User-Agent", "Mozilla/5.0 (MaxStream-Client/1.0)")
+                            .build()
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful && resp.body != null) {
+                                val listText = resp.body!!.string().trim()
+                                if (listText.startsWith("[")) {
+                                    val arr = org.json.JSONArray(listText)
+                                    parsePluginsArray(arr, listUrl, providers)
+                                } else if (listText.startsWith("{")) {
+                                    val subRoot = JSONObject(listText)
+                                    val subPlugins = subRoot.optJSONArray("plugins") ?: subRoot.optJSONArray("providers")
+                                    if (subPlugins != null) {
+                                        parsePluginsArray(subPlugins, listUrl, providers)
+                                    }
+                                }
+                            }
+                        }
+                    }.onFailure { err ->
+                        Log.w(TAG, "Failed to load sub-list $listUrl: ${err.message}")
                     }
                 }
             }
-            ProviderManifest(providers = providers)
+
+            ProviderManifest(providers = providers.distinctBy { it.id })
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse json repository: ${e.message}")
             ProviderManifest()
+        }
+    }
+
+    private fun parsePluginsArray(arr: org.json.JSONArray, sourceUrl: String, dest: MutableList<ManagedProvider>) {
+        val base = sourceUrl.substringBeforeLast("/") + "/"
+        for (i in 0 until arr.length()) {
+            val p = arr.optJSONObject(i) ?: continue
+            val internalName = p.optString("internalName", p.optString("id", p.optString("name", "plugin_$i")))
+            val name = p.optString("name", internalName)
+            var url = p.optString("url", "")
+            val version = p.optString("version", "1.0.0")
+            val versionCode = p.optInt("versionCode", 1)
+            val description = p.optString("description", "")
+            val lang = p.optString("lang", p.optString("language", "en"))
+
+            if (url.isNotBlank()) {
+                if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                    url = base + url.removePrefix("./").removePrefix("/")
+                }
+                dest.add(
+                    ManagedProvider(
+                        id = internalName,
+                        name = name,
+                        version = version,
+                        versionCode = versionCode,
+                        downloadUrl = url,
+                        enabled = true,
+                        description = description,
+                        lang = lang
+                    )
+                )
+            }
         }
     }
 
