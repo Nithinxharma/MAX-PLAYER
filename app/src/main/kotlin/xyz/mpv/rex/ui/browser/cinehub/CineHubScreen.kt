@@ -9,6 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -2203,7 +2205,7 @@ private fun ExtensionSearchResultRow(
   }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CineDetailView(
   item: Any,
@@ -2289,6 +2291,8 @@ fun CineDetailView(
   var detailPendingYear by remember { mutableStateOf<String?>(null) }
   var detailPendingRating by remember { mutableStateOf<Double?>(null) }
   var detailPendingProvider by remember { mutableStateOf<String?>(null) }
+  var isPendingDownloadMode by remember { mutableStateOf(false) }
+  var isInstantDownloadExtracting by remember { mutableStateOf(false) }
   val rawPlot = when (item) {
     is MovieItem -> item.plot
     is TvShowItem -> item.plot
@@ -2403,15 +2407,20 @@ fun CineDetailView(
   var isInstantPlayExtracting by remember { mutableStateOf(false) }
   var streamFailureReason by remember { mutableStateOf<StreamFailureReason?>(null) }
 
-  val onInstantPlayClick: () -> Unit = {
+  val onInstantAction: (isDownload: Boolean, forceQualitySheet: Boolean) -> Unit = { isDownload, forceQualitySheet ->
     streamFailureReason = null
+    if (isDownload) {
+      isInstantDownloadExtracting = true
+    } else {
+      isInstantPlayExtracting = true
+    }
+
     when (item) {
       is MovieItem -> {
         if (item.videoFilePath.startsWith("ext_stream:")) {
           val raw = item.videoFilePath.removePrefix("ext_stream:")
           val providerId = raw.substringBefore("::")
           val dataUrl = raw.substringAfter("::")
-          isInstantPlayExtracting = true
           scope.launch(Dispatchers.IO) {
             val registry = org.koin.java.KoinJavaComponent.get<xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry>(xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry::class.java)
             val provider = registry.getProvider(providerId)
@@ -2422,60 +2431,84 @@ fun CineDetailView(
               caughtEx = t
               emptyList()
             }
-            val stream = streams.firstOrNull()
             val extractorLinks = streams.map { s ->
               com.lagradost.cloudstream3.utils.ExtractorLink(
                 source = provider?.name ?: "Extension",
                 name = s.name.ifBlank { s.quality ?: "Auto" },
                 url = s.url,
                 referer = s.headers["Referer"] ?: "",
-                quality = com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
+                quality = s.quality.filter { it.isDigit() }.toIntOrNull() ?: com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
                 headers = s.headers
               )
-            }
+            }.sortedByDescending { it.quality }
             val fail = diagnoseFailure(provider?.name ?: providerId, dataUrl, caughtEx, streams.size)
             withContext(Dispatchers.Main) {
               isInstantPlayExtracting = false
-              if (stream != null && stream.url.isNotBlank()) {
-                onDismiss()
-                MediaUtils.playFile(
-                  source = stream.url,
-                  context = context,
-                  launchSource = "cinehub",
-                  headers = stream.headers,
-                  title = title,
-                  posterUrl = posterPath,
-                  overview = plot,
-                  year = year,
-                  rating = rating.takeIf { it > 0.0 },
-                  providerName = provider?.name,
-                  allLinks = extractorLinks
-                )
+              isInstantDownloadExtracting = false
+              if (extractorLinks.isNotEmpty()) {
+                if (forceQualitySheet) {
+                  isPendingDownloadMode = isDownload
+                  detailPendingLinks = extractorLinks
+                  detailPendingSubs = emptyList()
+                  detailPendingEpJson = null
+                  detailPendingTitle = title
+                  detailPendingPoster = posterPath
+                  detailPendingOverview = plot
+                  detailPendingYear = year
+                  detailPendingRating = rating.takeIf { it > 0.0 }
+                  detailPendingProvider = provider?.name ?: providerId
+                } else if (isDownload) {
+                  val topLink = extractorLinks.first()
+                  xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, title, topLink)
+                } else {
+                  val topLink = extractorLinks.first()
+                  onDismiss()
+                  MediaUtils.playFile(
+                    source = topLink.url,
+                    context = context,
+                    launchSource = "cinehub",
+                    headers = topLink.headers,
+                    title = title,
+                    posterUrl = posterPath,
+                    overview = plot,
+                    year = year,
+                    rating = rating.takeIf { it > 0.0 },
+                    providerName = provider?.name,
+                    allLinks = extractorLinks
+                  )
+                }
               } else {
                 streamFailureReason = fail
               }
             }
           }
         } else if (item.videoFilePath.isNotBlank()) {
-          onDismiss()
-          MediaUtils.playFile(
-            source = item.videoFilePath,
-            context = context,
-            launchSource = "cinehub",
-            title = title,
-            posterUrl = posterPath,
-            overview = plot,
-            year = year,
-            rating = rating.takeIf { it > 0.0 },
-            providerName = "Local Media"
-          )
+          isInstantPlayExtracting = false
+          isInstantDownloadExtracting = false
+          if (isDownload) {
+            Toast.makeText(context, "Media file already on local storage", Toast.LENGTH_SHORT).show()
+          } else {
+            onDismiss()
+            MediaUtils.playFile(
+              source = item.videoFilePath,
+              context = context,
+              launchSource = "cinehub",
+              title = title,
+              posterUrl = posterPath,
+              overview = plot,
+              year = year,
+              rating = rating.takeIf { it > 0.0 },
+              providerName = "Local Media"
+            )
+          }
         } else {
+          isInstantPlayExtracting = false
+          isInstantDownloadExtracting = false
           onDismiss()
           onPlay()
         }
       }
       is TvShowItem -> {
-        isInstantPlayExtracting = true
         scope.launch(Dispatchers.IO) {
           val episodes = if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
             NfoScanner.scanTvShowEpisodes(File(item.folderPath))
@@ -2485,20 +2518,25 @@ fun CineDetailView(
           val firstEp = episodes.firstOrNull()
           withContext(Dispatchers.Main) {
             isInstantPlayExtracting = false
+            isInstantDownloadExtracting = false
             if (firstEp != null && firstEp.videoFilePath.isNotBlank()) {
-              onDismiss()
-              Toast.makeText(context, "Playing ${item.title} - ${firstEp.title}", Toast.LENGTH_SHORT).show()
-              MediaUtils.playFile(
-                source = firstEp.videoFilePath,
-                context = context,
-                launchSource = "cinehub",
-                title = "${item.title} - ${firstEp.title}",
-                posterUrl = firstEp.stillPath ?: posterPath,
-                overview = firstEp.plot ?: plot,
-                year = year,
-                rating = rating.takeIf { it > 0.0 },
-                providerName = "Local Media"
-              )
+              if (isDownload) {
+                Toast.makeText(context, "Episode file already on local storage", Toast.LENGTH_SHORT).show()
+              } else {
+                onDismiss()
+                Toast.makeText(context, "Playing ${item.title} - ${firstEp.title}", Toast.LENGTH_SHORT).show()
+                MediaUtils.playFile(
+                  source = firstEp.videoFilePath,
+                  context = context,
+                  launchSource = "cinehub",
+                  title = "${item.title} - ${firstEp.title}",
+                  posterUrl = firstEp.stillPath ?: posterPath,
+                  overview = firstEp.plot ?: plot,
+                  year = year,
+                  rating = rating.takeIf { it > 0.0 },
+                  providerName = "Local Media"
+                )
+              }
             } else {
               onDismiss()
               onPlay()
@@ -2509,7 +2547,6 @@ fun CineDetailView(
       is ExtensionMediaDetails -> {
         when (val resp = item.loadResponse) {
           is MovieLoadResponse -> {
-            isInstantPlayExtracting = true
             extractAndPlayMovie(
               context = context,
               providerName = item.providerName.ifBlank { resp.apiName },
@@ -2520,17 +2557,37 @@ fun CineDetailView(
               onFailure = { streamFailureReason = it },
               onLinksLoaded = { links, subs ->
                 isInstantPlayExtracting = false
-                if (onLinksLoaded != null) {
-                  onLinksLoaded(links, subs, null)
-                } else if (links.isNotEmpty()) {
-                  val link = links.first()
+                isInstantDownloadExtracting = false
+                val sortedLinks = links.sortedByDescending { it.quality }
+                if (forceQualitySheet) {
+                  isPendingDownloadMode = isDownload
+                  detailPendingLinks = sortedLinks
+                  detailPendingSubs = subs
+                  detailPendingEpJson = null
+                  detailPendingTitle = title
+                  detailPendingPoster = posterPath
+                  detailPendingOverview = plot
+                  detailPendingYear = year
+                  detailPendingRating = rating.takeIf { it > 0.0 }
+                  detailPendingProvider = item.providerName.ifBlank { resp.apiName }
+                } else if (isDownload) {
+                  if (sortedLinks.isNotEmpty()) {
+                    val topLink = sortedLinks.first()
+                    xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, title, topLink)
+                  } else {
+                    Toast.makeText(context, "No stream links found to download", Toast.LENGTH_SHORT).show()
+                  }
+                } else if (onLinksLoaded != null) {
+                  onLinksLoaded(sortedLinks, subs, null)
+                } else if (sortedLinks.isNotEmpty()) {
+                  val topLink = sortedLinks.first()
                   val headersMap = buildMap {
-                    if (link.referer.isNotBlank()) put("Referer", link.referer)
-                    putAll(link.headers)
+                    if (topLink.referer.isNotBlank()) put("Referer", topLink.referer)
+                    putAll(topLink.headers)
                   }
                   val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
                   MediaUtils.playFile(
-                    source = link.url,
+                    source = topLink.url,
                     context = context,
                     launchSource = "cinehub",
                     headers = headersMap,
@@ -2541,7 +2598,7 @@ fun CineDetailView(
                     year = year,
                     rating = rating.takeIf { it > 0.0 },
                     providerName = item.providerName.ifBlank { resp.apiName },
-                    allLinks = links
+                    allLinks = sortedLinks
                   )
                 }
               }
@@ -2550,7 +2607,6 @@ fun CineDetailView(
           is TvSeriesLoadResponse -> {
             val firstEp = resp.episodes.firstOrNull()
             if (firstEp != null) {
-              isInstantPlayExtracting = true
               extractAndPlayEpisode(
                 context = context,
                 providerName = item.providerName.ifBlank { resp.apiName },
@@ -2562,6 +2618,8 @@ fun CineDetailView(
                 onFailure = { streamFailureReason = it },
                 onLinksLoaded = { links, subs ->
                   isInstantPlayExtracting = false
+                  isInstantDownloadExtracting = false
+                  val sortedLinks = links.sortedByDescending { it.quality }
                   val epMetadataJson = kotlinx.serialization.json.Json.encodeToString(
                     mapOf(
                       "seriesTitle" to resp.name,
@@ -2570,41 +2628,61 @@ fun CineDetailView(
                       "episode" to (firstEp.episode ?: 1).toString()
                     )
                   )
-                  if (onLinksLoaded != null) {
-                    onLinksLoaded(links, subs, epMetadataJson)
-                  } else if (links.isNotEmpty()) {
-                    val link = links.first()
+                  val epFullTitle = "$title - S${firstEp.season ?: 1}E${firstEp.episode ?: 1} ${firstEp.name ?: "Episode 1"}"
+                  if (forceQualitySheet) {
+                    isPendingDownloadMode = isDownload
+                    detailPendingLinks = sortedLinks
+                    detailPendingSubs = subs
+                    detailPendingEpJson = epMetadataJson
+                    detailPendingTitle = epFullTitle
+                    detailPendingPoster = posterPath
+                    detailPendingOverview = plot
+                    detailPendingYear = year
+                    detailPendingRating = rating.takeIf { it > 0.0 }
+                    detailPendingProvider = item.providerName.ifBlank { resp.apiName }
+                  } else if (isDownload) {
+                    if (sortedLinks.isNotEmpty()) {
+                      val topLink = sortedLinks.first()
+                      xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, epFullTitle, topLink)
+                    } else {
+                      Toast.makeText(context, "No stream links found to download", Toast.LENGTH_SHORT).show()
+                    }
+                  } else if (onLinksLoaded != null) {
+                    onLinksLoaded(sortedLinks, subs, epMetadataJson)
+                  } else if (sortedLinks.isNotEmpty()) {
+                    val topLink = sortedLinks.first()
                     val headersMap = buildMap {
-                      if (link.referer.isNotBlank()) put("Referer", link.referer)
-                      putAll(link.headers)
+                      if (topLink.referer.isNotBlank()) put("Referer", topLink.referer)
+                      putAll(topLink.headers)
                     }
                     val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
                     MediaUtils.playFile(
-                      source = link.url,
+                      source = topLink.url,
                       context = context,
                       launchSource = "cinehub",
                       headers = headersMap,
                       subtitlesJson = subtitlesJson,
                       episodeMetadataJson = epMetadataJson,
-                      title = "$title - S${firstEp.season ?: 1}E${firstEp.episode ?: 1} ${firstEp.name ?: "Episode 1"}",
+                      title = epFullTitle,
                       posterUrl = posterPath,
                       overview = plot,
                       year = year,
                       rating = rating.takeIf { it > 0.0 },
                       providerName = item.providerName.ifBlank { resp.apiName },
-                      allLinks = links
+                      allLinks = sortedLinks
                     )
                   }
                 }
               )
             } else {
+              isInstantPlayExtracting = false
+              isInstantDownloadExtracting = false
               Toast.makeText(context, "No episodes available", Toast.LENGTH_SHORT).show()
             }
           }
         }
       }
       is MovieLoadResponse -> {
-        isInstantPlayExtracting = true
         extractAndPlayMovie(
           context = context,
           providerName = item.apiName,
@@ -2615,17 +2693,37 @@ fun CineDetailView(
           onFailure = { streamFailureReason = it },
           onLinksLoaded = { links, subs ->
             isInstantPlayExtracting = false
-            if (onLinksLoaded != null) {
-              onLinksLoaded(links, subs, null)
-            } else if (links.isNotEmpty()) {
-              val link = links.first()
+            isInstantDownloadExtracting = false
+            val sortedLinks = links.sortedByDescending { it.quality }
+            if (forceQualitySheet) {
+              isPendingDownloadMode = isDownload
+              detailPendingLinks = sortedLinks
+              detailPendingSubs = subs
+              detailPendingEpJson = null
+              detailPendingTitle = title
+              detailPendingPoster = posterPath
+              detailPendingOverview = plot
+              detailPendingYear = year
+              detailPendingRating = rating.takeIf { it > 0.0 }
+              detailPendingProvider = item.apiName
+            } else if (isDownload) {
+              if (sortedLinks.isNotEmpty()) {
+                val topLink = sortedLinks.first()
+                xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, title, topLink)
+              } else {
+                Toast.makeText(context, "No stream links found to download", Toast.LENGTH_SHORT).show()
+              }
+            } else if (onLinksLoaded != null) {
+              onLinksLoaded(sortedLinks, subs, null)
+            } else if (sortedLinks.isNotEmpty()) {
+              val topLink = sortedLinks.first()
               val headersMap = buildMap {
-                if (link.referer.isNotBlank()) put("Referer", link.referer)
-                putAll(link.headers)
+                if (topLink.referer.isNotBlank()) put("Referer", topLink.referer)
+                putAll(topLink.headers)
               }
               val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
               MediaUtils.playFile(
-                source = link.url,
+                source = topLink.url,
                 context = context,
                 launchSource = "cinehub",
                 headers = headersMap,
@@ -2636,18 +2734,22 @@ fun CineDetailView(
                 year = year,
                 rating = rating.takeIf { it > 0.0 },
                 providerName = item.apiName,
-                allLinks = links
+                allLinks = sortedLinks
               )
             }
           }
         )
       }
       else -> {
+        isInstantPlayExtracting = false
+        isInstantDownloadExtracting = false
         onDismiss()
         onPlay()
       }
     }
   }
+
+  val onInstantPlayClick: () -> Unit = { onInstantAction(false, false) }
 
   val scrollState = rememberScrollState()
   var dragOffsetY by remember { mutableStateOf(0f) }
@@ -2793,7 +2895,10 @@ fun CineDetailView(
           border = BorderStroke(2.dp, Color.White.copy(alpha = 0.45f)),
           modifier = Modifier
             .size(62.dp)
-            .clickable { onInstantPlayClick() }
+            .combinedClickable(
+              onClick = { onInstantAction(false, false) },
+              onLongClick = { onInstantAction(false, true) }
+            )
         ) {
           Box(contentAlignment = Alignment.Center) {
             if (isInstantPlayExtracting) {
@@ -2832,32 +2937,73 @@ fun CineDetailView(
           )
         }
 
-        // Bottom instant play pill banner
+        // Bottom instant actions row (Play + Download pills with hold-to-select)
         Row(
           modifier = Modifier
             .align(Alignment.BottomStart)
-            .padding(14.dp)
-            .intelligentGlassEffect(
-              shape = RoundedCornerShape(8.dp),
-              backgroundColor = Color.Black.copy(alpha = 0.65f),
-              borderColor = Color.White.copy(alpha = 0.20f)
-            )
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(14.dp),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          Box(
+          // Play Pill
+          Row(
             modifier = Modifier
-              .size(8.dp)
-              .clip(CircleShape)
-              .background(if (isInstantPlayExtracting) Color(0xFFFFB800) else Color(0xFF00E676))
-          )
-          Text(
-            text = if (isInstantPlayExtracting) "Resolving Stream Link..." else "Instant Play • Tap to Watch",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White
-          )
+              .combinedClickable(
+                onClick = { onInstantAction(false, false) },
+                onLongClick = { onInstantAction(false, true) }
+              )
+              .intelligentGlassEffect(
+                shape = RoundedCornerShape(8.dp),
+                backgroundColor = Color.Black.copy(alpha = 0.65f),
+                borderColor = Color.White.copy(alpha = 0.20f)
+              )
+              .padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (isInstantPlayExtracting) Color(0xFFFFB800) else Color(0xFF00E676))
+            )
+            Text(
+              text = if (isInstantPlayExtracting) "Resolving..." else "Instant Play",
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.SemiBold,
+              color = Color.White
+            )
+          }
+
+          // Download Pill
+          Row(
+            modifier = Modifier
+              .combinedClickable(
+                onClick = { onInstantAction(true, false) },
+                onLongClick = { onInstantAction(true, true) }
+              )
+              .intelligentGlassEffect(
+                shape = RoundedCornerShape(8.dp),
+                backgroundColor = Color.Black.copy(alpha = 0.65f),
+                borderColor = Color.White.copy(alpha = 0.20f)
+              )
+              .padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Outlined.CloudDownload,
+              contentDescription = "Instant Download",
+              tint = if (isInstantDownloadExtracting) Color(0xFFFFB800) else Color.White,
+              modifier = Modifier.size(13.dp)
+            )
+            Text(
+              text = if (isInstantDownloadExtracting) "Downloading..." else "Download",
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.SemiBold,
+              color = Color.White
+            )
+          }
         }
       }
 
@@ -3030,6 +3176,64 @@ fun CineDetailView(
                   }
                 }
               }
+            }
+          }
+        }
+
+        // Primary Action Buttons: Play (Top Quality) + Download (Top Quality) with Hold-to-Select
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Button(
+            onClick = { onInstantAction(false, false) },
+            modifier = Modifier
+              .weight(1f)
+              .height(50.dp)
+              .combinedClickable(
+                onClick = { onInstantAction(false, false) },
+                onLongClick = { onInstantAction(false, true) }
+              ),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+          ) {
+            if (isInstantPlayExtracting) {
+              CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+              Spacer(modifier = Modifier.width(8.dp))
+              Text("Loading...", fontWeight = FontWeight.Bold)
+            } else {
+              Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = "Play Top Quality")
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Play", fontWeight = FontWeight.Bold)
+            }
+          }
+
+          FilledTonalButton(
+            onClick = { onInstantAction(true, false) },
+            modifier = Modifier
+              .weight(1f)
+              .height(50.dp)
+              .combinedClickable(
+                onClick = { onInstantAction(true, false) },
+                onLongClick = { onInstantAction(true, true) }
+              ),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.filledTonalButtonColors(
+              containerColor = MaterialTheme.colorScheme.secondaryContainer,
+              contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+          ) {
+            if (isInstantDownloadExtracting) {
+              CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSecondaryContainer)
+              Spacer(modifier = Modifier.width(8.dp))
+              Text("Resolving...", fontWeight = FontWeight.Bold)
+            } else {
+              Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = "Download Top Quality")
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Download", fontWeight = FontWeight.Bold)
             }
           }
         }
@@ -3638,74 +3842,60 @@ fun CineDetailView(
 
           if (loadResp is MovieLoadResponse) {
             var isExtractingMovie by remember { mutableStateOf(false) }
-            Button(
-              onClick = {
-                streamFailureReason = null
-                isExtractingMovie = true
-                extractAndPlayMovie(
-                  context = context,
-                  providerName = provName,
-                  dataUrl = loadResp.dataUrl.ifBlank { loadResp.url },
-                  movieTitle = loadResp.name,
-                  scope = scope,
-                  onDismiss = onDismiss,
-                  onFailure = { streamFailureReason = it },
-                  onLinksLoaded = { links, subs ->
-                    isExtractingMovie = false
-                    if (onLinksLoaded != null) {
-                      onLinksLoaded(links, subs, null)
-                    } else {
-                      if (links.size == 1) {
-                        val link = links.first()
-                        val headersMap = buildMap {
-                          if (link.referer.isNotBlank()) put("Referer", link.referer)
-                          putAll(link.headers)
-                        }
-                        val subtitlesJson = if (subs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                        MediaUtils.playFile(
-                          source = link.url,
-                          context = context,
-                          launchSource = "cinehub",
-                          headers = headersMap,
-                          subtitlesJson = subtitlesJson,
-                          episodeMetadataJson = null,
-                          title = loadResp.name,
-                          posterUrl = loadResp.posterUrl,
-                          overview = loadResp.plot,
-                          year = loadResp.year?.toString(),
-                          rating = loadResp.score?.score,
-                          providerName = provName,
-                          allLinks = links
-                        )
-                      } else if (links.size > 1) {
-                        detailPendingLinks = links
-                        detailPendingSubs = subs
-                        detailPendingEpJson = null
-                        detailPendingTitle = loadResp.name
-                        detailPendingPoster = loadResp.posterUrl
-                        detailPendingOverview = loadResp.plot
-                        detailPendingYear = loadResp.year?.toString()
-                        detailPendingRating = loadResp.score?.score
-                        detailPendingProvider = provName
-                      }
-                    }
-                  }
-                )
-              },
+            Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
-              shape = RoundedCornerShape(16.dp),
-              enabled = !isExtractingMovie
+                .padding(vertical = 4.dp),
+              horizontalArrangement = Arrangement.spacedBy(10.dp),
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              if (isExtractingMovie) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Loading Stream...", fontWeight = FontWeight.Bold)
-              } else {
-                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Play Movie", fontWeight = FontWeight.Bold)
+              Button(
+                onClick = { onInstantAction(false, false) },
+                modifier = Modifier
+                  .weight(1f)
+                  .height(50.dp)
+                  .combinedClickable(
+                    onClick = { onInstantAction(false, false) },
+                    onLongClick = { onInstantAction(false, true) }
+                  ),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+              ) {
+                if (isInstantPlayExtracting || isExtractingMovie) {
+                  CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Text("Loading...", fontWeight = FontWeight.Bold)
+                } else {
+                  Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = "Play Top Quality")
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text("Play Movie", fontWeight = FontWeight.Bold)
+                }
+              }
+
+              FilledTonalButton(
+                onClick = { onInstantAction(true, false) },
+                modifier = Modifier
+                  .weight(1f)
+                  .height(50.dp)
+                  .combinedClickable(
+                    onClick = { onInstantAction(true, false) },
+                    onLongClick = { onInstantAction(true, true) }
+                  ),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                  containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                  contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+              ) {
+                if (isInstantDownloadExtracting) {
+                  CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Text("Resolving...", fontWeight = FontWeight.Bold)
+                } else {
+                  Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = "Download Movie")
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text("Download", fontWeight = FontWeight.Bold)
+                }
               }
             }
           } else if (loadResp is TvSeriesLoadResponse) {
@@ -3972,74 +4162,104 @@ fun CineDetailView(
                           strokeWidth = 2.dp
                         )
                       } else {
-                        IconButton(
-                          onClick = {
-                            extractingEpisodeData = ep.data
-                            extractAndPlayEpisode(
-                              context = context,
-                              providerName = provName,
-                              data = ep.data,
-                              episodeTitle = epDisplayTitle,
-                              seriesTitle = loadResp.name,
-                              scope = scope,
-                              onDismiss = {
-                                extractingEpisodeData = null
-                                onDismiss()
-                              },
-                              onLinksLoaded = { links, subs ->
-                                extractingEpisodeData = null
-                                if (onLinksLoaded != null) {
-                                  onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
-                                } else {
-                                  if (links.size == 1) {
-                                    val link = links.first()
-                                    val headersMap = buildMap {
-                                      if (link.referer.isNotBlank()) put("Referer", link.referer)
-                                      putAll(link.headers)
-                                    }
-                                    val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-                                    val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                        Row(
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                          // Episode Download Button (tap = download top quality, hold = choose quality)
+                          IconButton(
+                            onClick = {
+                              extractingEpisodeData = ep.data
+                              extractAndPlayEpisode(
+                                context = context,
+                                providerName = provName,
+                                data = ep.data,
+                                episodeTitle = epDisplayTitle,
+                                seriesTitle = loadResp.name,
+                                scope = scope,
+                                onDismiss = { extractingEpisodeData = null },
+                                onLinksLoaded = { links, subs ->
+                                  extractingEpisodeData = null
+                                  val sorted = links.sortedByDescending { it.quality }
+                                  if (sorted.isNotEmpty()) {
+                                    val topLink = sorted.first()
                                     val epTitle = "${loadResp.name} - S${ep.season ?: selectedSeason}E${epNumber} $epDisplayTitle"
-                                    MediaUtils.playFile(
-                                      source = link.url,
-                                      context = context,
-                                      launchSource = "cinehub",
-                                      headers = headersMap,
-                                      subtitlesJson = subtitlesJson,
-                                      episodeMetadataJson = epJson,
-                                      title = epTitle,
-                                      posterUrl = epDisplayThumbnail,
-                                      overview = epDisplayOverview ?: loadResp.plot,
-                                      year = loadResp.year?.toString(),
-                                      rating = epDisplayRating ?: loadResp.score?.score,
-                                      providerName = provName,
-                                      allLinks = links
-                                    )
-                                  } else if (links.size > 1) {
-                                    val epTitle = "${loadResp.name} - S${ep.season ?: selectedSeason}E${epNumber} $epDisplayTitle"
-                                    val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
-                                    detailPendingLinks = links
-                                    detailPendingSubs = subs
-                                    detailPendingEpJson = epJson
-                                    detailPendingTitle = epTitle
-                                    detailPendingPoster = epDisplayThumbnail
-                                    detailPendingOverview = epDisplayOverview ?: loadResp.plot
-                                    detailPendingYear = loadResp.year?.toString()
-                                    detailPendingRating = epDisplayRating ?: loadResp.score?.score
-                                    detailPendingProvider = provName
-                                  } else if (links.isEmpty()) {
-                                    Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                                    xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, epTitle, topLink)
+                                  } else {
+                                    Toast.makeText(context, "No stream links found to download", Toast.LENGTH_SHORT).show()
                                   }
                                 }
-                              }
+                              )
+                            }
+                          ) {
+                            Icon(
+                              imageVector = Icons.Outlined.CloudDownload,
+                              contentDescription = "Download Episode",
+                              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                              modifier = Modifier.size(20.dp)
                             )
                           }
-                        ) {
-                          Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play Episode",
-                            tint = MaterialTheme.colorScheme.primary,
-                          )
+
+                          // Episode Play Button (tap = play top quality, hold = choose quality)
+                          IconButton(
+                            onClick = {
+                              extractingEpisodeData = ep.data
+                              extractAndPlayEpisode(
+                                context = context,
+                                providerName = provName,
+                                data = ep.data,
+                                episodeTitle = epDisplayTitle,
+                                seriesTitle = loadResp.name,
+                                scope = scope,
+                                onDismiss = {
+                                  extractingEpisodeData = null
+                                  onDismiss()
+                                },
+                                onLinksLoaded = { links, subs ->
+                                  extractingEpisodeData = null
+                                  if (onLinksLoaded != null) {
+                                    onLinksLoaded(links, subs, com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp))
+                                  } else {
+                                    val sorted = links.sortedByDescending { it.quality }
+                                    if (sorted.isNotEmpty()) {
+                                      val link = sorted.first()
+                                      val headersMap = buildMap {
+                                        if (link.referer.isNotBlank()) put("Referer", link.referer)
+                                        putAll(link.headers)
+                                      }
+                                      val subtitlesJson = if (subs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(subs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                                      val epJson = com.lagradost.cloudstream3.mapper.writeValueAsString(loadResp)
+                                      val epTitle = "${loadResp.name} - S${ep.season ?: selectedSeason}E${epNumber} $epDisplayTitle"
+                                      MediaUtils.playFile(
+                                        source = link.url,
+                                        context = context,
+                                        launchSource = "cinehub",
+                                        headers = headersMap,
+                                        subtitlesJson = subtitlesJson,
+                                        episodeMetadataJson = epJson,
+                                        title = epTitle,
+                                        posterUrl = epDisplayThumbnail,
+                                        overview = epDisplayOverview ?: loadResp.plot,
+                                        year = loadResp.year?.toString(),
+                                        rating = epDisplayRating ?: loadResp.score?.score,
+                                        providerName = provName,
+                                        allLinks = sorted
+                                      )
+                                    } else {
+                                      Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
+                                    }
+                                  }
+                                }
+                              )
+                            }
+                          ) {
+                            Icon(
+                              imageVector = Icons.Default.PlayArrow,
+                              contentDescription = "Play Episode",
+                              tint = MaterialTheme.colorScheme.primary,
+                              modifier = Modifier.size(24.dp)
+                            )
+                          }
                         }
                       }
                     }
@@ -4059,29 +4279,39 @@ fun CineDetailView(
         links = detailPendingLinks,
         subtitles = detailPendingSubs,
         episodeMetadataJson = detailPendingEpJson,
-        onDismiss = { detailPendingLinks = emptyList() },
-        onLinkSelected = { link ->
-          val headersMap = buildMap {
-            if (link.referer.isNotBlank()) put("Referer", link.referer)
-            putAll(link.headers)
-          }
-          val subtitlesJson = if (detailPendingSubs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(detailPendingSubs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
-          MediaUtils.playFile(
-            source = link.url,
-            context = context,
-            launchSource = "cinehub",
-            headers = headersMap,
-            subtitlesJson = subtitlesJson,
-            episodeMetadataJson = detailPendingEpJson,
-            title = detailPendingTitle,
-            posterUrl = detailPendingPoster,
-            overview = detailPendingOverview,
-            year = detailPendingYear,
-            rating = detailPendingRating,
-            providerName = detailPendingProvider,
-            allLinks = detailPendingLinks
-          )
+        isDownloadMode = isPendingDownloadMode,
+        onDismiss = {
           detailPendingLinks = emptyList()
+          isPendingDownloadMode = false
+        },
+        onLinkSelected = { link ->
+          if (isPendingDownloadMode) {
+            xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, detailPendingTitle, link)
+            isPendingDownloadMode = false
+            detailPendingLinks = emptyList()
+          } else {
+            val headersMap = buildMap {
+              if (link.referer.isNotBlank()) put("Referer", link.referer)
+              putAll(link.headers)
+            }
+            val subtitlesJson = if (detailPendingSubs.isNotEmpty()) com.lagradost.cloudstream3.mapper.writeValueAsString(detailPendingSubs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+            MediaUtils.playFile(
+              source = link.url,
+              context = context,
+              launchSource = "cinehub",
+              headers = headersMap,
+              subtitlesJson = subtitlesJson,
+              episodeMetadataJson = detailPendingEpJson,
+              title = detailPendingTitle,
+              posterUrl = detailPendingPoster,
+              overview = detailPendingOverview,
+              year = detailPendingYear,
+              rating = detailPendingRating,
+              providerName = detailPendingProvider,
+              allLinks = detailPendingLinks
+            )
+            detailPendingLinks = emptyList()
+          }
         }
       )
     }
@@ -4435,11 +4665,12 @@ fun QualitySelectorBottomSheet(
   links: List<com.lagradost.cloudstream3.utils.ExtractorLink>,
   subtitles: List<com.lagradost.cloudstream3.SubtitleFile>,
   episodeMetadataJson: String?,
+  isDownloadMode: Boolean = false,
   onDismiss: () -> Unit,
   onLinkSelected: (com.lagradost.cloudstream3.utils.ExtractorLink) -> Unit,
 ) {
   val context = LocalContext.current
-  val sortedLinks = links.sortedByDescending { it.quality }
+  val sortedLinks = remember(links) { links.sortedByDescending { it.quality } }
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -4450,14 +4681,30 @@ fun QualitySelectorBottomSheet(
         .padding(horizontal = 24.dp, vertical = 16.dp)
         .padding(bottom = 32.dp),
     ) {
-      Text(
-        text = "Select Stream Quality",
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(bottom = 16.dp)
-      )
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(bottom = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column {
+          Text(
+            text = if (isDownloadMode) "Select Download Quality" else "Select Stream Quality",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+          )
+          Text(
+            text = if (isDownloadMode) "Choose source link to download" else "Tap quality to play instantly",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
       
-      LazyColumn {
+      LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
         items(sortedLinks) { link ->
           val cleanLabel = remember(link) {
             xyz.mpv.rex.cinehub.utils.StreamLinkFormatter.formatQualityLanguage(link)
@@ -4467,19 +4714,18 @@ fun QualitySelectorBottomSheet(
             color = Color.Transparent,
             modifier = Modifier
               .fillMaxWidth()
-              .padding(vertical = 4.dp)
               .clip(RoundedCornerShape(14.dp))
               .intelligentGlassEffect(
                 shape = RoundedCornerShape(14.dp),
-                backgroundColor = Color.White.copy(alpha = 0.08f),
-                borderColor = Color.White.copy(alpha = 0.15f)
+                backgroundColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                borderColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
               )
               .clickable { onLinkSelected(link) }
           ) {
             Row(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
@@ -4488,12 +4734,12 @@ fun QualitySelectorBottomSheet(
                   text = cleanLabel,
                   fontWeight = FontWeight.Bold,
                   style = MaterialTheme.typography.titleMedium,
-                  color = Color.White
+                  color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                  text = if (link.isM3u8) "Fast Direct Stream (HLS)" else "High Speed Direct Link",
+                  text = if (link.isM3u8) "Direct Stream (HLS)" else "Direct Video Link",
                   style = MaterialTheme.typography.bodySmall,
-                  color = Color.White.copy(alpha = 0.7f)
+                  color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
                 )
               }
               Row(
@@ -4502,17 +4748,16 @@ fun QualitySelectorBottomSheet(
               ) {
                 if (link.isM3u8) {
                   Badge(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                    Text("M3U8", color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    Text("HLS", color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                   }
                 }
                 IconButton(
-                  onClick = {
-                    xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, title, link)
-                  }
+                  onClick = { onLinkSelected(link) },
+                  modifier = Modifier.size(36.dp)
                 ) {
                   Icon(
-                    imageVector = Icons.Outlined.CloudDownload,
-                    contentDescription = "Download Video",
+                    imageVector = if (isDownloadMode) Icons.Outlined.CloudDownload else Icons.Rounded.PlayArrow,
+                    contentDescription = if (isDownloadMode) "Download" else "Play",
                     tint = MaterialTheme.colorScheme.primary
                   )
                 }

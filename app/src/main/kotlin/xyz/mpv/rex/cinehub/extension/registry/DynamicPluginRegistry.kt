@@ -160,10 +160,149 @@ object DynamicPluginRegistry {
                 Log.i(TAG, "Loaded persistent registry: ${providerIndex.size} providers, ${extractorIndex.size} extractors indexed")
             }
             _isRegistryLoaded.value = true
+            scanAndRegisterDexFiles(context)
         } catch (e: Throwable) {
             Log.w(TAG, "Failed to load persistent registry: ${e.message}")
             _isRegistryLoaded.value = true
+            scanAndRegisterDexFiles(context)
         }
+    }
+
+    /**
+     * Actively scans storage directories for standalone .dex files containing ExtractorApi implementations,
+     * instantiating and registering them into APIHolder.extractorApis and the dynamic registry.
+     */
+    fun scanAndRegisterDexFiles(context: Context) {
+        try {
+            val searchDirs = listOfNotNull(
+                File(context.filesDir, "plugins"),
+                File(context.filesDir, "cloudstream_plugins"),
+                File(context.filesDir, "Extensions"),
+                File(context.filesDir, "extractors"),
+                context.filesDir,
+                context.getExternalFilesDir(null)?.let { File(it, "plugins") },
+                context.getExternalFilesDir(null)?.let { File(it, "extractors") },
+                File(android.os.Environment.getExternalStorageDirectory(), "Cloudstream3/plugins"),
+                File(android.os.Environment.getExternalStorageDirectory(), "Cloudstream3/extractors"),
+                File(android.os.Environment.getExternalStorageDirectory(), "Download/Cloudstream3")
+            )
+
+            val dexFiles = mutableListOf<File>()
+            for (dir in searchDirs) {
+                if (dir.exists() && dir.isDirectory) {
+                    dir.walkTopDown().maxDepth(3).forEach { f ->
+                        if (f.isFile && f.extension.equals("dex", ignoreCase = true)) {
+                            dexFiles.add(f)
+                        }
+                    }
+                }
+            }
+
+            for (dexFile in dexFiles.distinctBy { it.absolutePath }) {
+                loadExtractorsFromDexFile(context, dexFile)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "scanAndRegisterDexFiles error: ${t.message}")
+        }
+    }
+
+    /**
+     * Loads and indexes all ExtractorApi (and MainAPI/BasePlugin) classes found within a .dex file.
+     */
+    fun loadExtractorsFromDexFile(context: Context, dexFile: File) {
+        try {
+            runCatching { dexFile.setReadOnly() }
+            val pkgName = dexFile.nameWithoutExtension
+            val loader = dalvik.system.PathClassLoader(dexFile.absolutePath, context.classLoader)
+            val classNames = mutableListOf<String>()
+
+            try {
+                @Suppress("DEPRECATION")
+                val df = dalvik.system.DexFile(dexFile.absolutePath)
+                val entries = df.entries()
+                while (entries.hasMoreElements()) {
+                    classNames.add(entries.nextElement())
+                }
+            } catch (t: Throwable) {
+                // Fallback to byte scanning
+                val bytes = dexFile.readBytes()
+                classNames.addAll(extractClassNamesFromDexBytes(bytes))
+            }
+
+            if (classNames.isNotEmpty()) {
+                indexAndRegisterPluginClasses(
+                    context = context,
+                    pkgName = pkgName,
+                    version = "1.0.0",
+                    sourceFile = dexFile,
+                    classLoader = loader,
+                    classNames = classNames
+                )
+                Log.i(TAG, "DEX_EXTRACTOR_LOAD: Discovered and registered ${classNames.size} classes from standalone .dex: ${dexFile.name}")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed loading extractors from .dex ${dexFile.name}: ${t.message}")
+        }
+    }
+
+    private fun extractClassNamesFromDexBytes(dexBytes: ByteArray): List<String> {
+        val classNames = mutableListOf<String>()
+        try {
+            if (dexBytes.size < 0x70) return classNames
+            val magic = String(dexBytes, 0, 8)
+            if (!magic.startsWith("dex\n")) return classNames
+
+            fun readInt(offset: Int): Int {
+                return (dexBytes[offset].toInt() and 0xFF) or
+                        ((dexBytes[offset + 1].toInt() and 0xFF) shl 8) or
+                        ((dexBytes[offset + 2].toInt() and 0xFF) shl 16) or
+                        ((dexBytes[offset + 3].toInt() and 0xFF) shl 24)
+            }
+
+            val stringIdsSize = readInt(0x38)
+            val stringIdsOff = readInt(0x3C)
+            val typeIdsSize = readInt(0x40)
+            val typeIdsOff = readInt(0x44)
+            val classDefsSize = readInt(0x60)
+            val classDefsOff = readInt(0x64)
+
+            fun getString(stringIdx: Int): String {
+                if (stringIdx < 0 || stringIdx >= stringIdsSize) return ""
+                val strOff = readInt(stringIdsOff + stringIdx * 4)
+                var pos = strOff
+                var b: Int
+                do {
+                    b = dexBytes[pos++].toInt() and 0xFF
+                } while ((b and 0x80) != 0)
+                val start = pos
+                while (pos < dexBytes.size && dexBytes[pos] != 0.toByte()) {
+                    pos++
+                }
+                return String(dexBytes, start, pos - start, Charsets.UTF_8)
+            }
+
+            for (i in 0 until classDefsSize) {
+                val classDefOff = classDefsOff + i * 32
+                val classIdx = readInt(classDefOff)
+                if (classIdx >= 0 && classIdx < typeIdsSize) {
+                    val descriptorIdx = readInt(typeIdsOff + classIdx * 4)
+                    val descriptor = getString(descriptorIdx)
+                    if (descriptor.startsWith("L") && descriptor.endsWith(";")) {
+                        val className = descriptor.substring(1, descriptor.length - 1).replace('/', '.')
+                        if (!className.contains("$") &&
+                            !className.startsWith("kotlin.") &&
+                            !className.startsWith("kotlinx.") &&
+                            !className.startsWith("java.") &&
+                            !className.startsWith("android.") &&
+                            !className.startsWith("androidx.")
+                        ) {
+                            classNames.add(className)
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+        return classNames
     }
 
     /**

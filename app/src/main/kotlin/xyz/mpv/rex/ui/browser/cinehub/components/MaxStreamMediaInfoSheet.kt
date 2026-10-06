@@ -3,6 +3,8 @@ package xyz.mpv.rex.ui.browser.cinehub.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -83,12 +86,15 @@ data class MediaInfoDetails(
  * Displays high-impact imagery, title, genres, rating, cast and actions with glassmorphic styling
  * and adaptive colors for both dark and light modes.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun MaxStreamMediaInfoSheet(
     details: MediaInfoDetails,
     onDismissRequest: () -> Unit,
     onPlayClick: () -> Unit,
+    onPlayHold: (() -> Unit)? = null,
+    onDownloadClick: (() -> Unit)? = null,
+    onDownloadHold: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isBookmarked by remember { mutableStateOf(false) }
@@ -251,9 +257,9 @@ fun MaxStreamMediaInfoSheet(
                         }
                     }
 
-                    // Action Buttons: Play + My List
+                    // Action Buttons: Play + Download + My List
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(vertical = 4.dp)
                     ) {
@@ -267,26 +273,75 @@ fun MaxStreamMediaInfoSheet(
                                 containerColor = MaxStreamTheme.CrimsonAccent,
                                 contentColor = Color.White
                             ),
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(1.2f)
                                 .height(46.dp)
                                 .shadow(8.dp, MaxStreamTheme.ButtonShape, spotColor = MaxStreamTheme.CrimsonAccent)
+                                .combinedClickable(
+                                    onClick = {
+                                        onPlayClick()
+                                        onDismissRequest()
+                                    },
+                                    onLongClick = {
+                                        if (onPlayHold != null) {
+                                            onPlayHold()
+                                        } else {
+                                            onPlayClick()
+                                            onDismissRequest()
+                                        }
+                                    }
+                                )
                                 .testTag("sheet_play_btn")
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.PlayArrow,
-                                contentDescription = null,
+                                contentDescription = "Play Top Quality",
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Watch Stream",
+                                text = "Play",
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 )
                             )
+                        }
+
+                        if (onDownloadClick != null) {
+                            FilledTonalButton(
+                                onClick = { onDownloadClick() },
+                                shape = MaxStreamTheme.ButtonShape,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = glassPillBg,
+                                    contentColor = primaryTextColor
+                                ),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                                modifier = Modifier
+                                    .weight(1.1f)
+                                    .height(46.dp)
+                                    .border(1.dp, glassBorderColor, MaxStreamTheme.ButtonShape)
+                                    .combinedClickable(
+                                        onClick = { onDownloadClick() },
+                                        onLongClick = { onDownloadHold?.invoke() ?: onDownloadClick() }
+                                    )
+                                    .testTag("sheet_download_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CloudDownload,
+                                    contentDescription = "Download Top Quality",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Download",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                )
+                            }
                         }
 
                         FilledTonalButton(

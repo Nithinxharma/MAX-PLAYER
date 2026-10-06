@@ -123,7 +123,7 @@ class ExtensionManager(
                 dir.listFiles()?.forEach { file ->
                     if (file.isDirectory) {
                         collectPluginFiles(file, dest)
-                    } else if (file.extension.equals("cs3", ignoreCase = true) || file.extension.equals("zip", ignoreCase = true)) {
+                    } else if (file.extension.equals("cs3", ignoreCase = true) || file.extension.equals("zip", ignoreCase = true) || file.extension.equals("dex", ignoreCase = true)) {
                         dest.add(file)
                     }
                 }
@@ -308,13 +308,17 @@ class ExtensionManager(
             }
             dexFile.close()
         }.onFailure { dexErr ->
-            // Fallback: parse classes.dex directly from zip archive if DexFile.loadDex is unsupported (e.g. Android 14+ or Robolectric)
+            // Fallback: parse classes.dex directly from zip archive or directly from raw .dex file bytes
             runCatching {
-                ZipFile(file).use { zip ->
-                    val dexEntry = zip.getEntry("classes.dex")
-                    if (dexEntry != null) {
-                        val bytes = zip.getInputStream(dexEntry).readBytes()
-                        dexClasses.addAll(extractClassNamesFromDexBytes(bytes))
+                if (file.extension.equals("dex", ignoreCase = true)) {
+                    dexClasses.addAll(extractClassNamesFromDexBytes(file.readBytes()))
+                } else {
+                    ZipFile(file).use { zip ->
+                        val dexEntry = zip.getEntry("classes.dex")
+                        if (dexEntry != null) {
+                            val bytes = zip.getInputStream(dexEntry).readBytes()
+                            dexClasses.addAll(extractClassNamesFromDexBytes(bytes))
+                        }
                     }
                 }
             }.onFailure {
@@ -727,7 +731,7 @@ class ExtensionManager(
         for (dir in searchDirs) {
             if (dir.exists() && dir.isDirectory) {
                 dir.walkTopDown().maxDepth(2).forEach { f ->
-                    if (f.isFile && (f.extension.equals("cs3", ignoreCase = true) || f.extension.equals("zip", ignoreCase = true))) {
+                    if (f.isFile && (f.extension.equals("cs3", ignoreCase = true) || f.extension.equals("zip", ignoreCase = true) || f.extension.equals("dex", ignoreCase = true))) {
                         files.add(f)
                     }
                 }

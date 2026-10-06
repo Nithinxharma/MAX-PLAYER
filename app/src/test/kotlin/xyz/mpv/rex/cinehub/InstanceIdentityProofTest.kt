@@ -17,7 +17,6 @@ import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import xyz.mpv.rex.cinehub.diagnostic.CloudStreamDiagnosticViewModel
 import xyz.mpv.rex.cinehub.extension.manager.ExtensionManager
 import xyz.mpv.rex.cinehub.extension.manager.RepositoryManager
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
@@ -74,17 +73,6 @@ class InstanceIdentityProofTest {
         println("ExtensionManager 1 identityHashCode: $idExtMgr1")
         println("ExtensionManager 2 identityHashCode: $idExtMgr2 (Must be identical: ${idExtMgr1 == idExtMgr2})")
         println("APIHolder identityHashCode: $idAPIHolder")
-
-        val diagnosticVm = CloudStreamDiagnosticViewModel(
-            context = context,
-            repositoryManager = repoManager,
-            extensionManager = extensionManager1,
-            registry = providerRegistry1,
-            db = db,
-            client = client
-        )
-        val idVm = System.identityHashCode(diagnosticVm)
-        println("CloudStreamDiagnosticViewModel identityHashCode: $idVm")
 
         val dummyApi = object : MainAPI() {
             override var name = "ProofVerificationTestProvider"

@@ -210,7 +210,7 @@ object PluginManager {
 
     private suspend fun maybeLoadPlugin(context: Context, file: File) {
         val name = file.name
-        if (file.extension == "zip" || file.extension == "cs3") {
+        if (file.extension == "zip" || file.extension == "cs3" || file.extension == "dex") {
             loadPlugin(
                 context,
                 file,
@@ -610,27 +610,79 @@ object PluginManager {
             }
 
             val loader = PathClassLoader(filePath, context.classLoader)
-            var manifest: BasePlugin.Manifest
-            loader.getResourceAsStream("manifest.json").use { stream ->
-                if (stream == null) {
-                    Log.e(TAG, "Failed to load plugin  $fileName: No manifest found")
-                    return false
-                }
+            var manifest: BasePlugin.Manifest? = null
+            loader.getResourceAsStream("manifest.json")?.use { stream ->
                 InputStreamReader(stream).use { reader ->
                     manifest = parseJson<BasePlugin.Manifest>(reader.readText())
                 }
             }
 
-            val name: String = manifest.name ?: "NO NAME".also {
+            // Extract all class names from the DEX file to discover extractors and providers
+            val classNames = mutableListOf<String>()
+            try {
+                @Suppress("DEPRECATION")
+                val dexFile = dalvik.system.DexFile(filePath)
+                val entries = dexFile.entries()
+                while (entries.hasMoreElements()) {
+                    classNames.add(entries.nextElement())
+                }
+            } catch (t: Throwable) {
+                Log.d(TAG, "Could not enumerate DexFile entries for $fileName: ${t.message}")
+            }
+
+            // Deep scan and register all ExtractorApi implementations present in the DEX
+            if (classNames.isNotEmpty()) {
+                xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.indexAndRegisterPluginClasses(
+                    context = context,
+                    pkgName = data.internalName,
+                    version = data.version.toString(),
+                    sourceFile = file,
+                    classLoader = loader,
+                    classNames = classNames
+                )
+            }
+
+            if (manifest == null) {
+                // If no manifest.json, scan for BasePlugin classes directly in the DEX
+                var foundPluginInstance: BasePlugin? = null
+                for (className in classNames) {
+                    try {
+                        val clazz = loader.loadClass(className)
+                        if (BasePlugin::class.java.isAssignableFrom(clazz) && clazz != BasePlugin::class.java && clazz != Plugin::class.java) {
+                            val instance = clazz.getDeclaredConstructor().newInstance() as? BasePlugin
+                            if (instance != null) {
+                                foundPluginInstance = instance
+                                instance.filename = file.absolutePath
+                                synchronized(plugins) { plugins[filePath] = instance }
+                                synchronized(classLoaders) { classLoaders[loader] = instance }
+                                if (instance is Plugin) {
+                                    instance.load(context)
+                                } else {
+                                    instance.load()
+                                }
+                                Log.i(TAG, "Loaded standalone DEX plugin class $className from $fileName")
+                            }
+                        }
+                    } catch (_: Throwable) {}
+                }
+
+                setPluginData(data.copy(version = maxOf(1, data.version)))
+                currentlyLoading = null
+                Log.i(TAG, "Loaded extractors and plugin classes from standalone DEX file: $fileName")
+                return true
+            }
+
+            val currentManifest = manifest!!
+            val name: String = currentManifest.name ?: "NO NAME".also {
                 Log.d(TAG, "No manifest name for ${data.internalName}")
             }
-            val version: Int = manifest.version ?: PLUGIN_VERSION_NOT_SET.also {
+            val version: Int = currentManifest.version ?: PLUGIN_VERSION_NOT_SET.also {
                 Log.d(TAG, "No manifest version for ${data.internalName}")
             }
 
             @Suppress("UNCHECKED_CAST")
             val pluginClass: Class<*> =
-                loader.loadClass(manifest.pluginClassName) as Class<out BasePlugin?>
+                loader.loadClass(currentManifest.pluginClassName) as Class<out BasePlugin?>
             val pluginInstance: BasePlugin =
                 pluginClass.getDeclaredConstructor().newInstance() as BasePlugin
 
@@ -643,7 +695,7 @@ object PluginManager {
             }
 
             pluginInstance.filename = file.absolutePath
-            if (manifest.requiresResources) {
+            if (currentManifest.requiresResources) {
                 Log.d(TAG, "Loading resources for ${data.internalName}")
                 // based on https://stackoverflow.com/questions/7483568/dynamic-resource-loading-from-other-apk
                 val assets = AssetManager::class.java.getDeclaredConstructor().newInstance()

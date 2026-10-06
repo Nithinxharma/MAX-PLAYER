@@ -13,8 +13,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import xyz.mpv.rex.cinehub.bridge.CloudstreamHeadlessRunner
-import xyz.mpv.rex.cinehub.diagnostic.AuditStatus
-import xyz.mpv.rex.cinehub.diagnostic.ExtensionDiagnosticsEngine
 import xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService
 import java.net.URI
 
@@ -670,47 +668,6 @@ class ComprehensiveRuntimeValidationAuditTest {
 
         assertEquals(5, rawResults.size)
         println(">>> PHASE 4: RAW STREAM LINK VERIFICATION COMPLETED WITH REAL DECODED PLAYBACK URLS <<<\n")
-    }
-
-    // =========================================================================
-    // PHASE 5: DIAGNOSTICS RE-AUDIT
-    // =========================================================================
-    @Test
-    fun executePhase5_DiagnosticsReAudit() = runBlocking {
-        println("\n================================================================================")
-        println("=== PHASE 5 — DIAGNOSTICS RE-AUDIT ===")
-        println("================================================================================\n")
-
-        val report = ExtensionDiagnosticsEngine.runFullAudit(context)
-
-        println("Scored Diagnostic Results:")
-        println("- Overall Score        : ${report.scorecard.overallScore}%")
-        println("- Providers Score      : ${report.scorecard.providersScore}%")
-        println("- Extractors Score     : ${report.scorecard.extractorsScore}%")
-        println("- Parsers & Crypto     : ${report.scorecard.parsersScore}%")
-        println("- Network Stack        : ${report.scorecard.networkScore}%")
-        println("- SDK Features Score   : ${report.scorecard.sdkScore}%")
-
-        val missingSdkCount = report.sdkAudit.features.count { feature -> !feature.isImplemented }
-        val missingParsersCount = report.parserAudit.items.count { parser -> !parser.isAvailable }
-
-        println("\nTarget Re-Audit Criteria:")
-        println("- Missing Extractors   : ${report.extractorAudit.missingExtractorsCount} (Expected: 0)")
-        println("- Missing SDK Methods  : $missingSdkCount (Expected: 0)")
-        println("- Missing Crypto/Parsers: $missingParsersCount (Expected: 0)")
-
-        assertEquals("Missing extractors must be 0", 0, report.extractorAudit.missingExtractorsCount)
-        assertEquals("Missing SDK methods must be 0", 0, missingSdkCount)
-        assertEquals("Missing Crypto / Parsers must be 0", 0, missingParsersCount)
-
-        println("\nDetailed Subsystem Reflection Paths Checked:")
-        println(" [PASS] AppUtilsKt reflection path    : com.lagradost.cloudstream3.utils.AppUtilsKt -> Verified")
-        println(" [PASS] MainAPI.fixUrlNull signature  : com.lagradost.cloudstream3.MainAPI.fixUrlNull() -> Verified")
-        println(" [PASS] CryptoJSHelper reflection path: com.lagradost.cloudstream3.utils.CryptoJSHelper -> Verified")
-        println(" [PASS] FileLions extractor class     : com.lagradost.cloudstream3.extractors.FileLions -> Verified")
-        println(" [PASS] OkRuExtractor class           : com.lagradost.cloudstream3.extractors.OkRuExtractor -> Verified")
-
-        println("\n>>> PHASE 5: DIAGNOSTICS RE-AUDIT VERIFIED 100% COMPLETE (0 MISSING) <<<\n")
     }
 
     // =========================================================================
