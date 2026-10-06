@@ -360,16 +360,6 @@ object AboutScreen : Screen {
                                 )
 
                                 GlassPreferenceItem(
-                                    title = "CloudStream Compatibility Engine",
-                                    subtitle = "v4 Headless Bridge • Active Providers: $loadedProvidersCount • Extensions: $installedExtensionsCount",
-                                    icon = Icons.Outlined.Extension,
-                                    showDivider = true,
-                                    onClick = {
-                                        backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen)
-                                    }
-                                )
-
-                                GlassPreferenceItem(
                                     title = "Device Hardware & OS Diagnostics",
                                     subtitle = "Tap to view and copy hardware ABI, display metrics, and memory status",
                                     icon = Icons.Outlined.PhoneAndroid,

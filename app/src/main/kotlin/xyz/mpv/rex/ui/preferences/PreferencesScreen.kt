@@ -411,14 +411,6 @@ object PreferencesScreen : Screen {
                                     )
 
                                     QuickActionButton(
-                                        label = "Diagnostics",
-                                        icon = Icons.Outlined.Assessment,
-                                        accentColor = Color(0xFFAF52DE),
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { backstack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen) }
-                                    )
-
-                                    QuickActionButton(
                                         label = "Providers",
                                         icon = Icons.Outlined.Extension,
                                         accentColor = Color(0xFFFFB800),

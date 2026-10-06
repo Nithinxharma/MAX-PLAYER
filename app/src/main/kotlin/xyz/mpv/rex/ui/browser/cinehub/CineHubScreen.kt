@@ -420,7 +420,6 @@ object CineHubScreen : Screen {
     val activeProvidersList by providerRegistry.activeProviders.collectAsState()
     val registeredProvidersList by providerRegistry.registeredProviders.collectAsState()
     val installedExtensionsList by extensionManager.getAllInstalledExtensions().collectAsState(initial = emptyList())
-    var showDiagnostics by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
       Log.i("CineHubScreen", "INSTANCE_IDENTITY: CineHubScreen composed. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(providerRegistry)}, ExtensionManager.identityHashCode=${System.identityHashCode(extensionManager)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")

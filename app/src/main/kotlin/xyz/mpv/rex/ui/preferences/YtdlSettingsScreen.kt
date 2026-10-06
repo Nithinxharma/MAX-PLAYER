@@ -107,11 +107,6 @@ object YtdlSettingsScreen : Screen {
         var updateLogs by remember { mutableStateOf("") }
         var updateSuccess by remember { mutableStateOf<Boolean?>(null) }
 
-        // Test extraction state
-        var testUrl by remember { mutableStateOf("") }
-        var isTestingExtraction by remember { mutableStateOf(false) }
-        var testResult by remember { mutableStateOf<ResolvedStream?>(null) }
-
         // Load status when addon is installed
         fun refreshStatus() {
             scope.launch {
@@ -416,108 +411,6 @@ object YtdlSettingsScreen : Screen {
                                         )
                                     }
                                 )
-                            }
-                        }
-                    }
-
-                    // Section 4: Live Extraction Tester
-                    item {
-                        PreferenceSectionHeader(title = "Extractor Diagnostic Tool")
-                    }
-
-                    item {
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                ),
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(
-                                        text = "Test URL Extraction",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    Text(
-                                        text = "Paste a video URL to test IPC resolution directly with the add-on.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    OutlinedTextField(
-                                        value = testUrl,
-                                        onValueChange = { testUrl = it },
-                                        label = { Text("Video URL") },
-                                        placeholder = { Text("https://www.youtube.com/watch?v=...") },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        enabled = isAddonInstalled && !isTestingExtraction,
-                                    )
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    Button(
-                                        onClick = {
-                                            scope.launch {
-                                                isTestingExtraction = true
-                                                testResult = null
-                                                val res = ytDlClient.resolveStream(
-                                                    testUrl.trim(),
-                                                    preferences.buildExtractionOptions(),
-                                                )
-                                                testResult = res
-                                                isTestingExtraction = false
-                                            }
-                                        },
-                                        enabled = isAddonInstalled && testUrl.isNotBlank() && !isTestingExtraction,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        if (isTestingExtraction) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(18.dp),
-                                                strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.onPrimary,
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Resolving via Addon...")
-                                        } else {
-                                            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Test Extraction")
-                                        }
-                                    }
-
-                                    testResult?.let { res ->
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (res.isSuccess) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
-                                        ) {
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                Text(
-                                                    text = if (res.isSuccess) "Extraction Succeeded" else "Extraction Failed",
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    color = if (res.isSuccess) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                                                )
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                if (res.isSuccess) {
-                                                    Text("Title: ${res.title ?: "N/A"}", fontSize = 12.sp)
-                                                    Text("Duration: ${res.durationSeconds}s", fontSize = 12.sp)
-                                                    Text("DASH Separate Audio: ${if (res.isDASH) "Yes" else "No"}", fontSize = 12.sp)
-                                                    Text("Headers Passed: ${res.httpHeaders.size}", fontSize = 12.sp)
-                                                } else {
-                                                    Text("Error: ${res.errorMessage ?: "Unknown error"}", fontSize = 12.sp)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         }
                     }

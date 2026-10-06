@@ -32,8 +32,6 @@ val domainModule = module {
     single { xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry() }
     single { xyz.mpv.rex.cinehub.extension.manager.RepositoryManager(get(), get()) }
     single { xyz.mpv.rex.cinehub.extension.manager.ExtensionManager(androidContext(), get(), get(), get(), get()) }
-    single { xyz.mpv.rex.ui.preferences.ForcePluginActivationViewModel(androidContext(), get(), get(), get(), get()) }
-    single { xyz.mpv.rex.ui.preferences.PluginExecutionTraceViewModel(androidContext(), get(), get(), get()) }
     single { xyz.mpv.rex.ui.preferences.RepositoryPresetsViewModel(androidContext(), get()) }
     single<xyz.mpv.rex.auth.AuthManager> { xyz.mpv.rex.auth.FirebaseAuthManager() }
     single<xyz.mpv.rex.auth.elevation.AdminAuthorizationProvider> { xyz.mpv.rex.auth.elevation.DefaultAdminAuthorizationProvider(get()) }

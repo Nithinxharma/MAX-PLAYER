@@ -843,34 +843,6 @@ object AdvancedPreferencesScreen : Screen {
           item {
             PreferenceSectionHeader(title = stringResource(R.string.pref_developer_options_title))
           }
-
-          item {
-            GroupedListColumn {
-              GroupedPreferenceCard(
-                position = GroupPosition.ONLY,
-              ) {
-                Preference(
-                  title = { Text(stringResource(R.string.pref_cloudstream_test_center_title)) },
-                  summary = {
-                    Text(
-                      stringResource(R.string.pref_cloudstream_test_center_summary),
-                      color = MaterialTheme.colorScheme.outline,
-                    )
-                  },
-                  icon = {
-                    Icon(
-                      Icons.Filled.Build,
-                      contentDescription = null,
-                      tint = MaterialTheme.colorScheme.primary,
-                    )
-                  },
-                  onClick = {
-                    backStack.add(xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen)
-                  },
-                )
-              }
-            }
-          }
         }
       }
     }

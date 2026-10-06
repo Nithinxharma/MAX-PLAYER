@@ -1025,15 +1025,6 @@ object SearchablePreferences {
                 targetIndex = 2,
             ))
 
-            // Diagnostics & Developer Options
-            add(SearchablePreference(
-                title = "Parser & Link Diagnostics",
-                summary = "Detailed HTTP 200 payload previews, CSS selectors, candidate links, and loadLinks failure audit",
-                keywords = listOf("diagnostics", "parser", "search parser", "http 200", "0 results", "loadlinks", "extractors", "view diagnostics"),
-                category = "General",
-                screen = xyz.mpv.rex.cinehub.diagnostic.ParserDiagnosticsViewerScreenRoute,
-                targetIndex = 0,
-            ))
 
             // About
             add(SearchablePreference(

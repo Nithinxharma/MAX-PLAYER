@@ -344,9 +344,6 @@ object CineTvSettingsScreen : Screen {
                 }
 
                 items(m3uEntries) { entry ->
-                    var testResult by remember { mutableStateOf("") }
-                    var isTesting by remember { mutableStateOf(false) }
-
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -357,32 +354,6 @@ object CineTvSettingsScreen : Screen {
                         Column(Modifier.padding(14.dp)) {
                             Text(entry.name, fontWeight = FontWeight.Bold, color = primaryTextColor)
                             Text(entry.url, maxLines = 1, overflow = TextOverflow.Ellipsis, color = secondaryTextColor, fontSize = 11.sp)
-                            if (testResult.isNotBlank()) {
-                                Text(
-                                    "Status: $testResult",
-                                    color = if (testResult == "Working") Color(0xFF00E676) else Color(0xFFFF5252),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(Modifier.height(8.dp))
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(
-                                    onClick = {
-                                        isTesting = true
-                                        testResult = "Testing..."
-                                        scope.launch {
-                                            testResult = JioTvRepo.testStreamUrl(entry.url, entry.headers)
-                                            isTesting = false
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    enabled = !isTesting
-                                ) {
-                                    Text(if (isTesting) "..." else "TEST STREAM", color = primaryTextColor)
-                                }
-                            }
                         }
                     }
                 }

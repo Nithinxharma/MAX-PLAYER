@@ -37,9 +37,6 @@ fun ExtensionPreferencesScreen(
     onNavigateToPlans: () -> Unit = {},
     onNavigateToUserPermissions: () -> Unit = {},
     onNavigateToAssignment: () -> Unit = {},
-    onNavigateToTestCenter: () -> Unit = {},
-    onNavigateToForceActivation: () -> Unit = {},
-    onNavigateToExecutionTrace: () -> Unit = {},
     extensionManager: ExtensionManager = koinInject(),
     repositoryManager: RepositoryManager = koinInject(),
     registry: ProviderRegistry = koinInject()
@@ -168,17 +165,9 @@ fun ExtensionPreferencesScreen(
                     )
                 }
 
-                GlassCategoryHeader(title = "Tools & Diagnostics", icon = Icons.Outlined.Science)
+                GlassCategoryHeader(title = "Tools", icon = Icons.Outlined.Build)
 
                 GlassSettingsSection {
-                    GlassPreferenceItem(
-                        title = "CloudStream Diagnostic & Test Center",
-                        subtitle = "Multi-tool test suite: provider search test, live 16-stage trace & DEX activation",
-                        icon = Icons.Outlined.Science,
-                        showDivider = true,
-                        onClick = onNavigateToTestCenter
-                    )
-
                     GlassPreferenceItem(
                         title = "Update All Extensions",
                         subtitle = if (isUpdating) "Syncing repositories and downloading updates…" else "Sync all repositories and install newer provider versions",

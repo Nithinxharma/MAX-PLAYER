@@ -237,24 +237,8 @@ object GeneralPreferencesScreen : Screen {
                                     title = "mpv Configuration Editor",
                                     subtitle = "Edit mpv.conf and fine-tune playback engine parameters",
                                     icon = Icons.Outlined.Terminal,
-                                    showDivider = true,
-                                    onClick = { backstack.add(ConfigEditorScreen(ConfigEditorScreen.ConfigType.MPV_CONF)) }
-                                )
-
-                                GlassPreferenceItem(
-                                    title = "Plugin Execution Trace",
-                                    subtitle = "Real-time logging of CloudStream plugin and extractor calls",
-                                    icon = Icons.Outlined.Extension,
-                                    showDivider = true,
-                                    onClick = { backstack.add(PluginExecutionTraceScreenRoute) }
-                                )
-
-                                GlassPreferenceItem(
-                                    title = "Force Plugin Activation",
-                                    subtitle = "Bypass verification and force initialize plugin DEX packages",
-                                    icon = Icons.Outlined.Build,
                                     showDivider = false,
-                                    onClick = { backstack.add(ForcePluginActivationScreenRoute) }
+                                    onClick = { backstack.add(ConfigEditorScreen(ConfigEditorScreen.ConfigType.MPV_CONF)) }
                                 )
                             }
                         }

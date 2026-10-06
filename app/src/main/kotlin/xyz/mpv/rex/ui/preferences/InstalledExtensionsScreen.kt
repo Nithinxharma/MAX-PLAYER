@@ -34,8 +34,6 @@ import org.koin.compose.koinInject
 import xyz.mpv.rex.cinehub.extension.manager.ExtensionManager
 import xyz.mpv.rex.cinehub.extension.manager.RepositoryManager
 import xyz.mpv.rex.cinehub.extension.model.AvailablePlugin
-import xyz.mpv.rex.cinehub.extension.model.ExtensionFailureItem
-import xyz.mpv.rex.cinehub.extension.model.ExtensionTestBatchReport
 import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.provider.server.ServerProviderSyncService
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
@@ -61,31 +59,6 @@ fun InstalledExtensionsScreen(
     var selectedLanguageFilter by remember { mutableStateOf("All") }
     var isRefreshingCatalog by remember { mutableStateOf(false) }
     var pluginToUninstall by remember { mutableStateOf<InstalledExtension?>(null) }
-
-    // Diagnostic Testing States
-    var isRunningBatchTest by remember { mutableStateOf(false) }
-    var batchTestProgress by remember { mutableStateOf("Testing extensions...") }
-    var failureReport by remember { mutableStateOf<ExtensionTestBatchReport?>(null) }
-
-    fun runBatchDiagnostics() {
-        if (installedList.isEmpty()) {
-            Toast.makeText(context, "No extensions installed to test", Toast.LENGTH_SHORT).show()
-            return
-        }
-        isRunningBatchTest = true
-        batchTestProgress = "Initializing diagnostic suite..."
-        scope.launch(Dispatchers.IO) {
-            val report = extensionManager.testAllInstalledExtensions { current, total, currentName ->
-                scope.launch(Dispatchers.Main) {
-                    batchTestProgress = "Testing ($current/$total): $currentName..."
-                }
-            }
-            withContext(Dispatchers.Main) {
-                isRunningBatchTest = false
-                failureReport = report
-            }
-        }
-    }
 
     // Load available plugins from repositories cache
     LaunchedEffect(selectedTab) {
@@ -133,14 +106,6 @@ fun InstalledExtensionsScreen(
                         }
                     ) {
                         Icon(Icons.Outlined.CloudSync, contentDescription = "Sync Server Providers")
-                    }
-
-                    // Test All Installed Extensions button
-                    IconButton(
-                        onClick = { runBatchDiagnostics() },
-                        enabled = !isRunningBatchTest && installedList.isNotEmpty()
-                    ) {
-                        Icon(Icons.Outlined.FactCheck, contentDescription = "Test Extensions (Failure Report)")
                     }
 
                     if (selectedTab == 0) {
@@ -246,49 +211,6 @@ fun InstalledExtensionsScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Diagnostic Testing Banner
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Extension Health Diagnostic",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                        Text(
-                                            text = "Test all installed extensions & generate failure-only report",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    FilledTonalButton(
-                                        onClick = { runBatchDiagnostics() },
-                                        enabled = !isRunningBatchTest,
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(Icons.Outlined.FactCheck, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Test All")
-                                    }
-                                }
-                            }
-                        }
-
                         items(installedList, key = { it.pkgName }) { ext ->
                             InstalledExtensionCard(
                                 ext = ext,
@@ -420,179 +342,6 @@ fun InstalledExtensionsScreen(
         }
     }
 
-    // Testing Progress Dialog
-    if (isRunningBatchTest) {
-        AlertDialog(
-            onDismissRequest = {},
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
-                    Text("Testing Extensions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Running deep connectivity and provider scraper verification across all installed extensions.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = batchTestProgress,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            },
-            confirmButton = {}
-        )
-    }
-
-    // Failure-Only Report Dialog
-    failureReport?.let { report ->
-        AlertDialog(
-            onDismissRequest = { failureReport = null },
-            title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            if (report.failures.isEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.ReportProblem,
-                            contentDescription = null,
-                            tint = if (report.failures.isEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = "Extension Failure Report",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Summary Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Card(
-                            modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        ) {
-                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Tested", style = MaterialTheme.typography.labelSmall)
-                                Text("${report.totalTested}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            }
-                        }
-                        Card(
-                            modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                        ) {
-                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Working (Omitted)", style = MaterialTheme.typography.labelSmall)
-                                Text("${report.totalWorkingCount}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                        Card(
-                            modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(containerColor = if (report.totalFailedCount > 0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        ) {
-                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Core Failures", style = MaterialTheme.typography.labelSmall)
-                                Text("${report.totalFailedCount}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = if (report.totalFailedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    }
-
-                    if (report.failures.isEmpty()) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Column {
-                                    Text("All Extensions Working", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                    Text("All ${report.totalTested} installed extensions and providers passed diagnostics without errors.", style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
-                    } else {
-                        Text(
-                            text = "Failure Breakdown (${report.failures.size} failed)",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
-                        )
-
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 320.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(report.failures) { failure ->
-                                FailureItemCard(failure = failure)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Copy Report button
-                    OutlinedButton(
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(report.reportText))
-                            Toast.makeText(context, "Failure report copied to clipboard", Toast.LENGTH_SHORT).show()
-                        }
-                    ) {
-                        Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Copy Report")
-                    }
-
-                    // Share File / Text button
-                    FilledTonalButton(
-                        onClick = {
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, "MaxStream Extension Failures Report")
-                                putExtra(Intent.EXTRA_TEXT, report.reportText)
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Extension Failure Report"))
-                        }
-                    ) {
-                        Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Share")
-                    }
-
-                    Button(onClick = { failureReport = null }) {
-                        Text("Close")
-                    }
-                }
-            }
-        )
-    }
-
     pluginToUninstall?.let { ext ->
         AlertDialog(
             onDismissRequest = { pluginToUninstall = null },
@@ -622,100 +371,6 @@ fun InstalledExtensionsScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun FailureItemCard(failure: ExtensionFailureItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = failure.extensionName,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
-                SuggestionChip(
-                    onClick = {},
-                    label = { Text(failure.failureStage, style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.height(24.dp)
-                )
-            }
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Provider: ",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = failure.providerName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Repository: ",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = failure.repositoryName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(8.dp),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        Icons.Outlined.ErrorOutline,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp).padding(top = 2.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Column {
-                        Text(
-                            text = "Why it failed:",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = failure.failureReason,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 

@@ -18,7 +18,6 @@ import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import xyz.mpv.rex.R
-import xyz.mpv.rex.cinehub.diagnostic.CloudStreamTestCenterScreen
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.presentation.components.GroupPosition
 import xyz.mpv.rex.presentation.components.GroupedListColumn
@@ -219,7 +218,7 @@ object DeveloperOptionsScreen : Screen {
                                 }
                             )
                         }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                        GroupedPreferenceCard(position = GroupPosition.LAST) {
                             Preference(
                                 title = { Text("Repository Manager") },
                                 summary = {
@@ -240,97 +239,13 @@ object DeveloperOptionsScreen : Screen {
                                 }
                             )
                         }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
-                            Preference(
-                                title = { Text("Plugin Health & Force Activation") },
-                                summary = {
-                                    Text(
-                                        "Audit provider status and force DEX plugin loading",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.FlashOn,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(ForcePluginActivationScreenRoute)
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.LAST) {
-                            Preference(
-                                title = { Text("Plugin Execution Trace & Diagnostics") },
-                                summary = {
-                                    Text(
-                                        "Inspect real-time execution trace and diagnostic logs",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.BugReport,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(PluginExecutionTraceScreenRoute)
-                                }
-                            )
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     PreferenceSectionHeader(title = "CloudStream Integration")
                     GroupedListColumn {
-                        GroupedPreferenceCard(position = GroupPosition.FIRST) {
-                            Preference(
-                                title = { Text("View Diagnostics (Parser & Streams)") },
-                                summary = {
-                                    Text(
-                                        "Detailed HTTP 200 payload previews, CSS selector match counts, candidate links, and loadLinks failure audit",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.BugReport,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(xyz.mpv.rex.cinehub.diagnostic.ParserDiagnosticsViewerScreenRoute)
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
-                            Preference(
-                                title = { Text("CloudStream Diagnostic & Test Center") },
-                                summary = {
-                                    Text(
-                                        "End-to-end integration suite, live 16-stage trace, force DEX activation, and link resolution tests",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Science,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(CloudStreamTestCenterScreen)
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.LAST) {
+                        GroupedPreferenceCard(position = GroupPosition.ONLY) {
                             Preference(
                                 title = { Text("Repository Presets & MegaRepo") },
                                 summary = {

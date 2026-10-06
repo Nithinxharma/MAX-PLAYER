@@ -432,17 +432,5 @@ fun MaxStreamWatchlistCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-
-        // Subtitle (Provider / Source)
-        Text(
-            text = item.apiName.uppercase(),
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium
-            ),
-            color = mutedTextColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
