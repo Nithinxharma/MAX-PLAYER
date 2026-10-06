@@ -47,12 +47,24 @@ interface ExtensionDao {
 
 @Dao
 interface CineLibraryDao {
-    @Query("SELECT * FROM cinehub_library")
+    @Query("SELECT * FROM cinehub_library ORDER BY addedAt DESC")
     fun getAllLibraryItems(): Flow<List<LibraryItem>>
+
+    @Query("SELECT * FROM cinehub_library ORDER BY addedAt DESC")
+    suspend fun getAllLibraryItemsSync(): List<LibraryItem>
+
+    @Query("SELECT * FROM cinehub_library WHERE url = :url LIMIT 1")
+    suspend fun getLibraryItemByUrl(url: String): LibraryItem?
+
+    @Query("SELECT * FROM cinehub_library WHERE watchStatus = :status ORDER BY addedAt DESC")
+    fun getLibraryItemsByStatus(status: Int): Flow<List<LibraryItem>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLibraryItem(item: LibraryItem)
 
     @Delete
     suspend fun deleteLibraryItem(item: LibraryItem)
+
+    @Query("DELETE FROM cinehub_library WHERE url = :url")
+    suspend fun deleteLibraryItemByUrl(url: String)
 }
