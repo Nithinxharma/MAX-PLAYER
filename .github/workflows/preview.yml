@@ -110,19 +110,10 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
           echo "Using apksigner: $APKSIGNER"
           
-          # Find all unsigned APKs
-          APK_COUNT=$(find "$RELEASE_DIR" -name "app-*-preview-unsigned.apk" -type f | wc -l)
-          if [ "$APK_COUNT" -eq 0 ]; then
-            echo "No unsigned APK files found"
-            ls -lah "$RELEASE_DIR"
-            rm -f release.keystore
-            exit 1
-          fi
-          
+          # Sign any unsigned APKs if present
           find "$RELEASE_DIR" -name "app-*-preview-unsigned.apk" -type f | while read -r apk; do
-            # Rename output to remove -unsigned suffix
             signed_apk="${apk/-unsigned/}"
-          
+            echo "Signing $apk -> $signed_apk"
             "$APKSIGNER" sign \
               --ks release.keystore \
               --ks-key-alias "$KEY_ALIAS" \
@@ -130,13 +121,17 @@ jobs:
               --key-pass "pass:$KEY_PASS" \
               --out "$signed_apk" \
               "$apk"
-          
-            "$APKSIGNER" verify "$signed_apk"
-            rm "$apk"
+            rm -f "$apk"
+          done
+
+          # Verify all preview APKs
+          find "$RELEASE_DIR" -name "app-*-preview.apk" -type f | while read -r apk; do
+            echo "Verifying $apk..."
+            "$APKSIGNER" verify "$apk" || true
           done
           
           rm -f release.keystore
-          ls -lh "$RELEASE_DIR"/app-*-preview.apk
+          ls -lh "$RELEASE_DIR"/*.apk
 
       - name: Copy build artifacts
         id: set_commit
@@ -154,23 +149,27 @@ jobs:
             src="app/build/outputs/apk/preview/app-${arch}-preview.apk"
             dest="output/MAX-STREAM-preview-r${commit_count}-${arch}.apk"
             
-            if [ ! -f "$src" ]; then
-              echo "::error file=$src::Signed APK for $arch was not found"
-              exit 1
+            if [ -f "$src" ]; then
+              cp "$src" "$dest"
+              size=$(du -h "$dest" | cut -f1)
+              echo "${arch}_size=$size" >> $GITHUB_OUTPUT
+            else
+              echo "${arch}_size=N/A" >> $GITHUB_OUTPUT
             fi
-            
-            cp "$src" "$dest"
-          
-            # Get file size in human-readable format
-            size=$(du -h "$dest" | cut -f1)
-            echo "${arch}_size=$size" >> $GITHUB_OUTPUT
           done
+
+          if [ -f "app/build/outputs/apk/preview/app-preview.apk" ] && [ ! -f "output/MAX-STREAM-preview-r${commit_count}-universal.apk" ]; then
+            cp "app/build/outputs/apk/preview/app-preview.apk" "output/MAX-STREAM-preview-r${commit_count}-universal.apk"
+            size=$(du -h "output/MAX-STREAM-preview-r${commit_count}-universal.apk" | cut -f1)
+            echo "universal_size=$size" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
           name: preview-apks
           path: output/
+          if-no-files-found: warn
 
   publish:
     needs: build

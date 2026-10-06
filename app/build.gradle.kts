@@ -155,7 +155,10 @@ android {
 
   splits {
     abi {
-      isEnable = false
+      isEnable = true
+      reset()
+      include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+      isUniversalApk = true
     }
   }
 
@@ -464,4 +467,32 @@ tasks.register("firebaseReleaseReadinessCheck") {
     println("==========================================")
   }
 }
+
+// Ensure single standard APK copies exist for build tools and containers
+tasks.register("ensureStandardApkFiles") {
+  notCompatibleWithConfigurationCache("Copies universal APK to standard name dynamically")
+  val appDir = projectDir.absolutePath
+  doLast {
+    listOf("debug", "release", "preview").forEach { buildType ->
+      val apkDir = File(appDir, "build/outputs/apk/$buildType")
+      if (apkDir.exists() && apkDir.isDirectory) {
+        val standardApk = File(apkDir, "app-$buildType.apk")
+        if (!standardApk.exists()) {
+          val candidate = File(apkDir, "app-universal-$buildType.apk").takeIf { it.exists() }
+            ?: apkDir.listFiles()?.firstOrNull { it.name.endsWith("-$buildType.apk") && !it.name.contains("-unsigned") }
+            ?: apkDir.listFiles()?.firstOrNull { it.name.endsWith(".apk") }
+          if (candidate != null && candidate.exists() && candidate.absolutePath != standardApk.absolutePath) {
+            candidate.copyTo(standardApk, overwrite = true)
+          }
+        }
+      }
+    }
+  }
+}
+
+tasks.matching { it.name.startsWith("assemble") }.configureEach {
+  finalizedBy("ensureStandardApkFiles")
+}
+
+
 

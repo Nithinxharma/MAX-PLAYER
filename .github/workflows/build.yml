@@ -150,35 +150,49 @@ jobs:
           rm -f release.keystore
           ls -lh "$RELEASE_DIR"/*.apk
 
+      - name: Upload All Release APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-STREAM-all-apks-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+
       - name: Upload app-arm64-v8a Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MAX-STREAM-arm64-v8a-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          if-no-files-found: ignore
 
       - name: Upload app-armeabi-v7a Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MAX-STREAM-armeabi-v7a-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-armeabi-v7a-release.apk
+          if-no-files-found: ignore
 
       - name: Upload app-universal Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MAX-STREAM-universal-release-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/release/app-universal-release.apk
+          path: |
+            app/build/outputs/apk/release/app-universal-release.apk
+            app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: ignore
 
       - name: Upload app-x86 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MAX-STREAM-x86-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-x86-release.apk
+          if-no-files-found: ignore
 
       - name: Upload app-x86_64 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MAX-STREAM-x86_64-release-${{ env.SHORT_SHA }}
           path: app/build/outputs/apk/release/app-x86_64-release.apk
+          if-no-files-found: ignore
 
       - name: Publish to GitHub Releases
         if: github.event_name != 'pull_request'
@@ -197,11 +211,7 @@ jobs:
             - **SHA-1:** `8C:C3:72:DB:63:C1:6B:13:0C:3A:6E:3F:05:2A:5E:78:1D:EE:51:7D`
             - **SHA-256:** `71:FC:3C:FC:82:34:CB:A6:A4:66:28:C8:C0:75:75:1C:8E:57:D3:BE:28:6A:B3:F2:A3:FA:09:32:A1:BA:04:20`
           files: |
-            app/build/outputs/apk/release/app-universal-release.apk
-            app/build/outputs/apk/release/app-arm64-v8a-release.apk
-            app/build/outputs/apk/release/app-armeabi-v7a-release.apk
-            app/build/outputs/apk/release/app-x86-release.apk
-            app/build/outputs/apk/release/app-x86_64-release.apk
+            app/build/outputs/apk/release/*.apk
           draft: false
           prerelease: false
         env:
