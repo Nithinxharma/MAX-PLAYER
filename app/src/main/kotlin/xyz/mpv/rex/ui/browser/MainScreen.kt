@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
@@ -185,6 +187,8 @@ object MainScreen : Screen {
     val miniPlayerStateManager = koinInject<MiniPlayerStateManager>()
     val miniPlayerState by miniPlayerStateManager.state.collectAsState()
     val isShortsEnabled by browserPreferences.enableShorts.collectAsState()
+    val enableTabLibrary by browserPreferences.enableTabLibrary.collectAsState()
+    val enableTabDownloads by browserPreferences.enableTabDownloads.collectAsState()
     val enableTabRecents by browserPreferences.enableTabRecents.collectAsState()
     val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
     val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
@@ -196,6 +200,8 @@ object MainScreen : Screen {
     val shortsLabel = stringResource(R.string.shorts)
     val cineHubLabel = stringResource(R.string.cinehub)
     val cineTvLabel = stringResource(R.string.cinetv)
+    val libraryLabel = "Library"
+    val downloadsLabel = "Downloads"
     val recentsLabel = stringResource(R.string.recents)
     val playlistsLabel = stringResource(R.string.playlists)
     val networkLabel = stringResource(R.string.network)
@@ -203,8 +209,8 @@ object MainScreen : Screen {
     val isCineHubTabVisible = enableTabCineHub && enableCineHubIntegration
 
     val visibleTabs = remember(
-      isShortsEnabled, isCineHubTabVisible, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      cineHubLabel, cineTvLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, isCineHubTabVisible, enableTabLibrary, enableTabDownloads, enableTabCineTv, enableTabRecents, enableTabPlaylists, enableTabNetwork,
+      cineHubLabel, cineTvLabel, libraryLabel, downloadsLabel, recentsLabel, playlistsLabel, networkLabel
     ) {
       buildList {
         // Max Stream (CineHub) is the primary launch destination
@@ -212,6 +218,20 @@ object MainScreen : Screen {
           add(
             VisibleTab("cinehub", cineHubLabel, iconResId = R.drawable.ic_max_stream_mark) {
               CineHubScreen.Content()
+            }
+          )
+        }
+        if (enableTabLibrary) {
+          add(
+            VisibleTab("library", libraryLabel, icon = Icons.Rounded.Bookmark) {
+              xyz.mpv.rex.ui.browser.cinehub.CineHubLibraryScreen.Content()
+            }
+          )
+        }
+        if (enableTabDownloads) {
+          add(
+            VisibleTab("downloads", downloadsLabel, icon = Icons.Rounded.CloudDownload) {
+              xyz.mpv.rex.ui.browser.cinehub.CineDownloadManagerScreen.Content()
             }
           )
         }

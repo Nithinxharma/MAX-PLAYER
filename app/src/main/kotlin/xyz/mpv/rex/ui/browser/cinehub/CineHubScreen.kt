@@ -27,6 +27,8 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.animation.core.animateFloatAsState
@@ -699,7 +701,7 @@ object CineHubScreen : Screen {
       }.distinct().take(6)
     }
     val allCategoryTabs = remember(dynamicCategories) {
-      (baseCategories + dynamicCategories + listOf("Library", "Downloads", "History")).distinct()
+      (baseCategories + dynamicCategories).distinct()
     }
 
     val authManager = koinInject<AuthManager>()
@@ -735,6 +737,32 @@ object CineHubScreen : Screen {
             }
           },
           actions = {
+            IconButton(
+              onClick = {
+                xyz.mpv.rex.ui.browser.MainScreen.requestTab(1)
+              },
+              modifier = Modifier.testTag("cinehub_library_shortcut_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Bookmark,
+                contentDescription = "Movie Library",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+              )
+            }
+            IconButton(
+              onClick = {
+                xyz.mpv.rex.ui.browser.MainScreen.requestTab(2)
+              },
+              modifier = Modifier.testTag("cinehub_downloads_shortcut_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.CloudDownload,
+                contentDescription = "Download Manager",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+              )
+            }
             IconButton(
               onClick = {
                 backstack.add(ProfileScreen)
@@ -1216,134 +1244,8 @@ object CineHubScreen : Screen {
                 }
               }
 
-              // Library Management Tab
-              if (selectedCategory == "Library") {
-                item {
-                  var libraryWatchFilter by remember { mutableIntStateOf(-1) }
-                  val filteredLibrary = remember(libraryItems, libraryWatchFilter) {
-                    if (libraryWatchFilter == -1) libraryItems else libraryItems.filter { it.watchStatus == libraryWatchFilter }
-                  }
-                  Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-                    LazyRow(
-                      modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
-                      horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                      val statusTabs = listOf(
-                        -1 to "All (${libraryItems.size})",
-                        1 to "Watching (${libraryItems.count { it.watchStatus == 1 }})",
-                        0 to "Plan to Watch (${libraryItems.count { it.watchStatus == 0 }})",
-                        2 to "Completed (${libraryItems.count { it.watchStatus == 2 }})",
-                        4 to "On Hold (${libraryItems.count { it.watchStatus == 4 }})",
-                        3 to "Dropped (${libraryItems.count { it.watchStatus == 3 }})"
-                      )
-                      items(statusTabs) { (status, label) ->
-                        FilterChip(
-                          selected = libraryWatchFilter == status,
-                          onClick = { libraryWatchFilter = status },
-                          label = { Text(label) },
-                          shape = RoundedCornerShape(12.dp),
-                          colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
-                            selectedLabelColor = Color.White
-                          )
-                        )
-                      }
-                    }
-
-                    xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamWatchlistSection(
-                      items = filteredLibrary,
-                      onItemClick = { libraryItem ->
-                        loadExtensionItemDetails(
-                          providerId = libraryItem.apiName,
-                          providerName = libraryItem.apiName,
-                          url = libraryItem.url,
-                          scope = scope,
-                          fallbackTitle = libraryItem.title,
-                          fallbackPoster = libraryItem.posterUrl,
-                          fallbackYear = null,
-                          fallbackType = if (libraryItem.type == 1) TvType.TvSeries else TvType.Movie
-                        ) { details ->
-                          selectedDetailItem = details
-                        }
-                      }
-                    )
-                  }
-                }
-              }
-
-              // Downloads Tab
-              if (selectedCategory == "Downloads") {
-                item {
-                  var activeTasks by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.download.ActiveDownloadTask>>(emptyList()) }
-                  var completedVideos by remember { mutableStateOf<List<xyz.mpv.rex.cinehub.download.DownloadedVideoItem>>(emptyList()) }
-
-                  LaunchedEffect(Unit) {
-                    while (true) {
-                      withContext(Dispatchers.IO) {
-                        activeTasks = xyz.mpv.rex.cinehub.download.CineDownloadManager.getActiveDownloads(context)
-                        completedVideos = xyz.mpv.rex.cinehub.download.CineDownloadManager.getDownloadedVideos(context)
-                      }
-                      kotlinx.coroutines.delay(1500)
-                    }
-                  }
-
-                  xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamDownloadsSection(
-                    activeTasks = activeTasks,
-                    completedVideos = completedVideos,
-                    onPlayVideo = { videoItem ->
-                      MediaUtils.playFile(
-                        source = videoItem.file.absolutePath,
-                        context = context,
-                        launchSource = "cinehub",
-                        title = videoItem.name
-                      )
-                    },
-                    onDeleteVideo = { videoItem ->
-                      scope.launch(Dispatchers.IO) {
-                        xyz.mpv.rex.cinehub.download.CineDownloadManager.deleteDownloadedVideo(videoItem.file)
-                        completedVideos = xyz.mpv.rex.cinehub.download.CineDownloadManager.getDownloadedVideos(context)
-                      }
-                    },
-                    onCancelTask = { task ->
-                      scope.launch(Dispatchers.IO) {
-                        xyz.mpv.rex.cinehub.download.CineDownloadManager.cancelDownload(context, task.id)
-                        activeTasks = xyz.mpv.rex.cinehub.download.CineDownloadManager.getActiveDownloads(context)
-                      }
-                    }
-                  )
-                }
-              }
-
-              // History Tab
-              if (selectedCategory == "History") {
-                item {
-                  val historyItems by recentlyPlayedRepository.observeRecentlyPlayed(100).collectAsState(initial = emptyList())
-                  xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamHistorySection(
-                    historyItems = historyItems,
-                    onPlayHistoryItem = { entity ->
-                      MediaUtils.playFile(
-                        source = entity.filePath,
-                        context = context,
-                        launchSource = "cinehub",
-                        title = entity.videoTitle ?: File(entity.filePath).nameWithoutExtension
-                      )
-                    },
-                    onDeleteHistoryItem = { entity ->
-                      scope.launch(Dispatchers.IO) {
-                        recentlyPlayedRepository.deleteByFilePath(entity.filePath)
-                      }
-                    },
-                    onClearAllHistory = {
-                      scope.launch(Dispatchers.IO) {
-                        recentlyPlayedRepository.clearAll()
-                      }
-                    }
-                  )
-                }
-              }
-
               // Category-Filtered Content Rows (Part 4)
-              if (selectedCategory != "Library" && selectedCategory != "Downloads" && selectedCategory != "History") {
+              if (true) {
                 if (providerHomeRows.isEmpty() && localMovies.isEmpty() && localTvShows.isEmpty()) {
                   item {
                     Box(

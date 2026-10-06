@@ -297,27 +297,59 @@ object RecentlyPlayedScreen : Screen {
 
     val listState = rememberLazyListState()
 
+    var selectedSubTab by rememberSaveable { mutableStateOf("Watchlist") }
+
     Scaffold(
       topBar = {
-        BrowserTopBar(
-          title = "Continue Watching",
-          isInSelectionMode = selectionManager.isInSelectionMode,
-          selectedCount = selectionManager.selectedCount,
-          totalCount = recentItems.size,
-          onBackClick = null,
-          onCancelSelection = { selectionManager.clear() },
-          onSortClick = null,
-          onSettingsClick = {
-            backStack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen)
-          },
-          isSingleSelection = selectionManager.isSingleSelection,
-          onInfoClick = null,
-          onPlayClick = null,
-          onSelectAll = { selectionManager.selectAll() },
-          onInvertSelection = { selectionManager.invertSelection() },
-          onDeselectAll = { selectionManager.clear() },
-          onDeleteClick = { deleteDialogOpen.value = true },
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+          BrowserTopBar(
+            title = "My Library & Downloads",
+            isInSelectionMode = selectionManager.isInSelectionMode,
+            selectedCount = selectionManager.selectedCount,
+            totalCount = recentItems.size,
+            onBackClick = null,
+            onCancelSelection = { selectionManager.clear() },
+            onSortClick = null,
+            onSettingsClick = {
+              backStack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen)
+            },
+            isSingleSelection = selectionManager.isSingleSelection,
+            onInfoClick = null,
+            onPlayClick = null,
+            onSelectAll = { selectionManager.selectAll() },
+            onInvertSelection = { selectionManager.invertSelection() },
+            onDeselectAll = { selectionManager.clear() },
+            onDeleteClick = { deleteDialogOpen.value = true },
+          )
+
+          // Sub-Tab Filter Chips
+          LazyRow(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            val subTabs = listOf(
+              "Watchlist" to "Watchlist (${libraryItems.size})",
+              "Downloads" to "Downloads",
+              "History" to "History (${recentItems.size})",
+              "Playlists" to "Playlists",
+              "Network" to "Network Shares"
+            )
+            items(subTabs) { (tabKey, label) ->
+              androidx.compose.material3.FilterChip(
+                selected = selectedSubTab == tabKey,
+                onClick = { selectedSubTab = tabKey },
+                label = { Text(label, fontWeight = FontWeight.Bold) },
+                shape = RoundedCornerShape(14.dp),
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
+                  selectedLabelColor = Color.White
+                )
+              )
+            }
+          }
+        }
       },
       floatingActionButton = {
         if (!selectionManager.isInSelectionMode && isFabVisible.value && recentItems.isNotEmpty()) {
