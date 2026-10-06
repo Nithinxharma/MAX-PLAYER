@@ -562,16 +562,6 @@ fun MaxStreamDiscoveryCard(
                     color = mutedTextColor
                 )
             }
-            if (!item.providerName.isNullOrBlank()) {
-                Text(
-                    text = item.providerName.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaxStreamTheme.ElectricCyan
-                )
-            }
         }
     }
 }

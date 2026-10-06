@@ -89,7 +89,7 @@ class CineHubViewModel : ViewModel() {
                 Log.w(TAG, "No Cloudstream providers loaded in APIHolder")
                 _searchResults.value = emptyList()
                 _isSearching.value = false
-                _statusMessage.value = "No extension providers installed or active"
+                _statusMessage.value = "No titles currently available"
                 return@launch
             }
 
@@ -118,7 +118,7 @@ class CineHubViewModel : ViewModel() {
             _searchResults.value = aggregatedResults
             _isSearching.value = false
             if (aggregatedResults.isEmpty()) {
-                _statusMessage.value = "No playable results found\n\nTry another title or provider."
+                _statusMessage.value = "No playable results found\n\nTry searching for a different title."
             }
         }
     }
@@ -150,7 +150,7 @@ class CineHubViewModel : ViewModel() {
                     )
                 }
                 _isLoadingDetails.value = false
-                _statusMessage.value = "Provider '$providerName' not found"
+                _statusMessage.value = "Media details could not be loaded"
                 return@launch
             }
 
@@ -217,7 +217,7 @@ class CineHubViewModel : ViewModel() {
             if (provider == null) {
                 Log.e(TAG, "Provider not found for link extraction: $providerName")
                 _isExtracting.value = false
-                _statusMessage.value = "Provider '$providerName' not found"
+                _statusMessage.value = "Stream links could not be loaded"
                 return@launch
             }
 

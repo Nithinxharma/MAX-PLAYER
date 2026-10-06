@@ -345,7 +345,7 @@ fun CineHubSearchScreen(
                                     color = primaryTextColor
                                 )
                                 Text(
-                                    text = "Try another title or provider.",
+                                    text = "Try searching for a different title.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = mutedTextColor
                                 )

@@ -219,20 +219,6 @@ fun MaxStreamMediaInfoSheet(
                                         color = secondaryTextColor
                                     )
                                 }
-                                if (!details.providerBadge.isNullOrBlank()) {
-                                    Surface(
-                                        shape = MaxStreamTheme.BadgeShape,
-                                        color = if (isDark) MaxStreamTheme.GlassSurfaceActive else MaterialTheme.colorScheme.primaryContainer,
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, glassBorderColor)
-                                    ) {
-                                        Text(
-                                            text = details.providerBadge,
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                            color = if (isDark) MaxStreamTheme.ElectricCyan else MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
                             }
                         }
 

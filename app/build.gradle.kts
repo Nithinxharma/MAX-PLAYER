@@ -155,10 +155,7 @@ android {
 
   splits {
     abi {
-      isEnable = true
-      reset()
-      include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-      isUniversalApk = true
+      isEnable = false
     }
   }
 
@@ -188,12 +185,10 @@ android {
 
   signingConfigs {
     create("debugConfig") {
-      if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
-        storeFile = debugKeystoreFile
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      }
+      storeFile = file("${rootDir}/debug.keystore")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
     }
     create("release") {
       if (activeReleaseKeystore != null && !envStorePass.isNullOrBlank() && !envKeyAlias.isNullOrBlank() && !envKeyPass.isNullOrBlank()) {
@@ -243,9 +238,7 @@ android {
     }
 
     named("debug") {
-      if (debugKeystoreFile.exists() && debugKeystoreFile.length() > 0L) {
-        signingConfig = signingConfigs.getByName("debugConfig")
-      }
+      signingConfig = signingConfigs.getByName("debugConfig")
       isMinifyEnabled = false
       isShrinkResources = false
       versionNameSuffix = "-0"

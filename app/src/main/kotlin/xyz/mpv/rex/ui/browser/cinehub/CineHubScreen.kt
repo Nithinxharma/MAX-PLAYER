@@ -240,25 +240,25 @@ fun diagnoseFailure(providerName: String, url: String, exception: Throwable?, li
 
   val (title, desc) = when {
     exception is java.net.UnknownHostException || full.contains("Unable to resolve host", ignoreCase = true) -> {
-      "DNS Blocked by ISP" to "Unable to connect to host domain. Your internet service provider (Jio/Airtel/Vi) has blocked this website at the DNS level. Try enabling VPN or Cloudflare DNS (1.1.1.1)."
+      "Network Connection Error" to "Unable to connect to streaming server. Please check your internet connection and try again."
     }
     full.contains("403") || full.contains("Cloudflare", ignoreCase = true) || full.contains("Turnstile", ignoreCase = true) || full.contains("Just a moment", ignoreCase = true) -> {
-      "Cloudflare Anti-Bot (403 Forbidden)" to "The website is protected by Cloudflare DDoS / Turnstile challenge, blocking automated requests from extracting media links."
+      "Stream Temporarily Unavailable" to "The stream is temporarily protected or unavailable. Please try again later."
     }
     exception is java.net.SocketTimeoutException || full.contains("timeout", ignoreCase = true) -> {
-      "Connection Timeout" to "The provider server took too long to respond. The website might be slow or temporarily overloaded."
+      "Connection Timeout" to "The streaming server took too long to respond. The server might be temporarily overloaded."
     }
     exception is java.net.ConnectException || full.contains("Connection refused", ignoreCase = true) -> {
-      "Server Offline / Connection Refused" to "Connection refused by provider server ($url)."
+      "Stream Offline" to "The streaming server is currently offline. Please try another title."
     }
     exception is javax.net.ssl.SSLException || full.contains("SSL", ignoreCase = true) -> {
-      "SSL Certificate Error" to "Secure handshake with $url failed ($msg)."
+      "Security Handshake Error" to "Secure connection to stream failed. Please try again."
     }
     exception != null -> {
-      "Provider Error (${exception.javaClass.simpleName})" to (msg.ifBlank { "Error occurred during provider link extraction." })
+      "Playback Error" to "An unexpected error occurred while preparing this media."
     }
     linksCount == 0 -> {
-      "No Playable Links (0 Links Found)" to "The provider page opened successfully, but third-party video hosts (HubCloud, Streamwish, Filemoon, Dood, etc.) returned 0 stream links (video may be removed or expired)."
+      "No Playable Streams Available" to "No active stream links could be found for this title at this time."
     }
     else -> "No Streams Found" to "No playable stream links were found for this media."
   }
@@ -474,7 +474,6 @@ object CineHubScreen : Screen {
     var pendingStreamLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
     var pendingSubtitles by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
     var pendingEpisodeMetadataJson by remember { mutableStateOf<String?>(null) }
-    var showProviderSelector by remember { mutableStateOf(false) }
 
     val navBarHeight = LocalNavigationBarHeight.current
 
@@ -735,20 +734,6 @@ object CineHubScreen : Screen {
             }
           },
           actions = {
-            if (isAdmin) {
-              IconButton(
-                onClick = {
-                  backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
-                },
-                modifier = Modifier.testTag("cinehub_extensions_button"),
-              ) {
-                Icon(
-                  imageVector = Icons.Outlined.Extension,
-                  contentDescription = "Extensions",
-                  tint = MaterialTheme.colorScheme.secondary,
-                )
-              }
-            }
             IconButton(
               onClick = {
                 backstack.add(ProfileScreen)
@@ -794,62 +779,6 @@ object CineHubScreen : Screen {
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = navBarHeight + 32.dp),
           ) {
-            // Admin-Only Provider Sync Status Header
-            if (isAdmin) {
-              item {
-                xyz.mpv.rex.ui.components.glass.GlassCard(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                  shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                  onClick = {
-                    scope.launch {
-                      syncService.forceSync()
-                    }
-                  }
-                ) {
-                  Row(
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                  ) {
-                    Row(
-                      verticalAlignment = Alignment.CenterVertically,
-                      horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                      Box(
-                        modifier = Modifier
-                          .size(10.dp)
-                          .clip(CircleShape)
-                          .background(if (isSyncing) Color(0xFFFFB800) else Color(0xFF00E676))
-                      )
-                      Column {
-                        Text(
-                          text = if (isSyncing) "Syncing Providers..." else "Providers Synced",
-                          style = MaterialTheme.typography.titleSmall,
-                          fontWeight = FontWeight.Bold,
-                          color = Color.White
-                        )
-                        Text(
-                          text = "$loadedProvidersCount Providers Loaded • Last Sync: $lastSyncTime",
-                          style = MaterialTheme.typography.bodySmall,
-                          color = MaxStreamTheme.TextSecondary
-                        )
-                      }
-                    }
-                    Icon(
-                      imageVector = Icons.Outlined.Refresh,
-                      contentDescription = "Sync",
-                      tint = if (isSyncing) Color(0xFFFFB800) else MaxStreamTheme.CrimsonAccent,
-                      modifier = Modifier.size(20.dp)
-                    )
-                  }
-                }
-              }
-            }
-
             // Liquid Glass Search Input Field (Expandable)
             item {
               xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamLiquidGlassSearch(
@@ -1063,7 +992,7 @@ object CineHubScreen : Screen {
                             year = enrichedYear,
                             rating = enrichedRating,
                             mediaType = if (isTv) "TV" else if (isAnime) "ANIME" else "MOVIE",
-                            providerName = ext.providerName,
+                            providerName = null,
                             rawItem = ext
                           )
                         )
@@ -1090,7 +1019,7 @@ object CineHubScreen : Screen {
                         color = MaterialTheme.colorScheme.onSurface
                       )
                       Text(
-                        text = "Try another title or provider.",
+                        text = "Try searching for a different title.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.outline
                       )
@@ -1326,32 +1255,22 @@ object CineHubScreen : Screen {
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                       ) {
                         Icon(
-                          imageVector = Icons.Outlined.Extension,
+                          imageVector = Icons.Outlined.Movie,
                           contentDescription = null,
                           modifier = Modifier.size(64.dp),
-                          tint = MaterialTheme.colorScheme.primary,
+                          tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                         )
                         Text(
-                          text = "No Extensions Installed",
+                          text = "No Titles Available",
                           style = MaterialTheme.typography.titleMedium,
                           fontWeight = FontWeight.Bold,
                         )
                         Text(
-                          text = "Install extensions from repositories to browse movies, TV series, anime, and media streams.",
+                          text = "No media titles are currently available in this category.",
                           style = MaterialTheme.typography.bodyMedium,
                           color = MaterialTheme.colorScheme.outline,
                           textAlign = TextAlign.Center,
                         )
-                        Button(
-                          onClick = {
-                            backstack.add(xyz.mpv.rex.ui.preferences.ExtensionPreferencesScreenRoute)
-                          },
-                          shape = RoundedCornerShape(12.dp),
-                        ) {
-                          Icon(imageVector = Icons.Outlined.Extension, contentDescription = null)
-                          Spacer(modifier = Modifier.width(8.dp))
-                          Text("Manage Extensions")
-                        }
                       }
                     }
                   }
@@ -1806,14 +1725,6 @@ object CineHubScreen : Screen {
             }
           )
         }
-
-        if (showProviderSelector) {
-          ProviderSelectorSheet(
-            providerRegistry = providerRegistry,
-            onDismissRequest = { showProviderSelector = false },
-            onProvidersChanged = { loadMedia() }
-          )
-        }
       }
     }
   }
@@ -1847,7 +1758,6 @@ object CineHubScreen : Screen {
             }
             withContext(Dispatchers.Main) {
               if (stream != null && stream.url.isNotBlank()) {
-                Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
                 MediaUtils.playFile(
                   source = stream.url,
                   context = context,
@@ -1862,7 +1772,7 @@ object CineHubScreen : Screen {
                   allLinks = extractorLinks
                 )
               } else {
-                Toast.makeText(context, "No stream links found from extension", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "No stream links found", Toast.LENGTH_SHORT).show()
               }
             }
           }
@@ -2529,7 +2439,6 @@ fun CineDetailView(
               isInstantPlayExtracting = false
               if (stream != null && stream.url.isNotBlank()) {
                 onDismiss()
-                Toast.makeText(context, "Playing from ${provider?.name ?: "Extension"}", Toast.LENGTH_SHORT).show()
                 MediaUtils.playFile(
                   source = stream.url,
                   context = context,
@@ -3687,22 +3596,6 @@ fun CineDetailView(
                   color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.95f)
                 )
 
-                Surface(
-                  shape = RoundedCornerShape(8.dp),
-                  color = Color.Black.copy(alpha = 0.25f),
-                  modifier = Modifier.fillMaxWidth()
-                ) {
-                  Text(
-                    text = "Provider: ${failure.provider}\nURL: ${failure.url}",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                      fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                      fontSize = 11.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(8.dp)
-                  )
-                }
-
                 Row(
                   modifier = Modifier.fillMaxWidth(),
                   horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -3727,7 +3620,7 @@ fun CineDetailView(
                     onClick = {
                       val clip = android.content.ClipData.newPlainText(
                         "Stream Error",
-                        "Title: ${failure.title}\nReason: ${failure.description}\nProvider: ${failure.provider}\nURL: ${failure.url}"
+                        "Title: ${failure.title}\nReason: ${failure.description}"
                       )
                       (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
                       Toast.makeText(context, "Error reason copied", Toast.LENGTH_SHORT).show()
@@ -4631,159 +4524,6 @@ fun QualitySelectorBottomSheet(
       }
     }
   }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ProviderSelectorSheet(
-    providerRegistry: xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry,
-    onDismissRequest: () -> Unit,
-    onProvidersChanged: () -> Unit
-) {
-    val registeredProviders by providerRegistry.registeredProviders.collectAsState()
-    val isDark = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.isDark
-    val containerBg = if (isDark) Color(0xF210111A) else MaterialTheme.colorScheme.surface
-    val textColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-    val subTextColor = if (isDark) Color.White.copy(alpha = 0.70f) else MaterialTheme.colorScheme.onSurfaceVariant
-    val itemBg = if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    val itemBorder = if (isDark) Color.White.copy(alpha = 0.10f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = containerBg,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = if (isDark) Color(0x66FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Extension Providers",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = textColor
-                    )
-                    Text(
-                        text = "Enable or disable providers to optimize home loading speed",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subTextColor
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(
-                        onClick = {
-                            registeredProviders.forEach { providerRegistry.setProviderEnabled(it.id, true) }
-                            onProvidersChanged()
-                        }
-                    ) {
-                        Text("Enable All", style = MaterialTheme.typography.labelMedium)
-                    }
-                    TextButton(
-                        onClick = {
-                            registeredProviders.forEach { providerRegistry.setProviderEnabled(it.id, false) }
-                            onProvidersChanged()
-                        }
-                    ) {
-                        Text("Disable All", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
-            if (registeredProviders.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No providers currently registered. Install or reload extensions.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = subTextColor
-                    )
-                }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(registeredProviders) { provider ->
-                        val isEnabled = providerRegistry.isProviderEnabled(provider.id)
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (isEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else itemBg,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else itemBorder
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Extension,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(8.dp).size(20.dp)
-                                        )
-                                    }
-
-                                    Column {
-                                        Text(
-                                            text = provider.name,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = textColor
-                                        )
-                                        Text(
-                                            text = "ID: ${provider.id} • ${if (isEnabled) "Active" else "Disabled"}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = subTextColor
-                                        )
-                                    }
-                                }
-
-                                Switch(
-                                    checked = isEnabled,
-                                    onCheckedChange = { checked ->
-                                        providerRegistry.setProviderEnabled(provider.id, checked)
-                                        onProvidersChanged()
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 private fun createCuratedMovie(
