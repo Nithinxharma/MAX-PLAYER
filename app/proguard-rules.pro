@@ -157,3 +157,93 @@
 -keepclassmembers class * {
     @androidx.annotation.Keep *;
 }
+
+# ==============================================================================
+# Preserved Library & Reflection Rules Exactly As Requested
+# ==============================================================================
+
+# Suppress warnings
+-dontwarn com.fasterxml.jackson.**
+-dontwarn java.beans.**
+-dontwarn org.jsoup.**
+-dontwarn com.google.re2j.**
+
+# Keep kotlinx.coroutines for dynamic DEX plugin execution
+-keep class kotlinx.coroutines.** {
+    <fields>;
+    <methods>;
+}
+-keep interface kotlinx.coroutines.** { *; }
+-keepclassmembers class kotlinx.coroutines.** {
+    <fields>;
+    <methods>;
+}
+
+-keep class kotlinx.coroutines.Dispatchers {
+    public static *** *;
+    public static *** *(...);
+}
+-keepclassmembers class kotlinx.coroutines.Dispatchers {
+    public static *** *;
+    public static *** *(...);
+}
+
+# Keep Kotlin standard library
+-keep class kotlin.** {
+    <fields>;
+    <methods>;
+}
+-keep interface kotlin.** { *; }
+-keepclassmembers class kotlin.** {
+    <fields>;
+    <methods>;
+}
+
+# Keep OkHttp networking library
+-keep class okhttp3.** {
+    <fields>;
+    <methods>;
+}
+-keep interface okhttp3.** { *; }
+-keepclassmembers class okhttp3.** {
+    <fields>;
+    <methods>;
+}
+
+# Keep Okio
+-keep class okio.** {
+    <fields>;
+    <methods>;
+}
+-keep interface okio.** { *; }
+-keepclassmembers class okio.** {
+    <fields>;
+    <methods>;
+}
+
+# Keep Gson
+-keep class com.google.gson.** {
+    <fields>;
+    <methods>;
+}
+-keep interface com.google.gson.** { *; }
+-keepclassmembers class com.google.gson.** {
+    <fields>;
+    <methods>;
+}
+
+# Keep Jackson
+-keep class com.fasterxml.jackson.** { *; }
+-keep interface com.fasterxml.jackson.** { *; }
+-keepclassmembers class com.fasterxml.jackson.** { *; }
+
+# Keep Jsoup
+-keep class org.jsoup.** { *; }
+-keep interface org.jsoup.** { *; }
+-keepclassmembers class org.jsoup.** { *; }
+
+# Keep NiceHttp
+-keep class com.lagradost.nicehttp.** { *; }
+-keep interface com.lagradost.nicehttp.** { *; }
+-keepclassmembers class com.lagradost.nicehttp.** { *; }
+
