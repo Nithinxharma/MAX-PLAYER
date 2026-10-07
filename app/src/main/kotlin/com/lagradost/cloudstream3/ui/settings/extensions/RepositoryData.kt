@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 const val REPOSITORIES_KEY = "REPOSITORIES_KEY"
 
 @Serializable
-data class RepositoryData(
+data class RepositoryData @JvmOverloads constructor(
     @JsonProperty("name") @SerialName("name") val name: String,
     @JsonProperty("url") @SerialName("url") val url: String,
     @JsonProperty("iconUrl") @SerialName("iconUrl") val iconUrl: String? = null
