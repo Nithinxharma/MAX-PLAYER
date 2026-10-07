@@ -591,7 +591,7 @@ object PluginManager {
     /**
      * @return True if successful, false if not
      * */
-    private suspend fun loadPlugin(context: Context, file: File, data: PluginData): Boolean {
+    suspend fun loadPlugin(context: Context, file: File, data: PluginData): Boolean {
         val fileName = file.nameWithoutExtension
         val filePath = file.absolutePath
         currentlyLoading = fileName

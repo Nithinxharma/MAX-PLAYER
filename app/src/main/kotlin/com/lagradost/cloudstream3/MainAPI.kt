@@ -15,22 +15,11 @@ val json: Json = Json {
     encodeDefaults = true
 }
 
-val mapper: JsonMapper = JsonMapper.builder()
-    .addModule(com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build())
-    .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-    .configure(com.fasterxml.jackson.databind.DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
-    .build()
+val mapper: JsonMapper get() = com.lagradost.cloudstream3.utils.mapper
 
-fun Any.toJson(): String = mapper.writeValueAsString(this)
-inline fun <reified T : Any> parseJson(value: String): T = mapper.readValue(value)
-inline fun <reified T> tryParseJson(value: String?): T? {
-    if (value.isNullOrBlank()) return null
-    return try {
-        mapper.readValue(value)
-    } catch (_: Throwable) {
-        null
-    }
-}
+fun Any.toJson(): String = com.lagradost.cloudstream3.utils.mapper.writeValueAsString(this)
+inline fun <reified T : Any> parseJson(value: String): T = com.lagradost.cloudstream3.utils.mapper.readValue(value)
+inline fun <reified T> tryParseJson(value: String?): T? = com.lagradost.cloudstream3.utils.tryParseJson(value)
 
 suspend fun newSubtitleFile(
     lang: String,
@@ -482,6 +471,31 @@ data class AnimeLoadResponse(
     override var uniqueUrl: String = "",
     var engName: String? = null,
     var jpnName: String? = null
+) : LoadResponse
+
+data class TorrentLoadResponse(
+    override var name: String,
+    override var url: String,
+    override var apiName: String,
+    override var type: TvType = TvType.Others,
+    var torrent: String? = null,
+    var magnet: String? = null,
+    override var posterUrl: String? = null,
+    override var year: Int? = null,
+    override var plot: String? = null,
+    override var score: Score? = null,
+    override var tags: List<String>? = null,
+    override var duration: Int? = null,
+    override var trailers: MutableList<TrailerData> = mutableListOf(),
+    override var recommendations: List<SearchResponse>? = null,
+    override var actors: List<ActorData>? = null,
+    override var comingSoon: Boolean = false,
+    override var syncData: MutableMap<String, String> = mutableMapOf(),
+    override var posterHeaders: Map<String, String>? = null,
+    override var backgroundPosterUrl: String? = null,
+    override var logoUrl: String? = null,
+    override var contentRating: String? = null,
+    override var uniqueUrl: String = ""
 ) : LoadResponse
 
 data class LiveStreamLoadResponse(

@@ -54,5 +54,13 @@ open class MainActivity : androidx.fragment.app.FragmentActivity() {
     companion object {
         var afterPluginsLoadedEvent: ((Boolean) -> Unit) = {}
         var lastError: String? = null
+
+        var app: Requests
+            get() = com.lagradost.cloudstream3.app
+            set(value) { com.lagradost.cloudstream3.app = value }
+
+        var insecureApp: Requests
+            get() = com.lagradost.cloudstream3.insecureApp
+            set(value) { com.lagradost.cloudstream3.insecureApp = value }
     }
 }
