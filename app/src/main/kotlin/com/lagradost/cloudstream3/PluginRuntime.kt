@@ -83,8 +83,16 @@ object APIHolder {
         removePlugin(api)
     }
 
-    fun getApi(name: String): MainAPI? = apiMap[name]
-    fun getApiFromNameNull(name: String?): MainAPI? = if (name != null) apiMap[name] ?: allProviders.find { it.name.equals(name, ignoreCase = true) } else null
+    fun getApi(name: String): MainAPI? = getApiFromNameNull(name)
+    fun getApiFromNameNull(name: String?): MainAPI? {
+        if (name.isNullOrBlank()) return null
+        val cleanName = name.trim()
+        val stripped = cleanName.removePrefix("cs3_").replace("_", " ")
+        return apiMap[cleanName]
+            ?: apiMap[stripped]
+            ?: allProviders.find { it.name.equals(cleanName, ignoreCase = true) || it.name.equals(stripped, ignoreCase = true) || it.name.replace(" ", "").equals(cleanName.replace(" ", ""), ignoreCase = true) }
+            ?: apis.find { it.name.equals(cleanName, ignoreCase = true) || it.name.equals(stripped, ignoreCase = true) }
+    }
     fun getApiFromNameOrNull(name: String?): MainAPI? = getApiFromNameNull(name)
     fun getApiFromName(name: String): MainAPI = getApiFromNameNull(name) ?: throw ErrorLoadingException("No API found with name $name")
 

@@ -16,7 +16,9 @@ val json: Json = Json {
 }
 
 val mapper: JsonMapper = JsonMapper.builder()
+    .addModule(com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build())
     .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    .configure(com.fasterxml.jackson.databind.DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
     .build()
 
 fun Any.toJson(): String = mapper.writeValueAsString(this)
@@ -703,7 +705,15 @@ suspend fun MainAPI.searchSafe(query: String): List<SearchResponse> {
     if (!direct.isNullOrEmpty()) return direct
     val paginated = runCatching { search(query, 1)?.items }.getOrNull()
     if (!paginated.isNullOrEmpty()) return paginated
-    return direct ?: emptyList()
+    val quick = runCatching { quickSearch(query) }.getOrNull()
+    if (!quick.isNullOrEmpty()) return quick
+    return emptyList()
+}
+
+suspend fun MainAPI.loadSafe(url: String): LoadResponse? {
+    val fixedUrl = fixUrl(url)
+    return runCatching { load(fixedUrl) }.getOrNull()
+        ?: runCatching { load(url) }.getOrNull()
 }
 
 fun MainAPI.newMovieSearchResponse(name: String, url: String, type: TvType = TvType.Movie, fix: Boolean = true, initializer: MovieSearchResponse.() -> Unit = {}): MovieSearchResponse {

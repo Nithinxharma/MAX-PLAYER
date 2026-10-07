@@ -15,22 +15,22 @@ import java.security.Security
 
 // Backwards compatible constructor, mark as deprecated later
 fun Requests.initClient(context: Context) {
-    this.baseClient = buildDefaultClient(context)
+    this.baseClient = buildDefaultClient(context, true)
 }
 
 /** Only use ignoreSSL if you know what you are doing*/
-fun Requests.initClient(context: Context, ignoreSSL: Boolean = false) {
+fun Requests.initClient(context: Context, ignoreSSL: Boolean = true) {
     this.baseClient = buildDefaultClient(context, ignoreSSL)
 }
 
 
 // Backwards compatible constructor, mark as deprecated later
 fun buildDefaultClient(context: Context): OkHttpClient {
-    return buildDefaultClient(context, false)
+    return buildDefaultClient(context, true)
 }
 
 /** Only use ignoreSSL if you know what you are doing*/
-fun buildDefaultClient(context: Context, ignoreSSL: Boolean = false): OkHttpClient {
+fun buildDefaultClient(context: Context, ignoreSSL: Boolean = true): OkHttpClient {
     val settingsManager = PreferenceManager.getDefaultSharedPreferences(context)
     val dns = settingsManager.getInt("dns_key", 0)
     val baseClient = OkHttpClient.Builder()
@@ -60,6 +60,7 @@ fun buildDefaultClient(context: Context, ignoreSSL: Boolean = false): OkHttpClie
                 6 -> addQuad9Dns()
                 7 -> addDnsSbDns()
                 8 -> addCanadianShieldDns()
+                else -> addCloudFlareDns()
             }
         }
         // Needs to be build as otherwise the other builders will change this object

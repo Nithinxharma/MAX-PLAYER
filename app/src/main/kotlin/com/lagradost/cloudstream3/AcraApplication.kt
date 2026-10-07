@@ -12,7 +12,8 @@ open class AcraApplication {
         
         val context: Context
             get() = _context 
-                ?: xyz.mpv.rex.App.instance.applicationContext 
+                ?: (try { xyz.mpv.rex.App.instance.applicationContext } catch (_: Throwable) { null })
+                ?: (try { com.lagradost.cloudstream3.CommonActivity.activity?.applicationContext } catch (_: Throwable) { null })
                 ?: throw IllegalStateException("AcraApplication context has not been initialized")
 
         fun init(appContext: Context) {

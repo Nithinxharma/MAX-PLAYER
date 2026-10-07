@@ -99,7 +99,11 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
     }
 
     override suspend fun loadDetails(url: String): CineHubMediaDetails? {
-        val res = api.load(url) ?: return null
+        val res = runCatching {
+            val fixed = api.fixUrl(url)
+            api.load(fixed) ?: api.load(url)
+        }.getOrNull() ?: return null
+
         val episodes = when (res) {
             is TvSeriesLoadResponse -> {
                 res.episodes.mapIndexed { index, ep ->
@@ -131,7 +135,8 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
             else -> emptyList()
         }
 
-        val streamData = if (res is MovieLoadResponse) res.dataUrl else res.url
+        val rawDataUrl = if (res is MovieLoadResponse) res.dataUrl else res.url
+        val streamData = if (!rawDataUrl.isNullOrBlank()) rawDataUrl else res.url
 
         return CineHubMediaDetails(
             id = res.url,
@@ -158,30 +163,16 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
 
     override suspend fun loadStreams(data: String): List<CineHubStreamLink> {
         val links = mutableListOf<CineHubStreamLink>()
-        runCatching {
-            api.loadLinks(data, false, subtitleCallback = {}) { extractor ->
-                if (extractor is com.lagradost.cloudstream3.utils.ExtractorLinkPlayList) {
-                    for (item in extractor.playlist) {
-                        links.add(
-                            CineHubStreamLink(
-                                name = extractor.name,
-                                url = item.url,
-                                quality = "${extractor.quality}p",
-                                isM3u8 = item.isM3u8,
-                                headers = buildMap {
-                                    if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
-                                    putAll(extractor.headers)
-                                }
-                            )
-                        )
-                    }
-                } else if (extractor.url.isNotBlank()) {
+        
+        fun handleExtractorLink(extractor: com.lagradost.cloudstream3.utils.ExtractorLink) {
+            if (extractor is com.lagradost.cloudstream3.utils.ExtractorLinkPlayList) {
+                for (item in extractor.playlist) {
                     links.add(
                         CineHubStreamLink(
                             name = extractor.name,
-                            url = extractor.url,
+                            url = item.url,
                             quality = "${extractor.quality}p",
-                            isM3u8 = extractor.isM3u8,
+                            isM3u8 = item.isM3u8,
                             headers = buildMap {
                                 if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
                                 putAll(extractor.headers)
@@ -189,47 +180,70 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
                         )
                     )
                 }
+            } else if (extractor.url.isNotBlank()) {
+                links.add(
+                    CineHubStreamLink(
+                        name = extractor.name,
+                        url = extractor.url,
+                        quality = "${extractor.quality}p",
+                        isM3u8 = extractor.isM3u8,
+                        headers = buildMap {
+                            if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
+                            putAll(extractor.headers)
+                        }
+                    )
+                )
             }
         }
 
-        // Fallback 1: Attempt direct loadExtractor on data if links is empty and data is a valid URL
-        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
+        // 1. Direct api.loadLinks
+        runCatching {
+            api.loadLinks(data, false, subtitleCallback = {}) { extractor ->
+                handleExtractorLink(extractor)
+            }
+        }
+
+        // 1b. If empty and data is relative URL, try fixed URL
+        if (links.isEmpty() && (data.startsWith("/") || data.startsWith("./"))) {
+            val fixed = api.fixUrl(data)
             runCatching {
-                com.lagradost.cloudstream3.utils.loadExtractor(data, subtitleCallback = {}) { extractor ->
-                    if (extractor is com.lagradost.cloudstream3.utils.ExtractorLinkPlayList) {
-                        for (item in extractor.playlist) {
-                            links.add(
-                                CineHubStreamLink(
-                                    name = extractor.name,
-                                    url = item.url,
-                                    quality = "${extractor.quality}p",
-                                    isM3u8 = item.isM3u8,
-                                    headers = buildMap {
-                                        if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
-                                        putAll(extractor.headers)
-                                    }
-                                )
-                            )
-                        }
-                    } else if (extractor.url.isNotBlank()) {
-                        links.add(
-                            CineHubStreamLink(
-                                name = extractor.name,
-                                url = extractor.url,
-                                quality = "${extractor.quality}p",
-                                isM3u8 = extractor.isM3u8,
-                                headers = buildMap {
-                                    if (extractor.referer.isNotBlank()) put("Referer", extractor.referer)
-                                    putAll(extractor.headers)
-                                }
-                            )
-                        )
-                    }
+                api.loadLinks(fixed, false, subtitleCallback = {}) { extractor ->
+                    handleExtractorLink(extractor)
                 }
             }
         }
 
-        // Fallback 2: If still empty and data is a direct HTTP(S) URL, wrap as real direct stream link
+        // 2. Direct loadExtractor if data is a standard URL
+        if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
+            runCatching {
+                com.lagradost.cloudstream3.utils.loadExtractor(data, subtitleCallback = {}) { extractor ->
+                    handleExtractorLink(extractor)
+                }
+            }
+        }
+
+        // 3. Embedded URLs in JSON or text payloads
+        if (links.isEmpty() && (data.startsWith("{") || data.startsWith("[") || data.contains("http://") || data.contains("https://"))) {
+            val urlRegex = Regex("""https?://[^\s"'>\\]+""")
+            val discoveredUrls = urlRegex.findAll(data).map { it.value }.toList()
+            for (dUrl in discoveredUrls) {
+                runCatching {
+                    api.loadLinks(dUrl, false, subtitleCallback = {}) { extractor ->
+                        handleExtractorLink(extractor)
+                    }
+                }
+                if (links.isEmpty()) {
+                    runCatching {
+                        com.lagradost.cloudstream3.utils.loadExtractor(dUrl, subtitleCallback = {}) { extractor ->
+                            handleExtractorLink(extractor)
+                        }
+                    }
+                }
+                if (links.isNotEmpty()) break
+            }
+        }
+
+        // 4. Fallback: direct HTTP stream wrapping
         if (links.isEmpty() && (data.startsWith("http://") || data.startsWith("https://"))) {
             links.add(
                 CineHubStreamLink(

@@ -90,7 +90,7 @@ class DdosGuardKiller(private val alwaysBypass: Boolean = false) : Interceptor {
         if (cookies.isNullOrEmpty()) {
             try {
                 if (ddosBypassPath.isNullOrBlank()) {
-                    val checkScript = app.get("https://check.ddos-guard.net/check.js").text
+                    val checkScript = Requests().get("https://check.ddos-guard.net/check.js").text
                     ddosBypassPath = Regex("'(.*?)'").find(checkScript)?.groupValues?.getOrNull(1)
                 }
 

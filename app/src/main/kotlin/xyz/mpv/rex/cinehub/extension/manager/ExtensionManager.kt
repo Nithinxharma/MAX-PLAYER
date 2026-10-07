@@ -33,6 +33,11 @@ import java.util.zip.ZipFile
  * ExtensionManager coordinates installed extensions, life-cycles,
  * class discovery, plugin instantiation, and provider registrations.
  */
+private fun safeContains(a: String?, b: String?, ignoreCase: Boolean = true): Boolean {
+    if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+    return a.contains(b, ignoreCase)
+}
+
 class ExtensionManager(
     private val context: Context,
     private val db: MpvExDatabase,
@@ -90,7 +95,7 @@ class ExtensionManager(
 
     suspend fun loadInstalledExtensions() = withContext(Dispatchers.IO) {
         Log.i("ExtensionManager", "INSTANCE_IDENTITY: loadInstalledExtensions called on ExtensionManager@${System.identityHashCode(this)} with ProviderRegistry@${System.identityHashCode(registry)} and APIHolder@${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
-        val installedExts = db.extensionDao().getAllInstalledExtensionsSync()
+        val installedExts = try { db.extensionDao().getAllInstalledExtensionsSync() } catch (t: Throwable) { emptyList() }
         _installedExtensionsCount.value = installedExts.size
         _pluginFilesFoundCount.value = 0
         _successfullyLoadedPluginsCount.value = 0
@@ -100,7 +105,11 @@ class ExtensionManager(
         Log.i("ExtensionManager", "EXTENSION_LOAD: Beginning load of ${installedExts.size} installed extensions from database...")
 
         for (ext in installedExts) {
-            loadExtensionFromDisk(ext)
+            try {
+                loadExtensionFromDisk(ext)
+            } catch (t: Throwable) {
+                Log.e("ExtensionManager", "Error loading installed extension ${ext.pkgName}: ${t.message}", t)
+            }
         }
 
         // Also enumerate any .cs3 files on disk that might not be recorded in database or were placed manually
@@ -136,21 +145,25 @@ class ExtensionManager(
         }
 
         for (file in discoveredFiles.distinctBy { it.absolutePath }) {
-            if (!loadedFilePaths.contains(file.absolutePath)) {
-                val basePkg = file.nameWithoutExtension
-                val existing = installedExts.firstOrNull { it.pkgName.equals(basePkg, ignoreCase = true) || it.localFilePath == file.absolutePath }
-                if (existing == null) {
-                    Log.i("ExtensionManager", "EXTENSION_LOAD: Found unindexed .cs3 file on disk: ${file.name}, loading it...")
-                    val ext = InstalledExtension(
-                        pkgName = basePkg,
-                        name = basePkg,
-                        version = "1.0.0",
-                        versionCode = 1,
-                        localFilePath = file.absolutePath,
-                        isEnabled = true
-                    )
-                    loadExtensionFromDisk(ext)
+            try {
+                if (!loadedFilePaths.contains(file.absolutePath)) {
+                    val basePkg = file.nameWithoutExtension
+                    val existing = installedExts.firstOrNull { it.pkgName.equals(basePkg, ignoreCase = true) || it.localFilePath == file.absolutePath }
+                    if (existing == null) {
+                        Log.i("ExtensionManager", "EXTENSION_LOAD: Found unindexed .cs3 file on disk: ${file.name}, loading it...")
+                        val ext = InstalledExtension(
+                            pkgName = basePkg,
+                            name = basePkg,
+                            version = "1.0.0",
+                            versionCode = 1,
+                            localFilePath = file.absolutePath,
+                            isEnabled = true
+                        )
+                        loadExtensionFromDisk(ext)
+                    }
                 }
+            } catch (t: Throwable) {
+                Log.e("ExtensionManager", "Error processing discovered file ${file.name}: ${t.message}", t)
             }
         }
 
@@ -172,10 +185,21 @@ class ExtensionManager(
         // Ensure all APIHolder providers are synchronized into ProviderRegistry matching db enabled status
         val allApis = com.lagradost.cloudstream3.APIHolder.allProviders.toList()
         for (api in allApis) {
-            val matchingExt = installedExts.firstOrNull { it.pkgName.contains(api.name, ignoreCase = true) || api.name.contains(it.pkgName, ignoreCase = true) }
-            val isEnabled = matchingExt?.isEnabled ?: true
-            val adapter = CloudstreamMainApiAdapter(api)
-            registry.register(adapter, isEnabledByDefault = isEnabled)
+            try {
+                val rawApiName = runCatching { api.name }.getOrNull() ?: ""
+                val apiName = rawApiName.trim()
+                val matchingExt = installedExts.firstOrNull { ext ->
+                    val pkg = (ext.pkgName ?: "").trim()
+                    val extName = (ext.name ?: "").trim()
+                    (pkg.isNotBlank() && apiName.isNotBlank() && (safeContains(pkg, apiName) || safeContains(apiName, pkg))) ||
+                    (extName.isNotBlank() && apiName.isNotBlank() && (safeContains(extName, apiName) || safeContains(apiName, extName)))
+                }
+                val isEnabled = matchingExt?.isEnabled ?: true
+                val adapter = CloudstreamMainApiAdapter(api)
+                registry.register(adapter, isEnabledByDefault = isEnabled)
+            } catch (t: Throwable) {
+                Log.e("ExtensionManager", "Error syncing API ${runCatching { api.name }.getOrNull()}: ${t.message}", t)
+            }
         }
 
         Log.i("ExtensionManager", "Extension loading complete: " +
@@ -493,12 +517,18 @@ class ExtensionManager(
                 File(context.filesDir, "cloudstream_plugins/${ext.pkgName}.cs3"),
                 File(context.filesDir, "cloudstream_plugins/${ext.pkgName}"),
                 extensionDir.listFiles()?.firstOrNull { 
-                    it.name.contains(ext.pkgName, ignoreCase = true) || 
-                    (ext.name.isNotBlank() && it.name.contains(ext.name.replace(" ", ""), ignoreCase = true))
+                    val itName = it.name ?: ""
+                    val pkg = ext.pkgName ?: ""
+                    val extName = ext.name ?: ""
+                    (pkg.isNotBlank() && safeContains(itName, pkg)) || 
+                    (extName.isNotBlank() && safeContains(itName, extName.replace(" ", "")))
                 },
                 File(context.filesDir, "cloudstream_plugins").listFiles()?.firstOrNull { 
-                    it.name.contains(ext.pkgName, ignoreCase = true) || 
-                    (ext.name.isNotBlank() && it.name.contains(ext.name.replace(" ", ""), ignoreCase = true))
+                    val itName = it.name ?: ""
+                    val pkg = ext.pkgName ?: ""
+                    val extName = ext.name ?: ""
+                    (pkg.isNotBlank() && safeContains(itName, pkg)) || 
+                    (extName.isNotBlank() && safeContains(itName, extName.replace(" ", "")))
                 }
             )
             val found = candidateFiles.firstOrNull { it.exists() && it.isFile }
@@ -786,12 +816,14 @@ class ExtensionManager(
         loadExtensionFromDisk(extToLoad)
     }
 
-    fun findExtensionFile(pkgName: String, localPath: String?): File? {
-        if (localPath != null) {
+    fun findExtensionFile(pkgName: String?, localPath: String?): File? {
+        if (!localPath.isNullOrBlank()) {
             val f = File(localPath)
             if (f.exists() && f.isFile) return f
         }
-        val cleanPkg = pkgName.replace(" ", "").replace("_", "").lowercase()
+        val safePkg = (pkgName ?: "").trim()
+        if (safePkg.isBlank()) return null
+        val cleanPkg = safePkg.replace(" ", "").replace("_", "").lowercase()
         val dirsToSearch = listOfNotNull(
             extensionDir,
             File(context.filesDir, "cinehub_extensions"),
@@ -802,17 +834,18 @@ class ExtensionManager(
         )
         for (dir in dirsToSearch) {
             if (!dir.exists() || !dir.isDirectory) continue
-            val direct = File(dir, "$pkgName.cs3")
+            val direct = File(dir, "$safePkg.cs3")
             if (direct.exists() && direct.isFile) return direct
-            val directNoExt = File(dir, pkgName)
+            val directNoExt = File(dir, safePkg)
             if (directNoExt.exists() && directNoExt.isFile) return directNoExt
             
             val files = dir.listFiles() ?: continue
             val found = files.firstOrNull { file ->
-                val fClean = file.nameWithoutExtension.replace(" ", "").replace("_", "").lowercase()
+                val fName = file.nameWithoutExtension ?: ""
+                val fClean = fName.replace(" ", "").replace("_", "").lowercase()
                 fClean == cleanPkg ||
-                fClean.contains(cleanPkg) ||
-                cleanPkg.contains(fClean) ||
+                safeContains(fClean, cleanPkg) ||
+                safeContains(cleanPkg, fClean) ||
                 fClean.replace("provider", "").replace("plugin", "") == cleanPkg.replace("provider", "").replace("plugin", "")
             }
             if (found != null && found.isFile) return found
@@ -1250,19 +1283,27 @@ class ExtensionManager(
 
             // Step 3: Registration in APIHolder
             var providers = com.lagradost.cloudstream3.APIHolder.allProviders.filter { api ->
-                api.sourcePlugin == file.absolutePath ||
-                api.sourcePlugin?.contains(file.nameWithoutExtension) == true ||
-                ext.pkgName.contains(api.name, ignoreCase = true) ||
-                api.name.contains(ext.pkgName, ignoreCase = true)
+                val apiName = runCatching { api.name }.getOrNull() ?: ""
+                val src = api.sourcePlugin ?: ""
+                val fileNoExt = file.nameWithoutExtension ?: ""
+                val pkg = ext.pkgName ?: ""
+                src == file.absolutePath ||
+                safeContains(src, fileNoExt) ||
+                safeContains(pkg, apiName) ||
+                safeContains(apiName, pkg)
             }
 
             if (providers.isEmpty()) {
                 loadExtensionFromDisk(ext)
                 providers = com.lagradost.cloudstream3.APIHolder.allProviders.filter { api ->
-                    api.sourcePlugin == file.absolutePath ||
-                    api.sourcePlugin?.contains(file.nameWithoutExtension) == true ||
-                    ext.pkgName.contains(api.name, ignoreCase = true) ||
-                    api.name.contains(ext.pkgName, ignoreCase = true)
+                    val apiName = runCatching { api.name }.getOrNull() ?: ""
+                    val src = api.sourcePlugin ?: ""
+                    val fileNoExt = file.nameWithoutExtension ?: ""
+                    val pkg = ext.pkgName ?: ""
+                    src == file.absolutePath ||
+                    safeContains(src, fileNoExt) ||
+                    safeContains(pkg, apiName) ||
+                    safeContains(apiName, pkg)
                 }
             }
 
