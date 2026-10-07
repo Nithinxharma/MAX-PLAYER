@@ -591,13 +591,13 @@ object PluginManager {
     /**
      * @return True if successful, false if not
      * */
-    suspend fun loadPlugin(context: Context, file: File, data: PluginData): Boolean {
+    suspend fun loadPlugin(context: Context, file: File, data: PluginData): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val fileName = file.nameWithoutExtension
         val filePath = file.absolutePath
         currentlyLoading = fileName
         Log.i(TAG, "Loading plugin: $data")
 
-        return try {
+        try {
             // In case of Android 14+ then
             try {
                 // Set the file as read-only and log if it fails
@@ -669,7 +669,7 @@ object PluginManager {
                 setPluginData(data.copy(version = maxOf(1, data.version)))
                 currentlyLoading = null
                 Log.i(TAG, "Loaded extractors and plugin classes from standalone DEX file: $fileName")
-                return true
+                return@withContext true
             }
 
             val currentManifest = manifest!!
@@ -691,7 +691,7 @@ object PluginManager {
 
             if (plugins.containsKey(filePath)) {
                 Log.i(TAG, "Plugin with name $name already exists")
-                return true
+                return@withContext true
             }
 
             pluginInstance.filename = file.absolutePath

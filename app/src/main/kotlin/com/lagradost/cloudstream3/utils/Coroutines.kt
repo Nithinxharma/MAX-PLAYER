@@ -1,5 +1,7 @@
 package com.lagradost.cloudstream3.utils
 
+import com.lagradost.cloudstream3.amap as coreAmap
+import com.lagradost.cloudstream3.apmap as coreApmap
 import kotlinx.coroutines.*
 
 object Coroutines {
@@ -66,6 +68,14 @@ object Coroutines {
             work()
         }
     }
+
+    suspend fun <A, B> Iterable<A>.amap(f: suspend (A) -> B): List<B> = coreAmap(f)
+
+    suspend fun <A, B> Array<A>.amap(f: suspend (A) -> B): List<B> = coreAmap(f)
+
+    suspend fun <A, B> Iterable<A>.apmap(f: suspend (A) -> B): List<B> = coreApmap(f)
+
+    suspend fun <A, B> Array<A>.apmap(f: suspend (A) -> B): List<B> = coreApmap(f)
 
     class AtomicList<T>(private val list: MutableList<T> = mutableListOf()) : MutableList<T> by list {
         private val lock = Any()

@@ -909,23 +909,6 @@ fun MainAPI.newAnimeLoadResponse(name: String, url: String, type: TvType, initia
     return AnimeLoadResponse(name, url, this.name, type).apply(initializer)
 }
 
-fun MainAPI.newEpisode(data: Any, initializer: Episode.() -> Unit = {}): Episode {
-    val dataStr = if (data is String) data else data.toJson()
-    return Episode(dataStr).apply(initializer)
-}
-
-fun MainAPI.newEpisode(data: String, initializer: Episode.() -> Unit = {}): Episode {
-    return Episode(data).apply(initializer)
-}
-
-fun newEpisode(data: Any, initializer: Episode.() -> Unit = {}): Episode {
-    val dataStr = if (data is String) data else data.toJson()
-    return Episode(dataStr).apply(initializer)
-}
-
-fun newEpisode(data: String, initializer: Episode.() -> Unit = {}): Episode {
-    return Episode(data).apply(initializer)
-}
 fun newHomePageResponse(name: String, list: List<SearchResponse>, hasNext: Boolean? = false): HomePageResponse {
     return HomePageResponse(listOf(HomePageList(name, list)), hasNext ?: false)
 }

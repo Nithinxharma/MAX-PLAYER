@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.res.Resources
 import android.util.Log
 import androidx.annotation.Keep
+import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.actions.VideoClickAction
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
+import com.lagradost.cloudstream3.utils.ExtractorApi
 import kotlin.Throws
 
 @Keep

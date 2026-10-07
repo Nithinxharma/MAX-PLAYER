@@ -99,6 +99,7 @@ class App : Application(), ImageLoaderFactory {
 
     // Initialize Headless Cloudstream / Plugin Engine
     xyz.mpv.rex.cinehub.bridge.CloudstreamHeadlessRunner.init(this)
+    com.maxstream.bridge.CloudStreamEngine.init(this)
 
     registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
       override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {
