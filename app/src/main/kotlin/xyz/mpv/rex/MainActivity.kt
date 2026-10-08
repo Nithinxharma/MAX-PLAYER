@@ -43,6 +43,9 @@ import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.repository.NetworkRepository
 import xyz.mpv.rex.utils.update.UpdateDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import xyz.mpv.rex.utils.update.UpdateViewModel
 import xyz.mpv.rex.ui.browser.MainScreen
 import xyz.mpv.rex.ui.theme.DarkMode
@@ -320,6 +323,53 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
                 updateViewModel.installUpdate(release)
               },
               onIgnore = { updateViewModel.ignoreVersion(release.tagName.removePrefix("v")) }
+            )
+          }
+          is UpdateViewModel.UpdateState.NoUpdate -> {
+            androidx.compose.material3.AlertDialog(
+              onDismissRequest = { updateViewModel.dismissNoUpdate() },
+              icon = {
+                androidx.compose.material3.Icon(
+                  imageVector = androidx.compose.material.icons.Icons.Default.CheckCircle,
+                  contentDescription = null,
+                  tint = androidx.compose.material3.MaterialTheme.colorScheme.primary
+                )
+              },
+              title = {
+                androidx.compose.material3.Text(text = androidx.compose.ui.res.stringResource(R.string.pref_about_up_to_date))
+              },
+              text = {
+                androidx.compose.material3.Text(text = "You are running the latest version of Max Stream (v$currentVersion).")
+              },
+              confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { updateViewModel.dismissNoUpdate() }) {
+                  androidx.compose.material3.Text("OK")
+                }
+              }
+            )
+          }
+          is UpdateViewModel.UpdateState.Error -> {
+            val errorMsg = (updateState as UpdateViewModel.UpdateState.Error).message ?: "Unable to check for updates"
+            androidx.compose.material3.AlertDialog(
+              onDismissRequest = { updateViewModel.dismissNoUpdate() },
+              icon = {
+                androidx.compose.material3.Icon(
+                  imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                  contentDescription = null,
+                  tint = androidx.compose.material3.MaterialTheme.colorScheme.error
+                )
+              },
+              title = {
+                androidx.compose.material3.Text(text = androidx.compose.ui.res.stringResource(R.string.pref_about_check_updates_failed))
+              },
+              text = {
+                androidx.compose.material3.Text(text = errorMsg)
+              },
+              confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { updateViewModel.dismissNoUpdate() }) {
+                  androidx.compose.material3.Text("OK")
+                }
+              }
             )
           }
           else -> {}
