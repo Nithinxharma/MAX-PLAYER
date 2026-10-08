@@ -1070,6 +1070,28 @@
     <string name="update_download">Download</string>
     <string name="update_ignore">Ignore</string>
     <string name="update_cancel">Cancel</string>
+    <string name="pref_about_release_articles">Release Articles &amp; Changelogs</string>
+    <string name="pref_about_release_articles_summary">View release notes, articles, and build history</string>
+    <string name="pref_about_github_sync">GitHub Repository Sync</string>
+    <string name="pref_about_github_sync_summary">Configure repository source, channels, and access token</string>
+    <string name="github_sync_repo_title">GitHub Sync Settings</string>
+    <string name="github_sync_repo_label">GitHub Repository</string>
+    <string name="github_sync_token_label">Personal Access Token (Optional)</string>
+    <string name="github_sync_channel_label">Update Channel</string>
+    <string name="github_channel_stable">Stable Releases</string>
+    <string name="github_channel_prerelease">Pre-Releases &amp; Betas</string>
+    <string name="github_channel_all">All Releases</string>
+    <string name="github_sync_auto_install_label">Auto-Install on Download</string>
+    <string name="github_sync_now">Sync Now</string>
+    <string name="github_sync_success">Synced with GitHub repository</string>
+    <string name="github_sync_failed">Failed to sync with GitHub repository</string>
+    <string name="update_articles_empty_title">No Release Articles Found</string>
+    <string name="update_articles_empty_desc">Unable to fetch releases from the specified GitHub repository. Check your connection or verify the repository name and token.</string>
+    <string name="update_install_build">Install Build</string>
+    <string name="update_download_build">Download APK</string>
+    <string name="update_view_github">View on GitHub</string>
+    <string name="update_permission_required">Permission Required</string>
+    <string name="update_permission_prompt">Please allow Max Stream to install unknown apps in Android settings to complete the update.</string>
 
     <!-- Player Button Labels -->
     <string name="btn_label_back">Back Arrow</string>

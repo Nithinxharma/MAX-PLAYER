@@ -298,18 +298,11 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
               release = release,
               isDownloading = isDownloading,
               progress = downloadProgress,
-              actionLabel = if (isDownloading) "Downloading..." else "Download",
+              actionLabel = if (isDownloading) "Downloading..." else "Download & Install",
               currentVersion = currentVersion,
               onDismiss = { updateViewModel.dismiss() },
               onAction = { 
-                // Redirect to GitHub releases page as requested by user
-                context.startActivity(
-                  Intent(
-                    Intent.ACTION_VIEW, 
-                    (release.htmlUrl ?: "https://github.com/MaxStreamApp/MAX-STREAM/releases/latest").toUri()
-                  )
-                )
-                // updateViewModel.downloadUpdate(release) // Kept in code but disabled for now
+                updateViewModel.downloadUpdate(release)
               },
               onIgnore = { updateViewModel.ignoreVersion(release.tagName.removePrefix("v")) }
             )
@@ -320,18 +313,11 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
               release = release,
               isDownloading = isDownloading,
               progress = downloadProgress,
-              actionLabel = "Install",
+              actionLabel = "Install Now",
               currentVersion = currentVersion,
               onDismiss = { updateViewModel.dismiss() },
               onAction = { 
-                // Redirect to GitHub releases page as requested by user
-                context.startActivity(
-                  Intent(
-                    Intent.ACTION_VIEW, 
-                    (release.htmlUrl ?: "https://github.com/MaxStreamApp/MAX-STREAM/releases/latest").toUri()
-                  )
-                )
-                // updateViewModel.installUpdate(release) // Kept in code but disabled for now
+                updateViewModel.installUpdate(release)
               },
               onIgnore = { updateViewModel.ignoreVersion(release.tagName.removePrefix("v")) }
             )

@@ -32,6 +32,8 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
@@ -323,6 +325,14 @@ object AboutScreen : Screen {
                                     checked = isAutoUpdateEnabled,
                                     onCheckedChange = { updateViewModel?.toggleAutoUpdate(it) },
                                     showDivider = true
+                                )
+
+                                GlassPreferenceItem(
+                                    title = stringResource(R.string.pref_about_release_articles),
+                                    subtitle = stringResource(R.string.pref_about_release_articles_summary),
+                                    icon = Icons.Default.Article,
+                                    showDivider = true,
+                                    onClick = { backstack.add(ReleaseArticlesScreen) }
                                 )
 
                                 GlassPreferenceItem(
