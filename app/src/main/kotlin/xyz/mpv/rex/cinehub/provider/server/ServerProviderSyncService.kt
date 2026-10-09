@@ -307,10 +307,12 @@ class ServerProviderSyncService(
      * playback capabilities out of the box without requiring manual user intervention.
      */
     private fun ensureManagedCastleTvFallback() {
-        val existing = APIHolder.getApiFromNameNull(CASTLE_TV_NAME)
+        // Provide an explicit non-null fallback string (matching CastleTvProvider.name)
+        val targetName = CASTLE_TV_NAME.ifBlank { "Castle TV (Use VLC)" }
+        val existing = APIHolder.getApiFromNameNull(targetName) ?: APIHolder.getApiFromNameNull("Castle TV (Use VLC)")
         if (existing == null) {
             val managedCastleProvider = object : MainAPI() {
-                override var name = CASTLE_TV_NAME
+                override var name = targetName
                 override var mainUrl = "https://castletv.xyz"
                 override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
 
@@ -335,14 +337,14 @@ class ServerProviderSyncService(
                         LiveStreamLoadResponse(
                             name = "Castle Live Feed",
                             url = url,
-                            apiName = CASTLE_TV_NAME,
+                            apiName = targetName,
                             dataUrl = "$mainUrl/live/index.m3u8"
                         )
                     } else {
                         MovieLoadResponse(
                             name = "Castle Stream",
                             url = url,
-                            apiName = CASTLE_TV_NAME,
+                            apiName = targetName,
                             dataUrl = url
                         )
                     }
@@ -356,7 +358,7 @@ class ServerProviderSyncService(
                 ): Boolean {
                     callback(
                         ExtractorLink(
-                            source = CASTLE_TV_NAME,
+                            source = targetName,
                             name = "Castle High-Speed CDN",
                             url = if (data.contains("http")) data else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
                             referer = "https://castletv.xyz/",
@@ -367,8 +369,12 @@ class ServerProviderSyncService(
                     return true
                 }
             }
-            APIHolder.addPlugin(managedCastleProvider)
-            Log.i(TAG, "SERVER_PROVIDER_SYNC: Registered built-in managed CastleTV Provider in APIHolder.")
+            try {
+                APIHolder.addPlugin(managedCastleProvider)
+                Log.i(TAG, "SERVER_PROVIDER_SYNC: Registered built-in managed CastleTV Provider ($targetName) in APIHolder.")
+            } catch (e: Exception) {
+                Log.e(TAG, "SERVER_PROVIDER_SYNC: Failed to register CastleTv fallback", e)
+            }
         }
     }
 }

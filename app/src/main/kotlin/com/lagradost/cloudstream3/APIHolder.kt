@@ -74,14 +74,30 @@ object APIHolder {
 
     fun getApi(name: String): MainAPI? = getApiFromNameNull(name)
     
-    fun getApiFromNameNull(name: String?): MainAPI? {
-        if (name.isNullOrBlank()) return null
-        val cleanName = name.trim()
+    fun getApiFromNameNull(apiName: String?): MainAPI? {
+        // 1. Guard against null, empty, or blank string
+        if (apiName.isNullOrBlank()) return null
+
+        val cleanName = apiName.trim()
         val stripped = cleanName.removePrefix("cs3_").replace("_", " ")
-        return apiMap[cleanName]
-            ?: apiMap[stripped]
-            ?: allProviders.find { it.name.equals(cleanName, ignoreCase = true) || it.name.equals(stripped, ignoreCase = true) || it.name.replace(" ", "").equals(cleanName.replace(" ", ""), ignoreCase = true) }
-            ?: apis.find { it.name.equals(cleanName, ignoreCase = true) || it.name.equals(stripped, ignoreCase = true) }
+        val targetClean = apiName.replace(" ", "")
+
+        // Check map direct matches safely
+        apiMap[cleanName]?.let { return it }
+        apiMap[stripped]?.let { return it }
+
+        // 2. Safely iterate through allProviders, guarding against null providers and null names
+        return allProviders.firstOrNull { provider ->
+            val providerName = provider?.name ?: return@firstOrNull false
+            providerName.equals(cleanName, ignoreCase = true) ||
+            providerName.equals(stripped, ignoreCase = true) ||
+            providerName.replace(" ", "").equals(targetClean, ignoreCase = true)
+        } ?: apis.firstOrNull { provider ->
+            val providerName = provider?.name ?: return@firstOrNull false
+            providerName.equals(cleanName, ignoreCase = true) ||
+            providerName.equals(stripped, ignoreCase = true) ||
+            providerName.replace(" ", "").equals(targetClean, ignoreCase = true)
+        }
     }
     
     fun getApiFromNameOrNull(name: String?): MainAPI? = getApiFromNameNull(name)
