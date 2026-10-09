@@ -1,6 +1,8 @@
 package xyz.mpv.rex.ui.preferences
 
+import android.content.Intent
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,6 +57,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -183,7 +186,22 @@ object PreferencesScreen : Screen {
             topBar = {
                 GlassTopBar(
                     title = stringResource(R.string.pref_preferences),
-                    onBackClick = { backstack.removeLastOrNull() }
+                    onBackClick = { backstack.removeLastOrNull() },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "GitHub Repository",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
             },
             containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
@@ -507,8 +525,21 @@ object PreferencesScreen : Screen {
                                 title = stringResource(R.string.pref_about_title),
                                 subtitle = "Version info, open source licenses, updates, and engine diagnostics",
                                 icon = Icons.Outlined.Info,
-                                showDivider = false,
+                                showDivider = true,
                                 onClick = { backstack.add(AboutScreen) }
+                            )
+
+                            // Category 7: GitHub Project
+                            GlassPreferenceItem(
+                                title = "GitHub Project",
+                                subtitle = "NithinXharma/MAx-player • Source code, releases, and issues",
+                                icon = Icons.Outlined.Code,
+                                showDivider = false,
+                                onClick = {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                                    )
+                                }
                             )
                         }
                     }

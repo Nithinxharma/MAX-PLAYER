@@ -1,6 +1,8 @@
 package xyz.mpv.rex.ui.preferences
 
 import android.content.Context
+import android.content.Intent
+import androidx.core.net.toUri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Animation
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Image
@@ -29,6 +32,8 @@ import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.ViewQuilt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -105,7 +110,22 @@ object AppearancePreferencesScreen : Screen {
             topBar = {
                 GlassTopBar(
                     title = stringResource(R.string.pref_appearance_title),
-                    onBackClick = { backstack.removeLastOrNull() }
+                    onBackClick = { backstack.removeLastOrNull() },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "GitHub Repository",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
             },
             containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background

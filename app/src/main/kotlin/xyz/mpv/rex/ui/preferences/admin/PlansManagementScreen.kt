@@ -1,6 +1,8 @@
 package xyz.mpv.rex.ui.preferences.admin
 
+import android.content.Intent
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -83,6 +85,15 @@ fun PlansManagementScreen(
                 title = "Plans Management",
                 onBackClick = onNavigateBack,
                 actions = {
+                    IconButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Outlined.Code, contentDescription = "GitHub Repository", tint = MaterialTheme.colorScheme.onSurface)
+                    }
                     IconButton(onClick = { showCreateDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Plan", tint = MaxStreamTheme.CrimsonAccent)
                     }

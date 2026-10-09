@@ -1,6 +1,8 @@
 package xyz.mpv.rex.ui.preferences
 
+import android.content.Intent
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.CloudQueue
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
@@ -43,6 +46,7 @@ import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -164,7 +168,22 @@ object AccountPreferencesScreen : Screen {
             topBar = {
                 GlassTopBar(
                     title = "Account & Profile",
-                    onBackClick = { backstack.removeLastOrNull() }
+                    onBackClick = { backstack.removeLastOrNull() },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "GitHub Repository",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
             },
             containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background

@@ -116,7 +116,7 @@ enum class UpdateChannel(val displayName: String) {
 
 @Serializable
 data class GitHubSyncConfig(
-    val repo: String = "MaxStreamApp/MAX-STREAM",
+    val repo: String = "NithinXharma/MAx-player",
     val token: String = "",
     val channel: UpdateChannel = UpdateChannel.STABLE,
     val autoCheck: Boolean = true,
@@ -142,7 +142,7 @@ class UpdateManager(
     private val prefs = context.getSharedPreferences("maxstream_update_prefs", Context.MODE_PRIVATE)
 
     fun getGitHubConfig(): GitHubSyncConfig {
-        val repo = prefs.getString("github_repo", "MaxStreamApp/MAX-STREAM") ?: "MaxStreamApp/MAX-STREAM"
+        val repo = prefs.getString("github_repo", "NithinXharma/MAx-player") ?: "NithinXharma/MAx-player"
         val token = prefs.getString("github_token", "") ?: ""
         val channelStr = prefs.getString("update_channel", UpdateChannel.STABLE.name) ?: UpdateChannel.STABLE.name
         val channel = runCatching { UpdateChannel.valueOf(channelStr) }.getOrDefault(UpdateChannel.STABLE)
@@ -174,7 +174,7 @@ class UpdateManager(
             .removePrefix("http://github.com/")
             .removePrefix("github.com/")
             .trim('/')
-            .ifEmpty { "MaxStreamApp/MAX-STREAM" }
+            .ifEmpty { "NithinXharma/MAx-player" }
     }
 
     suspend fun fetchAllReleases(forceNetwork: Boolean = false): List<Release> = withContext(Dispatchers.IO) {

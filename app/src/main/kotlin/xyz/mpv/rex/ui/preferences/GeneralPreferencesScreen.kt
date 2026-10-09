@@ -1,5 +1,7 @@
 package xyz.mpv.rex.ui.preferences
 
+import android.content.Intent
+import androidx.core.net.toUri
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,12 +29,15 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.serialization.Serializable
@@ -67,11 +72,28 @@ object GeneralPreferencesScreen : Screen {
         val authManager = koinInject<AuthManager>()
         val isAdmin by authManager.isAdmin.collectAsState()
 
+        val context = LocalContext.current
+
         Scaffold(
             topBar = {
                 GlassTopBar(
                     title = "General Settings",
-                    onBackClick = { backstack.removeLastOrNull() }
+                    onBackClick = { backstack.removeLastOrNull() },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "GitHub Repository",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
             },
             containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background

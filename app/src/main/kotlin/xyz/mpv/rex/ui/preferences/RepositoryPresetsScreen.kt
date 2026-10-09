@@ -1,6 +1,8 @@
 package xyz.mpv.rex.ui.preferences
 
+import android.content.Intent
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -94,6 +96,15 @@ fun RepositoryPresetsScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Outlined.Code, contentDescription = "GitHub Repository")
+                    }
                     IconButton(
                         onClick = { viewModel.verifyAllPresets() },
                         enabled = !isVerifying

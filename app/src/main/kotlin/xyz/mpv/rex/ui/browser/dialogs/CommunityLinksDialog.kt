@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -154,6 +156,18 @@ fun CommunityLinksDialog(
                         }
                     )
 
+                    // GitHub Project Row
+                    CommunityLinkCard(
+                        title = "GitHub Repository",
+                        summary = "Explore source code, releases, and issues (NithinXharma/MAx-player)",
+                        brandColor = Color(0xFF6C5CE7),
+                        icon = Icons.Outlined.Code,
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/NithinXharma/MAx-player"))
+                            context.startActivity(intent)
+                        }
+                    )
+
                     // Educational Note / Hint
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -231,7 +245,8 @@ private fun CommunityLinkCard(
     summary: String,
     brandColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: ImageVector = TelegramIcon
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -255,7 +270,7 @@ private fun CommunityLinkCard(
                     .background(brandColor.copy(alpha = 0.15f), CircleShape)
             ) {
                 Icon(
-                    imageVector = TelegramIcon,
+                    imageVector = icon,
                     contentDescription = null,
                     tint = brandColor,
                     modifier = Modifier.size(22.dp)

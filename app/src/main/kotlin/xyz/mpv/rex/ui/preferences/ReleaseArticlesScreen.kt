@@ -570,7 +570,7 @@ private fun GitHubConfigDialog(
                     value = repo,
                     onValueChange = { repo = it },
                     label = { Text(stringResource(R.string.github_sync_repo_label)) },
-                    placeholder = { Text("MaxStreamApp/MAX-STREAM") },
+                    placeholder = { Text("NithinXharma/MAx-player") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -657,7 +657,7 @@ private fun GitHubConfigDialog(
                 onClick = {
                     onSave(
                         GitHubSyncConfig(
-                            repo = repo.ifBlank { "MaxStreamApp/MAX-STREAM" },
+                            repo = repo.ifBlank { "NithinXharma/MAx-player" },
                             token = token,
                             channel = channel,
                             autoCheck = autoCheck,

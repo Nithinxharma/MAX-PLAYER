@@ -277,7 +277,7 @@ object AboutScreen : Screen {
 
                             GlassPreferenceItem(
                                 title = "GitHub Repository",
-                                subtitle = "Explore open source project repository and issues",
+                                subtitle = "NithinXharma/MAx-player • Source code and issues",
                                 icon = Icons.Outlined.Code,
                                 showDivider = true,
                                 onClick = {
@@ -325,6 +325,14 @@ object AboutScreen : Screen {
                                     checked = isAutoUpdateEnabled,
                                     onCheckedChange = { updateViewModel?.toggleAutoUpdate(it) },
                                     showDivider = true
+                                )
+
+                                GlassPreferenceItem(
+                                    title = "Version & Change Log",
+                                    subtitle = "View detailed change log with features added, removed & fixed",
+                                    icon = Icons.Outlined.Assessment,
+                                    showDivider = true,
+                                    onClick = { backstack.add(ChangelogScreen) }
                                 )
 
                                 GlassPreferenceItem(
@@ -407,7 +415,7 @@ object AboutScreen : Screen {
                                 showDivider = true,
                                 onClick = {
                                     context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, "https://github.com".toUri())
+                                        Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
                                     )
                                 }
                             )
@@ -419,7 +427,7 @@ object AboutScreen : Screen {
                                 showDivider = false,
                                 onClick = {
                                     context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, "https://github.com".toUri())
+                                        Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
                                     )
                                 }
                             )

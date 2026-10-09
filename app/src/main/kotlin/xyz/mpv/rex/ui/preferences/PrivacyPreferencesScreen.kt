@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.History
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -90,7 +93,22 @@ object PrivacyPreferencesScreen : Screen {
             topBar = {
                 GlassTopBar(
                     title = "Privacy & Security",
-                    onBackClick = { backstack.removeLastOrNull() }
+                    onBackClick = { backstack.removeLastOrNull() },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "GitHub Repository",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
             },
             containerColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
@@ -213,7 +231,7 @@ object PrivacyPreferencesScreen : Screen {
                                 showDivider = true,
                                 onClick = {
                                     context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, "https://github.com".toUri())
+                                        Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
                                     )
                                 }
                             )
@@ -225,7 +243,7 @@ object PrivacyPreferencesScreen : Screen {
                                 showDivider = false,
                                 onClick = {
                                     context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, "https://github.com".toUri())
+                                        Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
                                     )
                                 }
                             )

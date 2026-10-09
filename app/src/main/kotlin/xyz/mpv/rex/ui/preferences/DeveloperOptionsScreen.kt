@@ -1,5 +1,7 @@
 package xyz.mpv.rex.ui.preferences
 
+import android.content.Intent
+import androidx.core.net.toUri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -62,12 +64,29 @@ object DeveloperOptionsScreen : Screen {
 
         val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
+        val context = LocalContext.current
+
         Scaffold(
             containerColor = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background,
             topBar = {
                 xyz.mpv.rex.ui.components.glass.GlassTopBar(
                     title = stringResource(id = R.string.pref_developer_options_title),
-                    onBackClick = { backstack.removeLastOrNull() }
+                    onBackClick = { backstack.removeLastOrNull() },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "GitHub Repository",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
             }
         ) { paddingValues ->

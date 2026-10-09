@@ -501,7 +501,7 @@ object WelcomeScreen : Screen {
     // Explanation Dialog in MaxStream Glass
     if (showExplanationDialog) {
       val uriHandler = LocalUriHandler.current
-      val githubUrl = "https://github.com/MaxStreamApp/MAX-STREAM"
+      val githubUrl = "https://github.com/NithinXharma/MAx-player"
       val isPlayStoreBuild = BuildConfig.SCOPED_STORAGE_ONLY
 
       xyz.mpv.rex.ui.components.glass.MaxStreamGlassDialog(

@@ -1,6 +1,8 @@
 package xyz.mpv.rex.ui.preferences
 
+import android.content.Intent
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,6 +51,15 @@ fun ExtensionRepositoriesScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Outlined.Code, contentDescription = "GitHub Repository")
+                    }
                     IconButton(
                         onClick = {
                             isSyncingAll = true

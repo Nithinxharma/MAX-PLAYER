@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
@@ -146,6 +147,18 @@ object YtdlSettingsScreen : Screen {
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/NithinXharma/MAx-player"))
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Icon(
+                                Icons.Outlined.Code,
+                                contentDescription = "GitHub Repository",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                         IconButton(onClick = { refreshStatus() }) {
                             Icon(
                                 Icons.Outlined.Refresh,

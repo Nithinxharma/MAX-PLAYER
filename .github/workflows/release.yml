@@ -177,6 +177,40 @@ jobs:
           
           ls -lah MAX-STREAM-*.apk 2>/dev/null || ls -lah app/build/outputs/apk/release/
 
+      - name: Extract Changelog For Release
+        id: extract_changelog
+        run: |
+          set -e
+          CLEAN_TAG="${VERSION_TAG#v}"
+          echo "Extracting notes for version: $CLEAN_TAG"
+          CHANGELOG_NOTES=""
+          if [ -f "CHANGELOG.md" ]; then
+            # Extract section under ## [$CLEAN_TAG] or ## [v$CLEAN_TAG]
+            CHANGELOG_NOTES=$(awk -v ver="$CLEAN_TAG" '
+              $0 ~ "^## \\[" ver "\\]" || $0 ~ "^## \\[v" ver "\\]" { found=1; next }
+              found && /^## / { found=0 }
+              found { print }
+            ' CHANGELOG.md)
+          fi
+
+          if [ -z "$CHANGELOG_NOTES" ] && [ -f "CHANGELOG.md" ]; then
+            # Fallback to the topmost release section if specific tag heading not matched
+            CHANGELOG_NOTES=$(awk '
+              /^## \[/ { if (count++ == 0) { found=1; next } else { found=0; exit } }
+              found { print }
+            ' CHANGELOG.md)
+          fi
+
+          if [ -z "$CHANGELOG_NOTES" ]; then
+            CHANGELOG_NOTES="Detailed release for MAX STREAM $VERSION_TAG."
+          fi
+
+          {
+            echo "RELEASE_NOTES<<EOF"
+            echo "$CHANGELOG_NOTES"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
       - name: Upload All Release APKs to Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -184,6 +218,7 @@ jobs:
           path: |
             MAX-STREAM-*.apk
             app/build/outputs/apk/release/*.apk
+            CHANGELOG.md
           if-no-files-found: warn
 
       - name: Create GitHub Release
@@ -192,8 +227,10 @@ jobs:
           tag_name: ${{ env.VERSION_TAG }}
           name: MAX STREAM ${{ env.VERSION_TAG }}
           body: |
+            ${{ env.RELEASE_NOTES }}
+
             ---
-            ### Checksums
+            ### 📦 Build Verification & Checksums
 
             | Variant | SHA-256 |
             | ------- | ------- |
@@ -205,6 +242,7 @@ jobs:
           files: |
             MAX-STREAM-*.apk
             app/build/outputs/apk/release/*.apk
+            CHANGELOG.md
           draft: false
           prerelease: false
         env:

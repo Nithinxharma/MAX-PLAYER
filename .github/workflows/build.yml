@@ -154,7 +154,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MAX-STREAM-all-apks-${{ env.SHORT_SHA }}
-          path: app/build/outputs/apk/release/*.apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            CHANGELOG.md
           if-no-files-found: warn
 
       - name: Upload app-arm64-v8a Artifact
@@ -194,12 +196,31 @@ jobs:
           path: app/build/outputs/apk/release/app-x86_64-release.apk
           if-no-files-found: ignore
 
+      - name: Extract Latest Changelog
+        id: extract_latest_changelog
+        run: |
+          LATEST_LOG=""
+          if [ -f "CHANGELOG.md" ]; then
+            LATEST_LOG=$(awk '
+              /^## \[/ { if (count++ == 0) { found=1; next } else { found=0; exit } }
+              found { print }
+            ' CHANGELOG.md)
+          fi
+          if [ -z "$LATEST_LOG" ]; then
+            LATEST_LOG="Continuous build for commit ${{ env.SHORT_SHA }}."
+          fi
+          {
+            echo "CI_CHANGELOG<<EOF"
+            echo "$LATEST_LOG"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
       - name: Publish to GitHub Releases
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.SHORT_SHA }}"
-          name: "MAX STREAM Release ${{ env.SHORT_SHA }}"
+          name: "MAX STREAM Continuous Build ${{ env.SHORT_SHA }}"
           body: |
             ### 🚀 MAX STREAM Continuous Build `${{ env.SHORT_SHA }}`
             
@@ -207,11 +228,16 @@ jobs:
             **Branch:** `${{ github.ref_name }}`
             
             ---
+            ### 📋 Recent Changes & Features
+            ${{ env.CI_CHANGELOG }}
+
+            ---
             ### 🔐 Static Certificate Fingerprints
             - **SHA-1:** `8C:C3:72:DB:63:C1:6B:13:0C:3A:6E:3F:05:2A:5E:78:1D:EE:51:7D`
             - **SHA-256:** `71:FC:3C:FC:82:34:CB:A6:A4:66:28:C8:C0:75:75:1C:8E:57:D3:BE:28:6A:B3:F2:A3:FA:09:32:A1:BA:04:20`
           files: |
             app/build/outputs/apk/release/*.apk
+            CHANGELOG.md
           draft: false
           prerelease: false
         env:

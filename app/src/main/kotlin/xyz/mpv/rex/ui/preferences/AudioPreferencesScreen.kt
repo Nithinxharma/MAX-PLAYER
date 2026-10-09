@@ -1,5 +1,7 @@
 package xyz.mpv.rex.ui.preferences
 
+import android.content.Intent
+import androidx.core.net.toUri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -8,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,7 +58,22 @@ object AudioPreferencesScreen : Screen {
       topBar = {
         xyz.mpv.rex.ui.components.glass.GlassTopBar(
           title = stringResource(R.string.pref_audio),
-          onBackClick = { backstack.removeLastOrNull() }
+          onBackClick = { backstack.removeLastOrNull() },
+          actions = {
+            IconButton(
+              onClick = {
+                context.startActivity(
+                  Intent(Intent.ACTION_VIEW, "https://github.com/NithinXharma/MAx-player".toUri())
+                )
+              }
+            ) {
+              Icon(
+                imageVector = Icons.Outlined.Code,
+                contentDescription = "GitHub Repository",
+                tint = MaterialTheme.colorScheme.primary
+              )
+            }
+          }
         )
       },
     ) { padding ->
