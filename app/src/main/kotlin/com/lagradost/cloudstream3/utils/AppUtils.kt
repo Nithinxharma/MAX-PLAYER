@@ -5,15 +5,15 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.kotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
-import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.base64Decode
 import com.lagradost.cloudstream3.base64DecodeArray
 import com.lagradost.cloudstream3.base64Encode
 import kotlin.reflect.KClass
 
 val mapper: JsonMapper = JsonMapper.builder()
-    .addModule(KotlinModule.Builder().build())
+    .addModule(kotlinModule())
     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
     .configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
     .configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true)
@@ -23,8 +23,8 @@ val mapper: JsonMapper = JsonMapper.builder()
 object AppUtils {
     val mapper: JsonMapper get() = com.lagradost.cloudstream3.utils.mapper
 
-    fun Any.toJson(): String {
-        return com.lagradost.cloudstream3.utils.mapper.writeValueAsString(this)
+    fun toJson(obj: Any?): String {
+        return if (obj == null) "null" else com.lagradost.cloudstream3.utils.mapper.writeValueAsString(obj)
     }
 
     fun Any.toJsonLiteral(): String {
@@ -77,6 +77,8 @@ object AppUtils {
     fun base64DecodeArray(string: String): ByteArray = com.lagradost.cloudstream3.base64DecodeArray(string)
     fun base64Encode(bytes: ByteArray): String = com.lagradost.cloudstream3.base64Encode(bytes)
 }
+
+// --- Top-Level ABI Exports ---
 
 fun Any.toJson(): String {
     return mapper.writeValueAsString(this)

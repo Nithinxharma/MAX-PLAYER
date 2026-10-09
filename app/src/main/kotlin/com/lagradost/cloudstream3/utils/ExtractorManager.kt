@@ -2,8 +2,16 @@ package com.lagradost.cloudstream3.utils
 
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.SubtitleFile
+import java.util.concurrent.CopyOnWriteArrayList
 
 object ExtractorManager {
+    val extractors: CopyOnWriteArrayList<ExtractorApi>
+        get() = APIHolder.extractorApis
+
+    fun registerExtractor(extractor: ExtractorApi) {
+        APIHolder.addExtractor(extractor)
+    }
+
     fun getExtractorForUrl(url: String): ExtractorApi? {
         return com.lagradost.cloudstream3.utils.getExtractorForUrl(url)
     }

@@ -33,7 +33,6 @@ object APIHolder {
         _registerMainApiCallsCount.incrementAndGet()
         Log.i("ExtensionManager", "INSTANCE_IDENTITY: APIHolder.addPlugin called on APIHolder@${System.identityHashCode(this)} for API ${api.name} (${api.mainUrl})")
         Log.i("ExtensionManager", "EXTENSION_LOAD: registerMainAPI called: ${api.name} (${api.mainUrl})")
-        // Replace existing entry with same name if already present, or add new
         val existing = allProviders.find { it.name.equals(api.name, ignoreCase = true) || (it.mainUrl.isNotBlank() && it.mainUrl == api.mainUrl) }
         if (existing != null) {
             allProviders.remove(existing)
@@ -74,6 +73,7 @@ object APIHolder {
     }
 
     fun getApi(name: String): MainAPI? = getApiFromNameNull(name)
+    
     fun getApiFromNameNull(name: String?): MainAPI? {
         if (name.isNullOrBlank()) return null
         val cleanName = name.trim()
@@ -83,11 +83,15 @@ object APIHolder {
             ?: allProviders.find { it.name.equals(cleanName, ignoreCase = true) || it.name.equals(stripped, ignoreCase = true) || it.name.replace(" ", "").equals(cleanName.replace(" ", ""), ignoreCase = true) }
             ?: apis.find { it.name.equals(cleanName, ignoreCase = true) || it.name.equals(stripped, ignoreCase = true) }
     }
+    
     fun getApiFromNameOrNull(name: String?): MainAPI? = getApiFromNameNull(name)
+    
     fun getApiFromName(name: String): MainAPI = getApiFromNameNull(name) ?: throw ErrorLoadingException("No API found with name $name")
 
     fun getExtractorApiFromName(name: String): ExtractorApi? = extractorApis.find { it.name.equals(name, ignoreCase = true) }
+    
     fun getExtractorApiFromNameNull(name: String?): ExtractorApi? = if (name != null) extractorApis.find { it.name.equals(name, ignoreCase = true) } else null
+    
     fun getExtractorForUrl(url: String): ExtractorApi? = com.lagradost.cloudstream3.utils.getExtractorForUrl(url)
 
     fun removePluginsBySource(sourceFilename: String) {
