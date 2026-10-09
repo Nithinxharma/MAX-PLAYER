@@ -563,3 +563,8 @@ object AccountPreferencesScreen : Screen {
         }
     }
 }
+
+/**
+ * ProfileScreen route alias to eliminate duplicate screens while preserving navigation compatibility.
+ */
+typealias ProfileScreen = AccountPreferencesScreen

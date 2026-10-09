@@ -173,7 +173,7 @@ object DeveloperOptionsScreen : Screen {
                                 }
                             )
                         }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
+                        GroupedPreferenceCard(position = GroupPosition.LAST) {
                             Preference(
                                 title = { Text("Run Firebase Auto-Discovery Database Sync") },
                                 summary = {
@@ -194,48 +194,6 @@ object DeveloperOptionsScreen : Screen {
                                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                         discoveryService.discoverAndSyncAll()
                                     }
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.MIDDLE) {
-                            Preference(
-                                title = { Text("Installed Providers & Extensions") },
-                                summary = {
-                                    Text(
-                                        "View and manage locally installed provider packages",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Extension,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(InstalledExtensionsScreenRoute)
-                                }
-                            )
-                        }
-                        GroupedPreferenceCard(position = GroupPosition.LAST) {
-                            Preference(
-                                title = { Text("Repository Manager") },
-                                summary = {
-                                    Text(
-                                        "Configure remote extension repositories and feeds",
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Storage,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                onClick = {
-                                    backstack.add(ExtensionRepositoriesScreenRoute)
                                 }
                             )
                         }

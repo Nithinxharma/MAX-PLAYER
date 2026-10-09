@@ -97,7 +97,6 @@ import xyz.mpv.rex.ui.components.glass.GlassPreferenceItem
 import xyz.mpv.rex.ui.components.glass.GlassSettingsSection
 import xyz.mpv.rex.ui.components.glass.GlassTopBar
 import xyz.mpv.rex.ui.components.glass.MaxStreamGlassButton
-import xyz.mpv.rex.ui.profile.ProfileScreen
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 import xyz.mpv.rex.ui.utils.LocalBackStack
 

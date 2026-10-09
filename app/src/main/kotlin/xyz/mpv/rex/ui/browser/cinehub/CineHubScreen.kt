@@ -72,7 +72,7 @@ import xyz.mpv.rex.ui.theme.maxstream.MaxStreamSkeletonListItem
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamSkeletonRow
 import xyz.mpv.rex.ui.theme.maxstream.maxStreamShimmer
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
-import xyz.mpv.rex.ui.profile.ProfileScreen
+import xyz.mpv.rex.ui.preferences.AccountPreferencesScreen
 import coil.compose.AsyncImage
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.Episode
@@ -109,6 +109,8 @@ import xyz.mpv.rex.ui.preferences.PreferencesScreen
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.utils.media.MediaUtils
 import java.io.File
+
+private typealias ProfileScreen = AccountPreferencesScreen
 
 data class ExtensionMediaDetails(
   val loadResponse: LoadResponse,
