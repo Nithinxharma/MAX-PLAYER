@@ -38,9 +38,10 @@ import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.annotation.KoinExperimentalAPI
+import com.lagradost.cloudstream3.AcraApplication
 
 @OptIn(KoinExperimentalAPI::class, kotlinx.coroutines.FlowPreview::class)
-class App : Application(), ImageLoaderFactory {
+class App : AcraApplication(), ImageLoaderFactory {
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
   private val metadataCache: VideoMetadataCacheRepository by inject()
   private val hybridMediaIndex: HybridMediaIndexRepository by inject()

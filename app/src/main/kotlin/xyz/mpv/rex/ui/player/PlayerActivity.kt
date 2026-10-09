@@ -114,7 +114,7 @@ import java.util.Locale
  * @see MediaPlaybackService for background playback functionality
  */
 @Suppress("TooManyFunctions", "LargeClass")
-class PlayerActivity :
+open class PlayerActivity :
   AppCompatActivity(),
   PlayerHost,
   MediaPlaybackService.ServiceListener {
