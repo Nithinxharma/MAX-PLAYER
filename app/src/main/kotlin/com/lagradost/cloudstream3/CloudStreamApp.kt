@@ -38,17 +38,17 @@ class CloudStreamApp {
         }
 
         inline fun <reified T> getKey(key: String, default: T): T = getKey(key) ?: default
+        inline fun <reified T> getKey(folder: String, key: String): T? = getKey("$folder/$key")
+        inline fun <reified T> getKey(folder: String, key: String, default: T): T = getKey("$folder/$key") ?: default
 
-        inline fun <reified T> setKey(key: String, value: T) {
+        fun <T> setKey(key: String, value: T) {
             val ctx = context ?: return
             val prefs = ctx.getSharedPreferences("cloudstream_app_prefs", Context.MODE_PRIVATE)
             val str = if (value is String) value else mapper.writeValueAsString(value)
             prefs.edit().putString(key, str).apply()
         }
 
-        inline fun <reified T> getKey(folder: String, key: String): T? = getKey("$folder/$key")
-        inline fun <reified T> getKey(folder: String, key: String, default: T): T = getKey("$folder/$key") ?: default
-        inline fun <reified T> setKey(folder: String, key: String, value: T) = setKey("$folder/$key", value)
+        fun <T> setKey(folder: String, key: String, value: T) = setKey("$folder/$key", value)
 
         fun removeKey(key: String) {
             val ctx = context ?: return

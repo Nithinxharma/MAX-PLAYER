@@ -1,3 +1,5 @@
+@file:JvmName("MainAPIKt")
+@file:JvmMultifileClass
 package com.lagradost.cloudstream3
 
 import androidx.annotation.Keep
@@ -1107,5 +1109,150 @@ fun capitalizeStringNullable(str: String?): String? {
     if (str == null) return null
     return str.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.ROOT) else it.toString() }
 }
+
+// --- Missing Extension Functions for Web Scraper Extensions Compatibility ---
+
+fun List<SearchResponse>.toNewSearchResponseList(hasNext: Boolean? = null): SearchResponseList {
+    return newSearchResponseList(this, hasNext)
+}
+
+fun Episode.addDate(date: java.util.Date?) {
+    this.date = date?.time
+}
+
+fun AnimeLoadResponse.addEpisodes(status: DubStatus, episodes: List<Episode>?) {
+    if (episodes.isNullOrEmpty()) return
+    this.episodes[status] = (this.episodes[status] ?: emptyList()) + episodes
+}
+
+fun AnimeSearchResponse.addDubStatus(status: DubStatus, episodes: Int? = null) {
+    this.dubStatus = dubStatus?.also { it.add(status) } ?: mutableSetOf(status)
+    if (this.type?.isMovieType() != true) {
+        if (episodes != null && episodes > 0) {
+            this.episodes[status] = episodes
+        }
+    }
+}
+
+fun AnimeSearchResponse.addDubStatus(isDub: Boolean, episodes: Int? = null) {
+    addDubStatus(if (isDub) DubStatus.Dubbed else DubStatus.Subbed, episodes)
+}
+
+fun AnimeSearchResponse.addDub(episodes: Int?) {
+    if (episodes == null || episodes <= 0) return
+    addDubStatus(DubStatus.Dubbed, episodes)
+}
+
+fun AnimeSearchResponse.addSub(episodes: Int?) {
+    if (episodes == null || episodes <= 0) return
+    addDubStatus(DubStatus.Subbed, episodes)
+}
+
+fun AnimeSearchResponse.addDubStatus(
+    dubExist: Boolean,
+    subExist: Boolean,
+    dubEpisodes: Int? = null,
+    subEpisodes: Int? = null
+) {
+    if (dubExist) addDubStatus(DubStatus.Dubbed, dubEpisodes)
+    if (subExist) addDubStatus(DubStatus.Subbed, subEpisodes)
+}
+
+fun AnimeSearchResponse.addDubStatus(status: String, episodes: Int? = null) {
+    if (status.contains("(dub)", ignoreCase = true)) {
+        addDubStatus(DubStatus.Dubbed, episodes)
+    } else if (status.contains("(sub)", ignoreCase = true)) {
+        addDubStatus(DubStatus.Subbed, episodes)
+    }
+}
+
+fun getDurationFromString(input: String?): Int? {
+    val cleanInput = input?.trim()?.replace(" ", "") ?: return null
+    Regex("(\\d+\\shr)|(\\d+\\shour)|(\\d+\\smin)|(\\d+\\ssec)").findAll(input).let { values ->
+        var seconds = 0
+        values.forEach {
+            val timeText = it.value
+            if (timeText.isNotBlank()) {
+                val time = timeText.filter { s -> s.isDigit() }.trim().toIntOrNull() ?: 0
+                val scale = timeText.filter { s -> !s.isDigit() }.trim()
+                val timeval = when (scale) {
+                    "hr", "hour" -> time * 60 * 60
+                    "min" -> time * 60
+                    "sec" -> time
+                    else -> 0
+                }
+                seconds += timeval
+            }
+        }
+        if (seconds > 0) {
+            return seconds / 60
+        }
+    }
+    Regex("([0-9]*)h.*?([0-9]*)m").find(cleanInput)?.groupValues?.let { values ->
+        if (values.size == 3) {
+            val hours = values[1].toIntOrNull()
+            val minutes = values[2].toIntOrNull()
+            if (minutes != null && hours != null) {
+                return hours * 60 + minutes
+            }
+        }
+    }
+    Regex("([0-9]*)m").find(cleanInput)?.groupValues?.let { values ->
+        if (values.size == 2) {
+            val returnValue = values[1].toIntOrNull()
+            if (returnValue != null) {
+                return returnValue
+            }
+        }
+    }
+    return null
+}
+
+fun TvType.isMovieType(): Boolean {
+    return when (this) {
+        TvType.AnimeMovie,
+        TvType.Live,
+        TvType.Movie,
+        TvType.Others -> true
+        else -> false
+    }
+}
+
+fun TvType.isAudioType(): Boolean = false
+
+fun TvType.isLiveStream(): Boolean = this == TvType.Live
+
+fun TvType.isAnimeOp(): Boolean = this == TvType.Anime || this == TvType.OVA
+
+fun TvType?.isEpisodeBased(): Boolean {
+    return when (this) {
+        TvType.Anime,
+        TvType.AsianDrama,
+        TvType.Cartoon,
+        TvType.TvSeries -> true
+        else -> false
+    }
+}
+
+fun LoadResponse?.isEpisodeBased(): Boolean {
+    if (this == null) return false
+    return (this is TvSeriesLoadResponse || this is AnimeLoadResponse) && this.type.isEpisodeBased()
+}
+
+fun LoadResponse?.isAnimeBased(): Boolean {
+    if (this == null) return false
+    return (this.type == TvType.Anime || this.type == TvType.AnimeMovie || this.type == TvType.OVA)
+}
+
+fun MainAPI.newAnimeLoadResponse(
+    name: String,
+    url: String,
+    type: TvType,
+    comingSoonIfNone: Boolean = true,
+    initializer: AnimeLoadResponse.() -> Unit = {}
+): AnimeLoadResponse {
+    return AnimeLoadResponse(name, url, this.name, type).apply(initializer)
+}
+
 
 
