@@ -196,7 +196,7 @@ class FirebaseProviderSyncService(
      * Example:
      * Free: [bollyflix, vega, superstream]
      * Premium inherits Free: [uhdmovies, moviesmod] -> Effective: [bollyflix, vega, superstream, uhdmovies, moviesmod]
-     * VIP inherits Premium: [castletv, streamwish] -> Effective: [all above + castletv, streamwish]
+     * VIP inherits Premium -> Effective: [all allowed extensions in inheritance chain]
      * Admin: allowAllExtensions = true
      *
      * Protected against circular inheritance cycles.

@@ -1,43 +1,51 @@
-# Implementation Plan: Screen Cleanup, Extension Consolidation, and Codebase Optimization
+# Architectural Plan: Purge Hardcoded Providers & Plan-Based Extension Sync
 
-This plan details the removal of unneeded/redundant UI screens (Shorts, Ytdl, Recently Played, MaxStreamSeeAllSheet, CineDetailScreen), consolidation of Extension & Repository management into a single tabbed view, and optimization of `SplashScreen.kt` and `CineHubUnifiedMediaScreen.kt`.
-
----
-
-## 1. Extension & Provider Management Consolidation
-- **Unified Extension Hub (`InstalledExtensionsScreen.kt`)**:
-  - Add top scrollable/segmented tabs: **Installed Extensions**, **Repositories**, and **Preset Repositories**.
-  - Move repository URL management and repository preset installation into `InstalledExtensionsScreen.kt`.
-  - Deprecate standalone routes (`ExtensionRepositoriesScreenRoute.kt`, `RepositoryPresetsScreenRoute.kt`, `ExtensionPreferencesScreenRoute.kt`) and redirect all extension navigation directly to `InstalledExtensionsScreenRoute`.
-  - Clean up redundant standalone repository files (`ExtensionRepositoriesScreen.kt`, `RepositoryPresetsScreen.kt`).
+This revised plan incorporates your feedback:
+1. **Preserve Preset Repositories**: Keep default preset extension repositories in `RepositoryManager.kt` intact so users can browse repository catalogs.
+2. **Remove Hardcoded Provider Fallbacks**: Completely remove `CastleTV` fallbacks, default CastleTV user profile references, and built-in provider fallbacks.
+3. **Strict Plan-Based Extension Activation**: Fix unpermissioned bulk auto-installations on app launch/login by restricting active extension installations strictly to extensions permitted by the user's Firestore subscription plan.
 
 ---
 
-## 2. Removal of Redundant & Unused UI Screens & Navigation Entries
-- **Shorts Module Removal**:
-  - Delete `ShortsScreen.kt`, `ShortsViewModel.kt`, `ShortsPreferencesScreen.kt`, and `BlockedShortsScreen.kt`.
-  - Remove Shorts tab from `MainScreen.kt` bottom navigation bar and navigation graph.
-  - Remove Shorts & Blocked Shorts preferences entries from `PreferencesScreen.kt`.
-- **Ytdl Settings & Recently Played Removal**:
-  - Delete `YtdlSettingsScreen.kt` and remove Ytdl configuration entries from `PreferencesScreen.kt`.
-  - Delete `RecentlyPlayedScreen.kt` and `RecentlyPlayedViewModel.kt`, and remove Recently Played options from MainScreen/Library navigation.
-- **Redundant Details & Sheet Removal**:
-  - Delete `CineDetailScreen.kt` (since `CineHubScreen.kt` contains the unified `CineDetailView` with inline stream resolution, episode ranges, and watch status).
-  - Delete `MaxStreamSeeAllSheet.kt` and route "See All" actions to `CineHubSearchScreen` or inline section grids.
+## Proposed Changes
+
+### Task 1: Complete Removal of Hardcoded Providers & Fallbacks
+
+#### 1. `ServerProviderSyncService.kt`
+- Delete `ensureManagedCastleTvFallback()`, `CASTLE_TV_ID`, `CASTLE_TV_NAME`, and `CastleTV.cs3` manifest logic.
+- Remove automatic silent background auto-installation of all catalog plugins on app startup.
+- Retain repository query capability without forced auto-installs.
+
+#### 2. `FirebaseProviderSyncService.kt`
+- Remove `"castletv"` and `"streamwish"` hardcoded provider IDs from fallback entitlement lists.
+
+#### 3. `UserProfile.kt`
+- Update `providerAccess` default from `listOf("castletv")` to `emptyList()`.
+- Update `installedProviders` default from `mapOf("castletv" to 14L)` to `emptyMap()`.
+
+#### 4. `RepositoryManager.kt`
+- **Keep Preset Repositories Intact**: Maintain preset community extension repositories (`BUILT_IN_PRESETS`) so users can view available plugins in the Extension Manager without forced background installation.
 
 ---
 
-## 3. Screen Optimization
-- **`SplashScreen.kt` Optimization**:
-  - Streamline initial boot logic, remove unnecessary delays/animations, and ensure fast transition directly to `MainScreen`.
-- **`CineHubUnifiedMediaScreen.kt` Optimization**:
-  - Clean up unused imports, dead layout state, and streamline the library grid rendering logic.
-- **Preferences & Main Navigation Cleanup**:
-  - Remove all broken or removed screen references from `PreferencesScreen.kt` menu items and `MainScreen.kt` routes.
+### Task 2: Fix Unpermissioned Auto-Installation on First Launch / Login
+
+#### 1. `FirebaseProviderModels.kt`
+- Update `PlanConfig.defaultForPlan("free")` so `allowAllExtensions = false` and `allowedExtensions = emptyList()` (or configured explicitly via Firestore).
+- Ensure default plans (`free`, `premium`, `vip`) do NOT default to `allowAllExtensions = true` unless specified in Firestore or for `admin`/`owner` roles.
+
+#### 2. `FirebaseProviderSyncService.kt`
+- Enforce strict plan entitlement checks: extensions are installed/activated **ONLY** if they match the user's active plan `allowedExtensions` or `customExtensions` in Firestore.
+- Disallowed extensions are not auto-installed on login or app launch.
 
 ---
 
-## Verification & Build Plan
-1. Execute file removals and code modifications across all affected packages.
-2. Verify with `compile_applet` to ensure zero compilation errors or broken route references.
-3. Verify that navigation remains clean, fluid, and responsive.
+## Verification Plan
+
+### Automated Build
+- Run `compile_applet` to verify clean compilation.
+
+### Behavior Verification
+1. **No CastleTV Fallbacks**: Verify that no hardcoded CastleTV or dummy providers are injected into `APIHolder`.
+2. **Preset Repositories Available**: Confirm preset repositories remain accessible in the Extension Manager UI.
+3. **Plan-Gated Extensions**: Verify that launching the app or logging in on a Free plan does not auto-install unpermitted extensions.

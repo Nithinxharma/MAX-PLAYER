@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for removing unused screens (Shorts, Blocked Shorts, Ytdl Settings, Recently Played, MaxStreamSeeAllSheet, CineDetailScreen), consolidating Extension & Repository management into tabs within InstalledExtensionsScreen, and optimizing SplashScreen and CineHubUnifiedMediaScreen.",
-  "updatedAt":  "2026-10-10T15:40:11.031308346Z",
+  "summary":  "Revised plan: Retain preset extension repositories while purging all hardcoded CastleTV/dummy providers, and enforce strict plan-matching so extensions are not auto-installed without plan authorization.",
+  "updatedAt":  "2026-10-10T17:07:11.985517804Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

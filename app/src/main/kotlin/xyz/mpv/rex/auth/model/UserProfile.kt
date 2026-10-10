@@ -42,11 +42,11 @@ data class UserProfile(
 
     @get:PropertyName("providerAccess")
     @set:PropertyName("providerAccess")
-    var providerAccess: List<String> = listOf("castletv"),
+    var providerAccess: List<String> = emptyList(),
 
     @get:PropertyName("installedProviders")
     @set:PropertyName("installedProviders")
-    var installedProviders: Map<String, Long> = mapOf("castletv" to 14L),
+    var installedProviders: Map<String, Long> = emptyMap(),
 
     @ServerTimestamp
     @get:PropertyName("createdAt")
@@ -107,12 +107,12 @@ data class UserProfile(
             }
 
             @Suppress("UNCHECKED_CAST")
-            val rawAccess = doc.get("providerAccess") as? List<String> ?: listOf("castletv")
+            val rawAccess = doc.get("providerAccess") as? List<String> ?: emptyList()
 
             @Suppress("UNCHECKED_CAST")
             val rawInstalled = (doc.get("installedProviders") as? Map<String, Any>)?.mapValues {
                 (it.value as? Number)?.toLong() ?: 1L
-            } ?: mapOf("castletv" to 14L)
+            } ?: emptyMap()
 
             val createdAt = doc.getDate("createdAt")
             val lastLogin = doc.getDate("lastLogin")

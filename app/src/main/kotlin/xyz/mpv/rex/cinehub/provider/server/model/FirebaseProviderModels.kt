@@ -158,7 +158,7 @@ data class PlanConfig(
                     name = "Free",
                     description = "Baseline curated providers for standard streaming",
                     allowedExtensions = emptyList(),
-                    allowAllExtensions = true,
+                    allowAllExtensions = false,
                     inherits = null,
                     price = "₹0",
                     strikePrice = "₹0",

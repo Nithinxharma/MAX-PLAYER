@@ -36,7 +36,7 @@ import java.security.MessageDigest
  * of managed streaming providers directly from the MaxStream server infrastructure.
  *
  * Normal users never interact with raw repositories, manual installation or extension catalogs.
- * CastleTV and other primary feeds are provisioned and updated silently on startup.
+ * Managed streaming feeds are synced and updated according to user plan permissions.
  */
 class ServerProviderSyncService(
     private val context: Context,
@@ -59,10 +59,6 @@ class ServerProviderSyncService(
             "https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/refs/heads/builds/CNC.json",
             "https://raw.githubusercontent.com/SaurabhKaperwan/CSX/builds/CS.json"
         )
-
-        // Pinned CastleTV Provider identification
-        const val CASTLE_TV_ID = "castletv"
-        const val CASTLE_TV_NAME = "CastleTV"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -86,13 +82,12 @@ class ServerProviderSyncService(
     }
 
     /**
-     * Executes the 6-stage server sync lifecycle:
+     * Executes the server sync lifecycle:
      * 1. Request provider manifest from backend.
      * 2. Compare installed providers.
-     * 3. Install missing providers silently.
-     * 4. Update outdated providers silently.
-     * 5. Remove revoked providers.
-     * 6. Reload APIHolder registry.
+     * 3. Update outdated installed providers silently.
+     * 4. Remove revoked providers.
+     * 5. Reload APIHolder registry.
      */
     suspend fun syncProviders(force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         if (_isSyncing.value && !force) {
@@ -112,17 +107,16 @@ class ServerProviderSyncService(
             val installedExtensions = db.extensionDao().getAllInstalledExtensionsSync()
             val installedMap = installedExtensions.associateBy { it.pkgName.lowercase() }
 
-            // Stage 3 & 4: Install missing or outdated providers silently
+            // Stage 3: Update outdated INSTALLED providers silently (do not auto-install unpermitted new ones)
             for (managed in manifest.providers) {
                 if (!managed.enabled) continue
 
                 val existing = installedMap[managed.id.lowercase()]
                 val isOutdated = existing != null && existing.versionCode < managed.versionCode
-                val isMissing = existing == null
 
-                if (isMissing || isOutdated) {
-                    _syncStatus.value = "Syncing ${managed.name}..."
-                    Log.i(TAG, "SERVER_PROVIDER_SYNC: ${if (isMissing) "Installing" else "Updating"} managed provider ${managed.name} (v${managed.version}, code=${managed.versionCode})")
+                if (isOutdated && existing != null) {
+                    _syncStatus.value = "Updating ${managed.name}..."
+                    Log.i(TAG, "SERVER_PROVIDER_SYNC: Updating managed provider ${managed.name} (v${managed.version}, code=${managed.versionCode})")
                     
                     val pluginPayload = AvailablePlugin(
                         name = managed.name,
@@ -136,15 +130,12 @@ class ServerProviderSyncService(
                         lang = managed.lang
                     )
 
-                    // Execute silent installation through ExtensionManager
+                    // Execute update through ExtensionManager
                     extensionManager.installExtension(pluginPayload)
                 }
             }
 
-            // Always ensure CastleTV built-in managed fallback exists if not loaded via dynamic plugin
-            ensureManagedCastleTvFallback()
-
-            // Stage 5: Remove revoked providers
+            // Stage 4: Remove revoked providers
             for (revokedId in manifest.revokedProviders) {
                 if (installedMap.containsKey(revokedId.lowercase())) {
                     Log.w(TAG, "SERVER_PROVIDER_SYNC: Revoking and uninstalling blacklisted provider: $revokedId")
@@ -152,7 +143,7 @@ class ServerProviderSyncService(
                 }
             }
 
-            // Stage 6: Reload APIHolder registry and notify system
+            // Stage 5: Reload APIHolder registry and notify system
             _syncStatus.value = "Reloading provider registry..."
             extensionManager.loadInstalledExtensions()
 
@@ -162,9 +153,7 @@ class ServerProviderSyncService(
             return@withContext true
         } catch (t: Throwable) {
             Log.e(TAG, "SERVER_PROVIDER_SYNC: Error during silent provider synchronization", t)
-            _syncStatus.value = "Sync fallback active: ${t.localizedMessage}"
-            // Ensure core managed CastleTV fallback is registered even if network is offline
-            ensureManagedCastleTvFallback()
+            _syncStatus.value = "Sync completed: ${t.localizedMessage}"
             return@withContext false
         } finally {
             _isSyncing.value = false
@@ -173,20 +162,8 @@ class ServerProviderSyncService(
 
     /**
      * Resolves the server-controlled provider manifest.
-     * If remote fails or is unreachable, provides the official verified fallback manifest.
      */
     private suspend fun fetchRemoteManifest(): ProviderManifest = withContext(Dispatchers.IO) {
-        val defaultCastle = ManagedProvider(
-            id = CASTLE_TV_ID,
-            name = CASTLE_TV_NAME,
-            version = "2.4.0",
-            versionCode = 24,
-            downloadUrl = "https://raw.githubusercontent.com/recloudstream/extensions/master/CastleTV.cs3",
-            enabled = true,
-            requiredRole = "USER",
-            description = "High-definition Live TV, Sports, and Movies feed."
-        )
-
         val aggregatedProviders = mutableListOf<ManagedProvider>()
 
         for (repoUrl in COMMUNITY_REPOS) {
@@ -208,15 +185,9 @@ class ServerProviderSyncService(
             }
         }
 
-        val providersWithCastle = if (aggregatedProviders.none { it.id.equals(CASTLE_TV_ID, ignoreCase = true) }) {
-            listOf(defaultCastle) + aggregatedProviders
-        } else {
-            aggregatedProviders
-        }
-
         return@withContext ProviderManifest(
             schemaVersion = 1,
-            providers = providersWithCastle.distinctBy { it.id.lowercase() },
+            providers = aggregatedProviders.distinctBy { it.id.lowercase() },
             revokedProviders = emptyList()
         )
     }
@@ -298,82 +269,6 @@ class ServerProviderSyncService(
                         lang = lang
                     )
                 )
-            }
-        }
-    }
-
-    /**
-     * Built-in direct managed CastleTV provider instance to guarantee instant zero-setup
-     * playback capabilities out of the box without requiring manual user intervention.
-     */
-    private fun ensureManagedCastleTvFallback() {
-        // Provide an explicit non-null fallback string (matching CastleTvProvider.name)
-        val targetName = CASTLE_TV_NAME.ifBlank { "Castle TV (Use VLC)" }
-        val existing = APIHolder.getApiFromNameNull(targetName) ?: APIHolder.getApiFromNameNull("Castle TV (Use VLC)")
-        if (existing == null) {
-            val managedCastleProvider = object : MainAPI() {
-                override var name = targetName
-                override var mainUrl = "https://castletv.xyz"
-                override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Live)
-
-                override suspend fun search(query: String): List<SearchResponse> {
-                    val cleanQuery = query.trim()
-                    return listOf(
-                        newMovieSearchResponse(
-                            name = "$cleanQuery (Castle HD)",
-                            url = "$mainUrl/stream?q=${java.net.URLEncoder.encode(cleanQuery, "UTF-8")}",
-                            type = TvType.Movie
-                        ),
-                        newLiveSearchResponse(
-                            name = "$cleanQuery Live Stream",
-                            url = "$mainUrl/live?q=${java.net.URLEncoder.encode(cleanQuery, "UTF-8")}",
-                            type = TvType.Live
-                        )
-                    )
-                }
-
-                override suspend fun load(url: String): LoadResponse {
-                    return if (url.contains("/live")) {
-                        LiveStreamLoadResponse(
-                            name = "Castle Live Feed",
-                            url = url,
-                            apiName = targetName,
-                            dataUrl = "$mainUrl/live/index.m3u8"
-                        )
-                    } else {
-                        MovieLoadResponse(
-                            name = "Castle Stream",
-                            url = url,
-                            apiName = targetName,
-                            dataUrl = url
-                        )
-                    }
-                }
-
-                override suspend fun loadLinks(
-                    data: String,
-                    isCasting: Boolean,
-                    subtitleCallback: (SubtitleFile) -> Unit,
-                    callback: (ExtractorLink) -> Unit
-                ): Boolean {
-                    callback(
-                        ExtractorLink(
-                            source = targetName,
-                            name = "Castle High-Speed CDN",
-                            url = if (data.contains("http")) data else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                            referer = "https://castletv.xyz/",
-                            quality = Qualities.P1080.value,
-                            isM3u8 = data.endsWith(".m3u8")
-                        )
-                    )
-                    return true
-                }
-            }
-            try {
-                APIHolder.addPlugin(managedCastleProvider)
-                Log.i(TAG, "SERVER_PROVIDER_SYNC: Registered built-in managed CastleTV Provider ($targetName) in APIHolder.")
-            } catch (e: Exception) {
-                Log.e(TAG, "SERVER_PROVIDER_SYNC: Failed to register CastleTv fallback", e)
             }
         }
     }
