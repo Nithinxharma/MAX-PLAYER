@@ -4690,17 +4690,18 @@ fun QualitySelectorBottomSheet(
   ModalBottomSheet(
     onDismissRequest = onDismiss,
     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    containerColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF0D111A) else MaterialTheme.colorScheme.surface
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 24.dp, vertical = 16.dp)
+        .padding(horizontal = 20.dp, vertical = 12.dp)
         .padding(bottom = 32.dp),
     ) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(bottom = 16.dp),
+          .padding(bottom = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
@@ -4711,10 +4712,107 @@ fun QualitySelectorBottomSheet(
             fontWeight = FontWeight.Bold,
           )
           Text(
-            text = if (isDownloadMode) "Choose source link to download" else "Tap quality to play instantly",
+            text = if (isDownloadMode) "Choose source server & resolution to download" else "Tap quality or server to play instantly",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
+        }
+      }
+
+      if (sortedLinks.isNotEmpty()) {
+        val topLink = sortedLinks.first()
+        val topQualityText = remember(topLink) {
+          when {
+            topLink.quality >= 2160 -> "4K UHD"
+            topLink.quality >= 1080 -> "1080p FHD"
+            topLink.quality >= 720 -> "720p HD"
+            topLink.quality > 0 -> "${topLink.quality}p"
+            else -> "Auto (Highest)"
+          }
+        }
+        val topServerName = topLink.source.ifBlank { "Best Available" }
+
+        // Hero Auto-Select Card
+        Surface(
+          shape = RoundedCornerShape(16.dp),
+          color = Color.Transparent,
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+              Brush.horizontalGradient(
+                colors = listOf(
+                  Color(0xFF6366F1).copy(alpha = 0.85f),
+                  Color(0xFFA855F7).copy(alpha = 0.85f)
+                )
+              )
+            )
+            .clickable { onLinkSelected(topLink) }
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color.White.copy(alpha = 0.25f)
+                ) {
+                  Text(
+                    text = "AUTO SELECT",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                  )
+                }
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color.Black.copy(alpha = 0.3f)
+                ) {
+                  Text(
+                    text = topQualityText,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                  )
+                }
+              }
+              Spacer(modifier = Modifier.height(6.dp))
+              Text(
+                text = "Auto-Play Highest Quality",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+              )
+              Text(
+                text = "Server: $topServerName • ${if (topLink.isM3u8) "HLS Stream" else "Direct Video"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.85f)
+              )
+            }
+            IconButton(
+              onClick = { onLinkSelected(topLink) },
+              modifier = Modifier
+                .size(44.dp)
+                .background(Color.White, CircleShape)
+            ) {
+              Icon(
+                imageVector = if (isDownloadMode) Icons.Outlined.CloudDownload else Icons.Rounded.PlayArrow,
+                contentDescription = "Auto Select",
+                tint = Color(0xFF6366F1)
+              )
+            }
+          }
         }
       }
       
@@ -4725,6 +4823,24 @@ fun QualitySelectorBottomSheet(
           val cleanLabel = remember(link) {
             xyz.mpv.rex.cinehub.utils.StreamLinkFormatter.formatQualityLanguage(link)
           }
+          val qualityTag = remember(link) {
+            when {
+              link.quality >= 2160 -> "4K"
+              link.quality >= 1080 -> "1080p"
+              link.quality >= 720 -> "720p"
+              link.quality >= 480 -> "480p"
+              link.quality >= 360 -> "360p"
+              else -> "HD"
+            }
+          }
+          val serverName = link.source.ifBlank {
+            try {
+              java.net.URI(link.url).host?.removePrefix("www.") ?: "Direct Server"
+            } catch (e: Exception) {
+              "Direct Server"
+            }
+          }
+
           Surface(
             shape = RoundedCornerShape(14.dp),
             color = Color.Transparent,
@@ -4746,14 +4862,32 @@ fun QualitySelectorBottomSheet(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Column(modifier = Modifier.weight(1f)) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                  Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                  ) {
+                    Text(
+                      text = qualityTag,
+                      style = MaterialTheme.typography.labelSmall,
+                      fontWeight = FontWeight.Bold,
+                      color = MaterialTheme.colorScheme.onPrimaryContainer,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                  Text(
+                    text = cleanLabel,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
+                  )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                  text = cleanLabel,
-                  fontWeight = FontWeight.Bold,
-                  style = MaterialTheme.typography.titleMedium,
-                  color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                  text = if (link.isM3u8) "Direct Stream (HLS)" else "Direct Video Link",
+                  text = "Server: $serverName • ${if (link.isM3u8) "Direct Stream (HLS)" else "Direct Video"}",
                   style = MaterialTheme.typography.bodySmall,
                   color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -4763,8 +4897,16 @@ fun QualitySelectorBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
                 if (link.isM3u8) {
-                  Badge(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                    Text("HLS", color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                  Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                  ) {
+                    Text(
+                      text = "HLS",
+                      style = MaterialTheme.typography.labelSmall,
+                      color = MaterialTheme.colorScheme.onSecondaryContainer,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
                   }
                 }
                 IconButton(
