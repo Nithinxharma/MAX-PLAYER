@@ -438,6 +438,7 @@ object CineHubScreen : Screen {
     val enableArtworkDownloads by browserPreferences.enableArtworkDownloads.collectAsState()
 
     var selectedCategory by remember { mutableStateOf("All") }
+    var selectedActiveProvider by remember { mutableStateOf("All Providers") }
     val searchQuery = CineHubSearchStateHolder.searchQuery
     val isSearchActive = CineHubSearchStateHolder.isSearchActive
 
@@ -509,6 +510,9 @@ object CineHubScreen : Screen {
           val activeProviders = providerRegistry.getEnabledProviders()
           val extHomeLists = mutableListOf<xyz.mpv.rex.cinehub.extension.api.CineHubHomePageList>()
           for (provider in activeProviders) {
+            if (selectedActiveProvider != "All Providers" && !provider.name.equals(selectedActiveProvider, ignoreCase = true) && !provider.id.equals(selectedActiveProvider, ignoreCase = true)) {
+              continue
+            }
             val rows = runCatching { provider.getHomePage() }.getOrDefault(emptyList())
             extHomeLists.addAll(rows)
           }
@@ -600,7 +604,7 @@ object CineHubScreen : Screen {
       }
     }
 
-    LaunchedEffect(activeProvidersList) {
+    LaunchedEffect(activeProvidersList, selectedActiveProvider) {
       loadMedia()
     }
 
@@ -743,6 +747,14 @@ object CineHubScreen : Screen {
             }
           },
           actions = {
+            xyz.mpv.rex.ui.theme.maxstream.MaxStreamActiveProviderSelector(
+              selectedProviderName = selectedActiveProvider,
+              availableProviders = activeProvidersList.map { it.name }.filter { it.isNotBlank() }.distinct(),
+              onProviderSelect = { providerName ->
+                selectedActiveProvider = providerName
+              },
+              modifier = Modifier.padding(end = 4.dp)
+            )
             IconButton(
               onClick = {
                 xyz.mpv.rex.ui.browser.MainScreen.requestTab(1)
@@ -1149,15 +1161,10 @@ object CineHubScreen : Screen {
                   contentPadding = PaddingValues(end = 16.dp),
                 ) {
                   items(allCategoryTabs) { category ->
-                    FilterChip(
-                      selected = selectedCategory == category,
-                      onClick = { selectedCategory = category },
-                      label = { Text(category) },
-                      shape = RoundedCornerShape(16.dp),
-                      colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
-                        selectedLabelColor = Color.White
-                      )
+                    xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassFilterChip(
+                      text = category,
+                      isSelected = selectedCategory == category,
+                      onClick = { selectedCategory = category }
                     )
                   }
                 }
@@ -2759,8 +2766,27 @@ fun CineDetailView(
     modifier = Modifier
       .fillMaxSize()
       .offset { IntOffset(0, animatedOffsetY.roundToInt()) }
-      .background(MaterialTheme.colorScheme.background)
+      .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+      .background(
+        Brush.verticalGradient(
+          colors = listOf(
+            Color(0xFA0B0F1A),
+            Color(0xFE070912)
+          )
+        )
+      )
+      .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
   ) {
+    // Frosted Glass Top Drag Handle Pill
+    Box(
+      modifier = Modifier
+        .align(Alignment.TopCenter)
+        .padding(top = 8.dp)
+        .width(42.dp)
+        .height(4.5.dp)
+        .clip(CircleShape)
+        .background(Color.White.copy(alpha = 0.35f))
+    )
     if (isTmdbEnriching && tmdbEnrichedMovie == null && tmdbEnrichedTvShow == null && item !is MovieItem && item !is TvShowItem) {
       // Phase 4: TMDB-style loading state to prevent flashing temporary scraped/provider metadata
       Column(
@@ -3184,52 +3210,151 @@ fun CineDetailView(
           horizontalArrangement = Arrangement.spacedBy(10.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Button(
+          xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassButton(
+            text = if (isInstantPlayExtracting) "Loading..." else "Play",
             onClick = { onInstantAction(false, false) },
+            icon = Icons.Rounded.PlayArrow,
+            variant = xyz.mpv.rex.ui.theme.maxstream.GlassButtonVariant.Primary,
+            isLoading = isInstantPlayExtracting,
             modifier = Modifier
               .weight(1f)
               .height(50.dp)
-              .combinedClickable(
-                onClick = { onInstantAction(false, false) },
-                onLongClick = { onInstantAction(false, true) }
-              ),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-          ) {
-            if (isInstantPlayExtracting) {
-              CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-              Spacer(modifier = Modifier.width(8.dp))
-              Text("Loading...", fontWeight = FontWeight.Bold)
-            } else {
-              Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = "Play Top Quality")
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Play", fontWeight = FontWeight.Bold)
-            }
-          }
+          )
 
-          FilledTonalButton(
+          xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassButton(
+            text = if (isInstantDownloadExtracting) "Resolving..." else "Download",
             onClick = { onInstantAction(true, false) },
+            icon = Icons.Outlined.CloudDownload,
+            variant = xyz.mpv.rex.ui.theme.maxstream.GlassButtonVariant.Secondary,
+            isLoading = isInstantDownloadExtracting,
             modifier = Modifier
               .weight(1f)
               .height(50.dp)
-              .combinedClickable(
-                onClick = { onInstantAction(true, false) },
-                onLongClick = { onInstantAction(true, true) }
-              ),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(
-              containerColor = MaterialTheme.colorScheme.secondaryContainer,
-              contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            )
+          )
+        }
+
+        // Stream Link Extraction Glass Chips section inside CineDetailView
+        if (detailPendingLinks.isNotEmpty()) {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(bottom = 14.dp)
+              .clip(RoundedCornerShape(18.dp))
+              .background(Color(0x381A2234))
+              .border(1.dp, MaxStreamTheme.ElectricCyan.copy(alpha = 0.40f), RoundedCornerShape(18.dp))
+              .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
           ) {
-            if (isInstantDownloadExtracting) {
-              CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSecondaryContainer)
-              Spacer(modifier = Modifier.width(8.dp))
-              Text("Resolving...", fontWeight = FontWeight.Bold)
-            } else {
-              Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = "Download Top Quality")
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Download", fontWeight = FontWeight.Bold)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Box(
+                  modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(MaxStreamTheme.ElectricCyan)
+                )
+                Text(
+                  text = if (isPendingDownloadMode) "Select Download Source Link" else "Available Stream Mirrors (${detailPendingLinks.size})",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                  color = Color.White
+                )
+              }
+              IconButton(
+                onClick = { detailPendingLinks = emptyList() },
+                modifier = Modifier.size(24.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Close,
+                  contentDescription = "Dismiss Stream Mirrors",
+                  tint = Color.White.copy(alpha = 0.8f),
+                  modifier = Modifier.size(16.dp)
+                )
+              }
+            }
+
+            LazyRow(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              items(detailPendingLinks) { link ->
+                val qualityText = when {
+                  link.quality >= 2160 -> "4K UHD"
+                  link.quality >= 1080 -> "1080p HD"
+                  link.quality >= 720 -> "720p HD"
+                  link.quality > 0 -> "${link.quality}p"
+                  else -> "Auto"
+                }
+                val sourceText = link.source.ifBlank { "Stream Link" }
+
+                Surface(
+                  shape = RoundedCornerShape(12.dp),
+                  color = Color(0x60182030),
+                  border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+                  modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                      if (isPendingDownloadMode) {
+                        xyz.mpv.rex.cinehub.download.CineDownloadManager.downloadStream(context, detailPendingTitle, link)
+                        detailPendingLinks = emptyList()
+                      } else {
+                        val headersMap = buildMap {
+                          if (link.referer.isNotBlank()) put("Referer", link.referer)
+                          putAll(link.headers)
+                        }
+                        val subtitlesJson = if (detailPendingSubs.isNotEmpty()) kotlinx.serialization.json.Json.encodeToString(detailPendingSubs.map { mapOf("lang" to it.lang, "url" to it.url) }) else null
+                        onDismiss()
+                        MediaUtils.playFile(
+                          source = link.url,
+                          context = context,
+                          launchSource = "cinehub",
+                          headers = headersMap,
+                          subtitlesJson = subtitlesJson,
+                          episodeMetadataJson = detailPendingEpJson,
+                          title = detailPendingTitle,
+                          posterUrl = detailPendingPoster,
+                          overview = detailPendingOverview,
+                          year = detailPendingYear,
+                          rating = detailPendingRating,
+                          providerName = detailPendingProvider ?: sourceText,
+                          allLinks = detailPendingLinks
+                        )
+                        detailPendingLinks = emptyList()
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    Box(
+                      modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(MaxStreamTheme.CrimsonAccent)
+                    )
+                    Column {
+                      Text(
+                        text = qualityText,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                      )
+                      Text(
+                        text = sourceText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.70f)
+                      )
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -3610,15 +3735,10 @@ fun CineDetailView(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             items(availableSeasons) { s ->
-              FilterChip(
-                selected = selectedSeason == s,
-                onClick = { selectedSeason = s },
-                label = { Text("Season $s", fontWeight = FontWeight.SemiBold) },
-                shape = RoundedCornerShape(12.dp),
-                colors = FilterChipDefaults.filterChipColors(
-                  selectedContainerColor = MaterialTheme.colorScheme.primary,
-                  selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                )
+              xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassFilterChip(
+                text = "Season $s",
+                isSelected = selectedSeason == s,
+                onClick = { selectedSeason = s }
               )
             }
           }
@@ -3968,15 +4088,10 @@ fun CineDetailView(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
                 items(availableSeasons) { s ->
-                  FilterChip(
-                    selected = selectedSeason == s,
-                    onClick = { selectedSeason = s },
-                    label = { Text("Season $s", fontWeight = FontWeight.SemiBold) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = FilterChipDefaults.filterChipColors(
-                      selectedContainerColor = MaterialTheme.colorScheme.primary,
-                      selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                    )
+                  xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassFilterChip(
+                    text = "Season $s",
+                    isSelected = selectedSeason == s,
+                    onClick = { selectedSeason = s }
                   )
                 }
               }

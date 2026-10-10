@@ -35,6 +35,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
@@ -451,6 +452,117 @@ fun MaxStreamGlassFilterChip(
                 color = textColor,
                 maxLines = 1
             )
+        }
+    }
+}
+
+/**
+ * 4b. Active Provider Selector Chip: Frosted glass dropdown chip for switching CloudStream extension providers.
+ */
+@Composable
+fun MaxStreamActiveProviderSelector(
+    selectedProviderName: String,
+    availableProviders: List<String>,
+    onProviderSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isDark = isSystemInDarkTheme()
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        Surface(
+            shape = CircleShape,
+            color = if (isDark) Color(0x40182234) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = 0.20f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+            modifier = Modifier
+                .clip(CircleShape)
+                .clickable { expanded = true }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(MaxStreamTheme.ElectricCyan)
+                )
+                Text(
+                    text = selectedProviderName,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.ArrowDropDown,
+                    contentDescription = "Select Provider",
+                    tint = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(if (isDark) Color(0xF20F1420) else MaterialTheme.colorScheme.surface)
+                .border(1.dp, if (isDark) Color.White.copy(alpha = 0.20f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+        ) {
+            val allOption = "All Providers"
+            androidx.compose.material3.DropdownMenuItem(
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (selectedProviderName == allOption) MaxStreamTheme.CrimsonAccent else Color.Transparent)
+                        )
+                        Text(
+                            text = allOption,
+                            fontWeight = if (selectedProviderName == allOption) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                onClick = {
+                    expanded = false
+                    onProviderSelect(allOption)
+                }
+            )
+
+            availableProviders.forEach { providerName ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selectedProviderName == providerName) MaxStreamTheme.CrimsonAccent else Color.Transparent)
+                            )
+                            Text(
+                                text = providerName,
+                                fontWeight = if (selectedProviderName == providerName) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onProviderSelect(providerName)
+                    }
+                )
+            }
         }
     }
 }
