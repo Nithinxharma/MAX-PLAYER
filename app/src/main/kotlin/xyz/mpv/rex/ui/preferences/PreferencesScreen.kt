@@ -428,11 +428,11 @@ object PreferencesScreen : Screen {
                                     )
 
                                     QuickActionButton(
-                                        label = "Providers",
+                                        label = "Extensions",
                                         icon = Icons.Outlined.Extension,
                                         accentColor = Color(0xFFFFB800),
                                         modifier = Modifier.weight(1f),
-                                        onClick = { backstack.add(xyz.mpv.rex.ui.preferences.ExtensionRepositoriesScreenRoute) }
+                                        onClick = { backstack.add(xyz.mpv.rex.ui.preferences.InstalledExtensionsScreenRoute) }
                                     )
                                 }
                             }

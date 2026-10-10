@@ -25,33 +25,6 @@ object ExtensionPreferencesScreenRoute : Screen {
     @Composable
     override fun Content() {
         val backstack = LocalBackStack.current
-        val authManager = koinInject<AuthManager>()
-        val isAdmin by authManager.isAdmin.collectAsState()
-
-        if (!isAdmin) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.foundation.layout.Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Access Restricted: Extension and Repository management is reserved exclusively for Administrator accounts.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    androidx.compose.material3.Button(onClick = { backstack.removeLastOrNull() }) {
-                        Text("Go Back")
-                    }
-                }
-            }
-            return
-        }
 
         ExtensionPreferencesScreen(
             onNavigateBack = { backstack.removeLastOrNull() },

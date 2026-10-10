@@ -760,13 +760,13 @@ object CineHubScreen : Screen {
             )
             IconButton(
               onClick = {
-                showRepoInstallerDialog = true
+                backstack.add(xyz.mpv.rex.ui.preferences.InstalledExtensionsScreenRoute)
               },
               modifier = Modifier.testTag("cinehub_install_repo_button")
             ) {
               Icon(
                 imageVector = Icons.Default.Extension,
-                contentDescription = "Install Extension Repository",
+                contentDescription = "Manage Extensions",
                 tint = MaxStreamTheme.CrimsonAccent,
                 modifier = Modifier.size(24.dp)
               )
@@ -2988,75 +2988,6 @@ fun CineDetailView(
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
           )
         }
-
-        // Bottom instant actions row (Play + Download pills with hold-to-select)
-        Row(
-          modifier = Modifier
-            .align(Alignment.BottomStart)
-            .padding(14.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          // Play Pill
-          Row(
-            modifier = Modifier
-              .combinedClickable(
-                onClick = { onInstantAction(false, false) },
-                onLongClick = { onInstantAction(false, true) }
-              )
-              .intelligentGlassEffect(
-                shape = RoundedCornerShape(8.dp),
-                backgroundColor = Color.Black.copy(alpha = 0.65f),
-                borderColor = Color.White.copy(alpha = 0.20f)
-              )
-              .padding(horizontal = 10.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            Box(
-              modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(if (isInstantPlayExtracting) Color(0xFFFFB800) else Color(0xFF00E676))
-            )
-            Text(
-              text = if (isInstantPlayExtracting) "Resolving..." else "Instant Play",
-              style = MaterialTheme.typography.labelSmall,
-              fontWeight = FontWeight.SemiBold,
-              color = Color.White
-            )
-          }
-
-          // Download Pill
-          Row(
-            modifier = Modifier
-              .combinedClickable(
-                onClick = { onInstantAction(true, false) },
-                onLongClick = { onInstantAction(true, true) }
-              )
-              .intelligentGlassEffect(
-                shape = RoundedCornerShape(8.dp),
-                backgroundColor = Color.Black.copy(alpha = 0.65f),
-                borderColor = Color.White.copy(alpha = 0.20f)
-              )
-              .padding(horizontal = 10.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            Icon(
-              imageVector = Icons.Outlined.CloudDownload,
-              contentDescription = "Instant Download",
-              tint = if (isInstantDownloadExtracting) Color(0xFFFFB800) else Color.White,
-              modifier = Modifier.size(13.dp)
-            )
-            Text(
-              text = if (isInstantDownloadExtracting) "Downloading..." else "Download",
-              style = MaterialTheme.typography.labelSmall,
-              fontWeight = FontWeight.SemiBold,
-              color = Color.White
-            )
-          }
-        }
       }
 
       Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -3494,23 +3425,8 @@ fun CineDetailView(
         if (item is MovieItem) {
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.End,
           ) {
-            Button(
-              onClick = {
-                onDismiss()
-                onPlay()
-              },
-              modifier = Modifier
-                .weight(1f)
-                .height(50.dp),
-              shape = RoundedCornerShape(16.dp),
-            ) {
-              Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
-              Spacer(modifier = Modifier.width(8.dp))
-              Text(text = "Play Movie", fontWeight = FontWeight.Bold)
-            }
-
             var isScrapingMovie by remember { mutableStateOf(false) }
             val context = LocalContext.current
             val scope = rememberCoroutineScope()
@@ -4012,65 +3928,7 @@ fun CineDetailView(
             }
           }
 
-          if (loadResp is MovieLoadResponse) {
-            var isExtractingMovie by remember { mutableStateOf(false) }
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-              horizontalArrangement = Arrangement.spacedBy(10.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Button(
-                onClick = { onInstantAction(false, false) },
-                modifier = Modifier
-                  .weight(1f)
-                  .height(50.dp)
-                  .combinedClickable(
-                    onClick = { onInstantAction(false, false) },
-                    onLongClick = { onInstantAction(false, true) }
-                  ),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-              ) {
-                if (isInstantPlayExtracting || isExtractingMovie) {
-                  CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                  Spacer(modifier = Modifier.width(8.dp))
-                  Text("Loading...", fontWeight = FontWeight.Bold)
-                } else {
-                  Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = "Play Top Quality")
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text("Play Movie", fontWeight = FontWeight.Bold)
-                }
-              }
-
-              FilledTonalButton(
-                onClick = { onInstantAction(true, false) },
-                modifier = Modifier
-                  .weight(1f)
-                  .height(50.dp)
-                  .combinedClickable(
-                    onClick = { onInstantAction(true, false) },
-                    onLongClick = { onInstantAction(true, true) }
-                  ),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                  containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                  contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-              ) {
-                if (isInstantDownloadExtracting) {
-                  CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                  Spacer(modifier = Modifier.width(8.dp))
-                  Text("Resolving...", fontWeight = FontWeight.Bold)
-                } else {
-                  Icon(imageVector = Icons.Outlined.CloudDownload, contentDescription = "Download Movie")
-                  Spacer(modifier = Modifier.width(6.dp))
-                  Text("Download", fontWeight = FontWeight.Bold)
-                }
-              }
-            }
-          } else if (loadResp is TvSeriesLoadResponse) {
+          if (loadResp is TvSeriesLoadResponse) {
             val allEpisodes = loadResp.episodes
             val availableSeasons = remember(allEpisodes) {
               val detected = allEpisodes.mapNotNull { it.season }.filter { it > 0 }.distinct().sorted()
