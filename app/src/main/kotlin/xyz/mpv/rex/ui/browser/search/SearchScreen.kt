@@ -1274,13 +1274,26 @@ private fun FederatedItemCard(
               color = if (isDark) xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
+
+          Box(
+            modifier = Modifier
+              .clip(RoundedCornerShape(6.dp))
+              .background(Color(0xFF4CAF50).copy(alpha = 0.2f))
+              .padding(horizontal = 6.dp, vertical = 2.dp)
+          ) {
+            Text(
+              text = "1080p • Auto",
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+              color = Color(0xFF4CAF50),
+            )
+          }
         }
       }
 
       IconButton(onClick = onClick) {
         Icon(
           imageVector = Icons.Default.PlayArrow,
-          contentDescription = "View Details",
+          contentDescription = "Extract & Stream",
           tint = xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme.CrimsonAccent,
         )
       }

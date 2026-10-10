@@ -1,92 +1,112 @@
-# Max Stream: 100% CloudStream 3 Core Engine Integration with Glassmorphic CineHub UI & REX MPV Player
+# CloudStream SDK & UI Implementation Plan: Search & Details Logic
 
-A comprehensive architectural blueprint for completing the full 100% core CloudStream 3 engine integration in Max Stream (`xyz.mpv.rex`), featuring fluid Glassmorphism UI components and explicit intent hand-off to the standalone MPV-based REX Player.
+Comprehensive implementation plan for integrating **CloudStream Core SDK logic** and UI screens into **Max Stream / CineHub**.
 
-## User Review & Critical Decisions
+---
+
+## User Preferences & Critical UX Decisions
 
 > [!IMPORTANT]
-> The following choices were confirmed by the user during Phase 1 clarification:
+> All UI screens adhere strictly to Max Stream's existing **Glassmorphism design system** (`GlassCard`, `GlassButton`, `GlassDialog`, `GlassTopBar`) with modern fluid ambient themes and responsive edge-to-edge support.
 
-- **Confirmed Decision 1 (Visual Style)**: Premium Glassmorphism visual theme with modern fluid animations, semi-transparent frosted cards (`blur` + `border`), and dynamic dark ambient backgrounds.
-- **Confirmed Decision 2 (Navigation Layout)**: Preserved Max Stream navigation system (Bottom Navigation bar maintaining existing screen states and CineHub view switchers).
-- **Confirmed Decision 3 (Stream Link Extraction & Player Launch)**: Interactive bottom sheet displaying extracted streams with server names, resolution/quality tags, subtitle tracks, and automatic selection of the highest quality stream.
-
----
-
-## 1. Overview & Core Concept
-
-Max Stream embeds the headless **CloudStream 3 engine** directly into a native Android architecture with **CineHub Compose UI** and the **MPV REX Player**.
-
-- **Core Headless Engine**: 100% authentic CloudStream 3 SDK (`com.lagradost.cloudstream3.*` and `com.lagradost.api.*`), maintaining full ABI compatibility with dynamic `.cs3` community extensions.
-- **CineHub Experience**: Glassmorphic Compose interface powering home feed discovery, multi-provider concurrent search, rich media detail screens, season/episode drawers, and extension sync.
-- **MPV REX Player**: Native C/C++ libmpv hardware-accelerated media player handling video streaming, HLS/DASH manifest playback, subtitle rendering, and custom HTTP headers.
+- **Search Screen UX**: Minimal list view focused on fast stream link extraction and resolution tags (1080p, 4K, Sub/Dub, Server badges).
+- **Media Details & Episode Logic**: Full-screen detailed view with dynamic backdrop imagery, TV show season/episode carousel, episode watch progress badges, and an integrated bottom sheet for stream source extraction and auto-resolution selection.
 
 ---
 
-## 2. User Experience & Visual Design
+## 1. CloudStream Core SDK & Media Fetching Logic Audit
 
-### Key User Flows
-1. **Home Discovery**: View trending lists, continue watching rail, and active provider feeds rendered with frosted glass cards (`Surface` with low alpha background + subtle border highlights).
-2. **Concurrent Multi-Provider Search**: Real-time search across all enabled CloudStream providers (`APIHolder.apis`), merging provider responses smoothly with staggered entrance animations.
-3. **Media Details & Season/Episode Drawer**: Display poster backdrop, metadata chips (quality, rating, genres), plot synopsis, and collapsible season/episode selectors.
-4. **Stream Link Extraction Sheet**: When an episode or movie is selected, slide up a Glassmorphic Bottom Sheet displaying extracted `ExtractorLink` mirrors, server latency, resolution badges (1080p, 4K, 720p), and subtitle options.
-5. **REX Player Activity Hand-off**: Fire explicit `Intent` to `PlayerActivity` with stream URL, HTTP headers (User-Agent, Referer, Cookies), subtitle links, and title metadata for zero-buffering hardware playback.
+CloudStream's core SDK provides the media extraction, provider abstraction, and season/episode parser:
 
-### Visual Identity & Theme
-- **Theme**: Luxury Dark Ambient with Frosted Glassmorphism.
-- **Color Tokens**:
-  - Background: `#0B0E14` (Deep Ambient Void)
-  - Surface Glass: `Color(0x1A202C70)` with `blur(16.dp)` and `BorderStroke(1.dp, Color(0x33FFFFFF))`
-  - Accent Primary: `#6366F1` (Indigo Glow)
-  - Accent Secondary: `#10B981` (Emerald Stream)
-- **Typography**: Clean display hierarchy (`Typography.titleLarge`, `headlineMedium`) paired with high-contrast body text for max readability on TV/Mobile displays.
+| Core SDK Domain | CloudStream Source File Path | Max Stream Target Path | Core Logic & Data Flow |
+| :--- | :--- | :--- | :--- |
+| **Provider Contracts** | `app/src/main/java/com/lagradost/cloudstream3/MainAPI.kt` | `app/src/main/kotlin/com/lagradost/cloudstream3/MainAPI.kt` | `search(query)` returning `SearchResponse` list. `load(url)` returning `LoadResponse` (`TvSeriesLoadResponse` / `MovieLoadResponse`) containing episode lists and seasons. |
+| **Stream Extraction** | `app/src/main/java/com/lagradost/cloudstream3/utils/ExtractorLink.kt` | `app/src/main/kotlin/com/lagradost/cloudstream3/utils/ExtractorLink.kt` | `loadLinks(data, isCasting, subtitleCallback, callback)` extracts high-res stream URLs, headers, and quality tags. |
+| **Bridge Adapter** | *N/A (CloudStream native)* | `app/src/main/kotlin/com/maxstream/bridge/CloudStreamBridge.kt` | Bridges CloudStream `MainAPI` providers to Kotlin Coroutines `Flow<UiState>` for Jetpack Compose UI screens. |
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+## 2. Detailed Implementation Plan: Search Screen & Media Details View
 
-- **Decision 1: Full In-Place Engine vs Stubbing**
-  - *Chosen Approach*: Maintain full authentic CloudStream SDK classes in `com.lagradost.cloudstream3.*`.
-  - *Why*: Guarantees zero `IncompatibleClassChangeError` or `NoSuchMethodError` when loading precompiled `.cs3` plugins from community repos.
-
-- **Decision 2: Intent Activity Hand-off for REX Player**
-  - *Chosen Approach*: CloudStream resolves stream links -> `Intent` -> `PlayerActivity` (MPVLib).
-  - *Why*: Isolates player UI/lifecycle from network scraping, enabling hardware acceleration and MPV options without UI thread blocking.
+### Phase 1: Minimal Stream-Focused Search Screen (`SearchScreen.kt`)
+- **File Path**: `app/src/main/kotlin/xyz/mpv/rex/ui/search/SearchScreen.kt`
+- **Logic & Functionality**:
+  1. **Debounced Query Execution**: 300ms debounce on search text input triggering `CloudStreamBridge.searchAllProviders(query)`.
+  2. **Active Provider Chips**: Filterable chips to toggle individual active CloudStream providers (e.g., FlixHQ, SuperStream, AnimePahe, VidSrc).
+  3. **Minimal Stream Resolution List Item**:
+     - Compact horizontal row with poster thumbnail, title, release year, media type (Movie / TV Series / Anime), and primary active provider badge.
+     - **Quick Stream Trigger**: Immediate "Extract Stream" icon button to resolve links directly without deep navigating.
+     - Quality and audio indicators (4K, 1080p, Multi-Sub, Dubbed).
+  4. **State Machine**: Unified `SearchUiState` handling `Idle`, `Loading`, `Success(List<SearchResponse>)`, and `Empty/Error`.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+### Phase 2: Full-Screen Media Details & Episode Carousel View (`MediaDetailView.kt`)
+- **File Path**: `app/src/main/kotlin/xyz/mpv/rex/ui/browser/sheets/MediaDetailSheet.kt` & `MediaDetailScreen.kt`
+- **Logic & Functionality**:
+  1. **Dynamic Backdrop & Ambient Header**:
+     - High-resolution hero backdrop image with dark ambient gradient overlay and frosted glass top navigation bar (`GlassTopBar`).
+     - Metadata panel: Rating, duration/seasons, genre tags, release year, and provider source attribution.
+  2. **TV Series Season & Episode Carousel**:
+     - **Season Selector**: Horizontal pill row / drop-down drawer for switching seasons (Season 1, Season 2, Specials).
+     - **Episode Carousel & List**: Horizontal scroll or vertical card list showing episode thumbnail, episode number, title, overview synopsis, runtime, and watched status progress bar.
+  3. **Stream Link Extraction Bottom Sheet (`PlayLinkSheet.kt`)**:
+     - Clicking any episode or movie "Play" button opens the glassmorphic extraction sheet.
+     - Fetches live stream links via `MainAPI.loadLinks()`.
+     - Displays server names (Server 1, Server 2, VidCloud, UpCloud), video quality tags (1080p, 720p, 4K), and auto-selects the highest resolution link by default for seamless playback in ExoPlayer/MPV.
+
+---
+
+### Phase 3: Additional CloudStream UI Features to Complete 110% Parity
+
+1. **Download Manager Screen (`DownloadManagerScreen.kt`)**:
+   - `app/src/main/kotlin/xyz/mpv/rex/ui/downloads/DownloadManagerScreen.kt`
+   - Active download progress, download speed stats (MB/s), storage space bar, and offline media playback launcher.
+
+2. **CloudSync & Scrobble Screen (`CloudSyncScreen.kt`)**:
+   - `app/src/main/kotlin/xyz/mpv/rex/ui/sync/CloudSyncScreen.kt`
+   - Multi-account sync dashboard for **Trakt.tv**, **AniList**, **MyAnimeList**, and **Simkl**.
+
+3. **Extension Detail Screen (`ExtensionDetailScreen.kt`)**:
+   - `app/src/main/kotlin/xyz/mpv/rex/ui/preferences/ExtensionDetailScreen.kt`
+   - Extension version inspection, provider cache cleaner, and auto-update toggles.
+
+4. **Cast / DLNA Device Selector (`CastDeviceSheet.kt`)**:
+   - `app/src/main/kotlin/xyz/mpv/rex/ui/browser/sheets/CastDeviceSheet.kt`
+   - Chromecast and DLNA device discovery modal sheet with remote playback controls.
+
+---
+
+## 3. Step-by-Step Execution Order
+
+1. **Update `SearchScreen.kt`**: Integrate minimal list view with debounced query search and instant stream extraction action.
+2. **Implement Media Details View**: Build full-screen detailed view with hero backdrop, season episode carousel, and link extraction bottom sheet trigger.
+3. **Connect CloudStream SDK Data Layer**: Ensure `CloudStreamBridge` handles `LoadResponse` parsing for episode lists and stream links seamlessly.
+4. **Build Download & CloudSync Screens**: Complete remaining UI screens for 110% feature parity.
+5. **Verify Compilation**: Run `compile_applet` to validate syntax and Jetpack Compose bindings.
+
+---
+
+## 4. Architectural Verification Matrix
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        CineHub Compose UI                              │
-│  [ Home Feed ]    [ Search Screen ]    [ Details View ]    [ Extensions] │
-└─────────────────────────────────┬──────────────────────────────────────┘
-                                  │
-                                  ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        CineHubViewModel                                │
-│   - searchContent(query) -> APIRepository.search()                     │
-│   - loadMediaDetails(url) -> APIRepository.load()                      │
-│   - getStreamLinks(episodeData) -> APIRepository.loadLinks()           │
-└─────────────────────────────────┬──────────────────────────────────────┘
-                                  │
-                                  ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                 CloudStream 3 Core Headless Engine                     │
-│   - APIHolder (Registry)            - PluginRuntime (Loader)           │
-│   - MainAPI / MainAPIKt (Contracts) - NiceHttp / CloudflareKiller      │
-└─────────────────────────────────┬──────────────────────────────────────┘
-                                  │ ExtractorLink + Headers
-                                  ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     Standalone REX Player Activity                     │
-│   - PlayerActivity (MPVLib Engine) - Hardware Decoders / Subtitles     │
-└─────────────────────────────────┬──────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       Max Stream / CineHub UI Layer                         │
+├─────────────────┬───────────────────┬───────────────────┬───────────────────┤
+│ SearchScreen.kt │ MediaDetailScreen │ DownloadManager   │ CloudSyncScreen   │
+│ (Minimal List)  │(Episode Carousel) │ (Download Queue)  │ (Trakt/AniList)   │
+└────────┬────────┴─────────┬─────────┴─────────┬─────────┴─────────┬─────────┘
+         │                  │                   │                   │
+         ▼                  ▼                   ▼                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    CloudStreamBridge & Extraction Logic                     │
+│  - searchAllProviders()     - loadMediaDetails()    - loadEpisodeLinks()    │
+└───────────────────────────────────────┬─────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        CloudStream Core SDK Layer                           │
+│  - MainAPI (FlixHQ, SuperStream, AnimePahe, VidSrc)                          │
+│  - ExtractorLink Engine (VidCloud, UpCloud, MixDrop, StreamTape)            │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-### Component & State Mapping
-- `CineHubSearchScreen`: Observes `searchResults` and `isSearching` StateFlows; renders glassmorphic search bar and grid items.
-- `CineHubDetailsScreen`: Displays `selectedMediaDetails` (`MovieLoadResponse` or `TvSeriesLoadResponse`), episode list cards, and triggers `getStreamLinks`.
-- `StreamExtractionBottomSheet`: Displays extracted `ExtractorLink` instances with quality badges and subtitle options.
-- `RexPlayerBridge`: Prepares intent extras (`EXTRA_STREAM_URL`, `EXTRA_HEADERS`, `EXTRA_SUBTITLES`) and launches `PlayerActivity`.
