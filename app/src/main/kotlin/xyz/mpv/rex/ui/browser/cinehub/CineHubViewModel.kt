@@ -66,39 +66,48 @@ class CineHubViewModel : ViewModel() {
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    // Active provider search progress: Pair(completedProvidersCount, totalProvidersCount)
+    private val _searchProgress = MutableStateFlow<Pair<Int, Int>>(0 to 0)
+    val searchProgress: StateFlow<Pair<Int, Int>> = _searchProgress.asStateFlow()
+
     /**
-     * 1. Search Function:
-     * Iterates through APIHolder.apis, executes APIRepository.search(query) concurrently
-     * using async(Dispatchers.IO), gracefully handles errors per provider, merges the results,
-     * and updates searchResults.
+     * 1. Streaming Multi-Provider Search Function:
+     * Executes APIRepository.search(query) concurrently across all registered Cloudstream APIs.
+     * Emits search results progressively in real-time as each provider responds so the UI renders immediately.
      */
     fun searchContent(query: String) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) {
             _searchResults.value = emptyList()
             _isSearching.value = false
+            _searchProgress.value = 0 to 0
             return
         }
 
         viewModelScope.launch {
             _isSearching.value = true
             _statusMessage.value = null
+            _searchResults.value = emptyList()
 
             val apis = APIHolder.apis.toList()
             if (apis.isEmpty()) {
                 Log.w(TAG, "No Cloudstream providers loaded in APIHolder")
                 _searchResults.value = emptyList()
                 _isSearching.value = false
+                _searchProgress.value = 0 to 0
                 _statusMessage.value = "No titles currently available"
                 return@launch
             }
 
-            val aggregatedResults = withContext(Dispatchers.IO) {
-                val deferredList = apis.map { provider ->
-                    async {
+            _searchProgress.value = 0 to apis.size
+            val currentResultsList = java.util.Collections.synchronizedList(mutableListOf<SearchResponse>())
+
+            withContext(Dispatchers.IO) {
+                val jobs = apis.map { provider ->
+                    launch {
                         try {
                             val repo = APIRepository(provider)
-                            when (val res = repo.search(trimmed)) {
+                            val providerResults = when (val res = repo.search(trimmed)) {
                                 is Resource.Success -> res.value.list
                                 is Resource.Failure -> {
                                     Log.w(TAG, "Search failure in provider '${provider.name}': ${res.errorString}")
@@ -106,18 +115,29 @@ class CineHubViewModel : ViewModel() {
                                 }
                                 else -> emptyList()
                             }
+
+                            if (providerResults.isNotEmpty()) {
+                                synchronized(currentResultsList) {
+                                    currentResultsList.addAll(providerResults)
+                                    val updated = currentResultsList.toList().distinctBy { "${it.apiName}_${it.url}" }
+                                    _searchResults.value = updated
+                                }
+                            }
                         } catch (t: Throwable) {
                             Log.w(TAG, "Search error in provider '${provider.name}': ${t.message}")
-                            emptyList()
+                        } finally {
+                            synchronized(_searchProgress) {
+                                val currentDone = _searchProgress.value.first + 1
+                                _searchProgress.value = currentDone to apis.size
+                            }
                         }
                     }
                 }
-                deferredList.awaitAll().flatten()
+                jobs.forEach { it.join() }
             }
 
-            _searchResults.value = aggregatedResults
             _isSearching.value = false
-            if (aggregatedResults.isEmpty()) {
+            if (_searchResults.value.isEmpty()) {
                 _statusMessage.value = "No playable results found\n\nTry searching for a different title."
             }
         }

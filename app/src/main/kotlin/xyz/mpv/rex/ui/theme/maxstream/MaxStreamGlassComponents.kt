@@ -733,3 +733,85 @@ fun MaxStreamGlassDialog(
         }
     }
 }
+
+/**
+ * 7. MaxStreamWatchTypeChip: Interactive glassmorphic WatchType selector chip.
+ */
+@Composable
+fun MaxStreamWatchTypeChip(
+    currentWatchType: xyz.mpv.rex.cinehub.model.WatchType,
+    onWatchTypeSelected: (xyz.mpv.rex.cinehub.model.WatchType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val isDark = isSystemInDarkTheme()
+
+    Box(modifier = modifier) {
+        MaxStreamGlassCard(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(12.dp),
+            backgroundColor = if (isDark) currentWatchType.color.copy(alpha = 0.20f) else currentWatchType.color.copy(alpha = 0.12f),
+            borderColor = currentWatchType.color.copy(alpha = 0.40f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = currentWatchType.icon,
+                    contentDescription = currentWatchType.label,
+                    tint = currentWatchType.color,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = currentWatchType.label,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+                )
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = "Change Status",
+                    tint = if (isDark) MaxStreamTheme.TextSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(if (isDark) Color(0xF20F1420) else MaterialTheme.colorScheme.surface)
+                .border(1.dp, if (isDark) Color.White.copy(alpha = 0.20f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+        ) {
+            xyz.mpv.rex.cinehub.model.WatchType.entries.forEach { watchType ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = watchType.icon,
+                                contentDescription = watchType.label,
+                                tint = watchType.color,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = watchType.label,
+                                fontWeight = if (currentWatchType == watchType) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onWatchTypeSelected(watchType)
+                    }
+                )
+            }
+        }
+    }
+}
+

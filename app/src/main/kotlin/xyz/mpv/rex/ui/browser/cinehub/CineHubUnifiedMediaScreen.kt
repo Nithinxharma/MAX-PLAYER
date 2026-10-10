@@ -403,46 +403,157 @@ private fun UnifiedWatchlistTab(
     onRemove: (LibraryItem) -> Unit
 ) {
     var selectedWatchStatus by remember { mutableStateOf("All") }
+    var sortBy by remember { mutableStateOf("Recently Added") }
+    var showSortMenu by remember { mutableStateOf(false) }
+    var randomPickItem by remember { mutableStateOf<LibraryItem?>(null) }
+    var showRandomDialog by remember { mutableStateOf(false) }
+
     val isDark = isSystemInDarkTheme()
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
     val mutedTextColor = if (isDark) MaxStreamTheme.TextMuted else MaterialTheme.colorScheme.outline
 
-    val statuses = listOf("All", "Watching", "Plan to Watch", "Completed", "Dropped")
+    val statuses = listOf("All", "Watching", "Plan to Watch", "Completed", "Favorites", "Subscriptions", "Dropped")
 
-    val filtered = remember(libraryItems, selectedWatchStatus, searchQuery) {
-        libraryItems.filter { item ->
+    val filtered = remember(libraryItems, selectedWatchStatus, searchQuery, sortBy) {
+        val list = libraryItems.filter { item ->
             val matchesStatus = when (selectedWatchStatus) {
                 "All" -> true
                 "Watching" -> item.watchStatus == 1
                 "Plan to Watch" -> item.watchStatus == 0
                 "Completed" -> item.watchStatus == 2
+                "Favorites" -> item.watchStatus == 1 || item.watchStatus == 2
+                "Subscriptions" -> item.watchStatus == 0 || item.watchStatus == 1
                 "Dropped" -> item.watchStatus == 3
                 else -> true
             }
             val matchesQuery = if (searchQuery.isBlank()) true else item.title.contains(searchQuery, ignoreCase = true)
             matchesStatus && matchesQuery
         }
+
+        when (sortBy) {
+            "Alphabetical" -> list.sortedBy { it.title }
+            "Recently Added" -> list.reversed()
+            else -> list
+        }
+    }
+
+    if (showRandomDialog && randomPickItem != null) {
+        val picked = randomPickItem!!
+        AlertDialog(
+            onDismissRequest = { showRandomDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Movie,
+                        contentDescription = null,
+                        tint = MaxStreamTheme.ElectricCyan
+                    )
+                    Text("Random Pick", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (!picked.posterUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = picked.posterUrl,
+                            contentDescription = picked.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .width(120.dp)
+                                .aspectRatio(0.68f)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+                    }
+                    Text(
+                        text = picked.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRandomDialog = false
+                        onItemClick(picked)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaxStreamTheme.CrimsonAccent)
+                ) {
+                    Text("Watch Now")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val pool = filtered.ifEmpty { libraryItems }
+                    if (pool.isNotEmpty()) {
+                        randomPickItem = pool.random()
+                    }
+                }) {
+                    Text("Pick Another")
+                }
+            },
+            containerColor = Color(0xFF121622),
+            titleContentColor = Color.White,
+            textContentColor = Color.White
+        )
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        LazyRow(
+        // Controls Header Row: Filter Chips + Sort Button + Random Title Picker
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            items(statuses) { status ->
-                val isSelected = selectedWatchStatus == status
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { selectedWatchStatus = status },
-                    label = { Text(status, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaxStreamTheme.CrimsonAccent,
-                        selectedLabelColor = Color.White,
-                        containerColor = if (isDark) Color(0x1FFFFFFF) else MaterialTheme.colorScheme.surfaceVariant
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(statuses) { status ->
+                    val isSelected = selectedWatchStatus == status
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedWatchStatus = status },
+                        label = { Text(status, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaxStreamTheme.CrimsonAccent,
+                            selectedLabelColor = Color.White,
+                            containerColor = if (isDark) Color(0x1FFFFFFF) else MaterialTheme.colorScheme.surfaceVariant
+                        )
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Pick Random Title Button
+            IconButton(
+                onClick = {
+                    val pool = filtered.ifEmpty { libraryItems }
+                    if (pool.isNotEmpty()) {
+                        randomPickItem = pool.random()
+                        showRandomDialog = true
+                    }
+                },
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaxStreamTheme.ElectricCyan.copy(alpha = 0.20f))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Pick Random Title",
+                    tint = MaxStreamTheme.ElectricCyan
                 )
             }
         }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -423,6 +424,7 @@ object CineHubScreen : Screen {
     val extensionManager = koinInject<xyz.mpv.rex.cinehub.extension.manager.ExtensionManager>()
     val recentlyPlayedRepository = koinInject<xyz.mpv.rex.domain.recentlyplayed.repository.RecentlyPlayedRepository>()
     val playbackStateRepository = koinInject<xyz.mpv.rex.domain.playbackstate.repository.PlaybackStateRepository>()
+    val repositoryManager = koinInject<xyz.mpv.rex.cinehub.extension.manager.RepositoryManager>()
 
     val activeProvidersList by providerRegistry.activeProviders.collectAsState()
     val registeredProvidersList by providerRegistry.registeredProviders.collectAsState()
@@ -439,6 +441,7 @@ object CineHubScreen : Screen {
 
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedActiveProvider by remember { mutableStateOf("All Providers") }
+    var showRepoInstallerDialog by remember { mutableStateOf(false) }
     val searchQuery = CineHubSearchStateHolder.searchQuery
     val isSearchActive = CineHubSearchStateHolder.isSearchActive
 
@@ -755,6 +758,19 @@ object CineHubScreen : Screen {
               },
               modifier = Modifier.padding(end = 4.dp)
             )
+            IconButton(
+              onClick = {
+                showRepoInstallerDialog = true
+              },
+              modifier = Modifier.testTag("cinehub_install_repo_button")
+            ) {
+              Icon(
+                imageVector = Icons.Default.Extension,
+                contentDescription = "Install Extension Repository",
+                tint = MaxStreamTheme.CrimsonAccent,
+                modifier = Modifier.size(24.dp)
+              )
+            }
             IconButton(
               onClick = {
                 xyz.mpv.rex.ui.browser.MainScreen.requestTab(1)
@@ -1644,6 +1660,19 @@ object CineHubScreen : Screen {
           )
         }
 
+        // 1-Click Extension Repository Installer Dialog
+        if (showRepoInstallerDialog) {
+          xyz.mpv.rex.cinehub.ui.RepoInstallerDialog(
+            repositoryManager = repositoryManager,
+            onDismissRequest = { showRepoInstallerDialog = false },
+            onInstalledSuccess = {
+              scope.launch {
+                loadMedia()
+              }
+            }
+          )
+        }
+
         if (pendingStreamLinks.isNotEmpty()) {
           QualitySelectorBottomSheet(
             title = pendingStreamTitle,
@@ -2222,6 +2251,7 @@ fun CineDetailView(
   val libraryItems by libraryDao.getAllLibraryItems().collectAsState(initial = emptyList())
   val scope = rememberCoroutineScope()
   val context = LocalContext.current
+  var currentWatchType by remember { mutableStateOf(xyz.mpv.rex.cinehub.model.WatchType.NONE) }
   
   val tmdbId = when (item) {
     is MovieItem -> item.tmdbId.takeIf { it.isNotBlank() } ?: item.title
@@ -3113,6 +3143,12 @@ fun CineDetailView(
                   )
                 }
               }
+              xyz.mpv.rex.ui.theme.maxstream.MaxStreamWatchTypeChip(
+                currentWatchType = currentWatchType,
+                onWatchTypeSelected = { selected ->
+                  currentWatchType = selected
+                }
+              )
             }
 
             if (rating > 0.0) {
@@ -4084,7 +4120,7 @@ fun CineDetailView(
               LazyRow(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(bottom = 12.dp),
+                  .padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
               ) {
                 items(availableSeasons) { s ->
@@ -4097,7 +4133,48 @@ fun CineDetailView(
               }
             }
 
-            if (seasonEpisodes.isEmpty()) {
+            // Episode Range Pagination for long series (> 25 episodes)
+            val rangeChunks = remember(seasonEpisodes) {
+              if (seasonEpisodes.size > 25) {
+                seasonEpisodes.chunked(25).mapIndexed { idx, list ->
+                  val start = idx * 25 + 1
+                  val end = start + list.size - 1
+                  "$start-$end" to list
+                }
+              } else emptyList()
+            }
+            var selectedRangeIndex by remember(seasonEpisodes) { mutableIntStateOf(0) }
+            val displayedEpisodes = if (rangeChunks.isNotEmpty()) {
+              rangeChunks.getOrNull(selectedRangeIndex)?.second ?: seasonEpisodes
+            } else seasonEpisodes
+
+            if (rangeChunks.isNotEmpty()) {
+              Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Text(
+                  text = "Range:",
+                  style = MaterialTheme.typography.labelMedium,
+                  color = Color.White.copy(alpha = 0.7f)
+                )
+                LazyRow(
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  modifier = Modifier.weight(1f)
+                ) {
+                  itemsIndexed(rangeChunks) { idx, (label, _) ->
+                    xyz.mpv.rex.ui.theme.maxstream.MaxStreamGlassFilterChip(
+                      text = label,
+                      isSelected = selectedRangeIndex == idx,
+                      onClick = { selectedRangeIndex = idx }
+                    )
+                  }
+                }
+              }
+            }
+
+            if (displayedEpisodes.isEmpty()) {
               Card(
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
@@ -4126,7 +4203,7 @@ fun CineDetailView(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
               ) {
-                seasonEpisodes.forEachIndexed { idx, ep ->
+                displayedEpisodes.forEachIndexed { idx, ep ->
                   val isExtracting = extractingEpisodeData == ep.data
                   val epNumber = ep.episode ?: (idx + 1)
                   val matchedTmdb = tmdbSeasonEpisodes.firstOrNull { it.episode == epNumber }

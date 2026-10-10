@@ -150,6 +150,28 @@ fun CineHubSearchScreen(
         }
     }
 
+    val searchProgress by viewModel.searchProgress.collectAsState()
+    var selectedTypeFilter by remember { mutableStateOf("All") }
+    val typeFilters = listOf("All", "Movies", "TV Series", "Anime", "Live TV")
+
+    // Filter search results dynamically by selected media type
+    val filteredResults = remember(searchResults, selectedTypeFilter) {
+        if (selectedTypeFilter == "All") {
+            searchResults
+        } else {
+            searchResults.filter { item ->
+                val typeName = item.type?.name?.lowercase() ?: ""
+                when (selectedTypeFilter) {
+                    "Movies" -> typeName.contains("movie") || typeName.contains("torrent")
+                    "TV Series" -> typeName.contains("tv") || typeName.contains("series") || typeName.contains("show")
+                    "Anime" -> typeName.contains("anime")
+                    "Live TV" -> typeName.contains("live")
+                    else -> true
+                }
+            }
+        }
+    }
+
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val bgColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
@@ -267,27 +289,64 @@ fun CineHubSearchScreen(
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    // Quick Suggestion Chips using GlassFilterChip
+                    // Media Type Filter Chips (All, Movies, TV Series, Anime, Live TV)
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(suggestions) { chip ->
-                            val cleanTag = chip.replace("4K ", "")
+                        items(typeFilters) { filterTag ->
                             MaxStreamGlassFilterChip(
-                                text = chip,
-                                isSelected = searchInput.equals(cleanTag, ignoreCase = true),
-                                onClick = {
-                                    searchInput = cleanTag
-                                    viewModel.searchContent(searchInput)
-                                }
+                                text = filterTag,
+                                isSelected = selectedTypeFilter == filterTag,
+                                onClick = { selectedTypeFilter = filterTag }
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Live Multi-Provider Progress Bar Indicator
+                    if (searchProgress.second > 0 && searchProgress.first < searchProgress.second) {
+                        MaxStreamGlassCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            backgroundColor = MaxStreamTheme.MidnightSurface.copy(alpha = 0.85f),
+                            borderColor = MaxStreamTheme.ElectricCyan.copy(alpha = 0.35f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaxStreamTheme.ElectricCyan
+                                    )
+                                    Text(
+                                        text = "Searching ${searchProgress.first}/${searchProgress.second} providers…",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                        color = primaryTextColor
+                                    )
+                                }
+                                Text(
+                                    text = "${searchResults.size} results",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaxStreamTheme.ElectricCyan
+                                )
+                            }
+                        }
+                    }
 
                     if (searchInput.isBlank()) {
                         // Rich OTT Search Suggestions (Recent, Trending, Popular, Filters)
@@ -306,8 +365,8 @@ fun CineHubSearchScreen(
                                 viewModel.searchContent(q)
                             }
                         )
-                    } else if (isSearching) {
-                        // High Performance Skeleton Grid (replaces circular progress indicator)
+                    } else if (isSearching && searchResults.isEmpty()) {
+                        // High Performance Skeleton Grid (when starting search)
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 130.dp),
                             contentPadding = PaddingValues(bottom = 32.dp),
@@ -325,7 +384,7 @@ fun CineHubSearchScreen(
                                 )
                             }
                         }
-                    } else if (searchResults.isEmpty() && searchInput.isNotBlank()) {
+                    } else if (filteredResults.isEmpty() && searchInput.isNotBlank() && !isSearching) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -345,14 +404,14 @@ fun CineHubSearchScreen(
                                     color = primaryTextColor
                                 )
                                 Text(
-                                    text = "Try searching for a different title.",
+                                    text = "Try searching for a different title or filter category.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = mutedTextColor
                                 )
                             }
                         }
                     } else {
-                        // Poster Grid of Search Results
+                        // Poster Grid of Live Filtered Search Results
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 130.dp),
                             contentPadding = PaddingValues(bottom = 32.dp),
@@ -362,7 +421,7 @@ fun CineHubSearchScreen(
                                 .fillMaxSize()
                                 .testTag("cinehub_search_results_grid")
                         ) {
-                            items(searchResults, key = { "${it.apiName}_${it.url}" }) { item ->
+                            items(filteredResults, key = { "${it.apiName}_${it.url}" }) { item ->
                                 val mediaType = item.type
                                 MaxStreamPosterCard(
                                     title = item.name,
