@@ -169,11 +169,11 @@ object SplashScreen : Screen {
       }
     }
 
-    // Safety timer for exactly 2.5s
+    // Fast startup timer (~800ms)
     LaunchedEffect(Unit) {
-      delay(2500)
+      delay(800)
       if (exitAlpha.value > 0.1f) {
-        exitAlpha.animateTo(0f, tween(250))
+        exitAlpha.animateTo(0f, tween(150))
         proceedToNextScreen()
       }
     }

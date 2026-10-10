@@ -55,10 +55,7 @@ object InstalledExtensionsScreenRoute : Screen {
         }
 
         InstalledExtensionsScreen(
-            onNavigateBack = { backstack.removeLastOrNull() },
-            onNavigateToRepositories = {
-                backstack.add(ExtensionRepositoriesScreenRoute)
-            }
+            onNavigateBack = { backstack.removeLastOrNull() }
         )
     }
 }

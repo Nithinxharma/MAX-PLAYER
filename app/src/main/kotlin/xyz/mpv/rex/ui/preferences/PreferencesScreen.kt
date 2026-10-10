@@ -54,6 +54,7 @@ import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -92,7 +93,6 @@ import xyz.mpv.rex.auth.elevation.AdminSessionManager
 import xyz.mpv.rex.cinehub.provider.server.FirebaseProviderSyncService
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.auth.LoginScreen
-import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
 import xyz.mpv.rex.ui.components.glass.GlassButtonVariant
 import xyz.mpv.rex.ui.components.glass.GlassCard
 import xyz.mpv.rex.ui.components.glass.GlassCategoryHeader
@@ -404,10 +404,10 @@ object PreferencesScreen : Screen {
                                 )
 
                                 QuickActionButton(
-                                    label = "History",
-                                    icon = Icons.Outlined.History,
+                                    label = "Library",
+                                    icon = Icons.Outlined.VideoLibrary,
                                     modifier = Modifier.weight(1f),
-                                    onClick = { backstack.add(RecentlyPlayedScreen) }
+                                    onClick = { backstack.add(MediaLibraryPreferencesScreen) }
                                 )
                             }
 

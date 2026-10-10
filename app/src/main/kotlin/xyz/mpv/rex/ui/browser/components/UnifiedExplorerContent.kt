@@ -27,7 +27,6 @@ import xyz.mpv.rex.domain.media.model.Video
 import xyz.mpv.rex.domain.media.model.VideoFolder
 import xyz.mpv.rex.ui.browser.playlist.PlaylistWithCount
 import xyz.mpv.rex.ui.browser.playlist.PlaylistVideoItem
-import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedItem
 import xyz.mpv.rex.domain.browser.FileSystemItem
 import xyz.mpv.rex.ui.browser.cards.FolderCard
 import xyz.mpv.rex.ui.browser.cards.PlaylistCard
@@ -102,8 +101,7 @@ fun <T> UnifiedExplorerContent(
       items.firstOrNull()?.let {
         it is VideoFolder || 
         it is FileSystemItem.Folder ||
-        it is PlaylistWithCount ||
-        it is RecentlyPlayedItem.PlaylistItem
+        it is PlaylistWithCount
       } ?: false
     }
     if (isFolder) {
@@ -162,7 +160,6 @@ fun <T> UnifiedExplorerContent(
         when (item) {
           is Video -> item.path
           is VideoWithPlaybackInfo -> item.video.path
-          is RecentlyPlayedItem.VideoItem -> item.video.path
           is FileSystemItem.VideoFile -> item.video.path
           is PlaylistVideoItem -> item.video.path
           else -> null
@@ -198,7 +195,6 @@ fun <T> UnifiedExplorerContent(
           when (item) {
             is Video -> item.path == recentlyPlayedFilePath
             is VideoWithPlaybackInfo -> item.video.path == recentlyPlayedFilePath
-            is RecentlyPlayedItem.VideoItem -> item.video.path == recentlyPlayedFilePath
             is FileSystemItem.VideoFile -> item.video.path == recentlyPlayedFilePath
             is VideoFolder -> {
               if (showSections) {
@@ -223,7 +219,7 @@ fun <T> UnifiedExplorerContent(
             val matchedItem = items[lastPlayedIndex]
             val isFolder = matchedItem is VideoFolder || matchedItem is FileSystemItem.Folder
             val folderItems = items.filter { it is VideoFolder || it is FileSystemItem.Folder }
-            val videoItems = items.filter { it is Video || it is VideoWithPlaybackInfo || it is FileSystemItem.VideoFile || it is RecentlyPlayedItem.VideoItem }
+            val videoItems = items.filter { it is Video || it is VideoWithPlaybackInfo || it is FileSystemItem.VideoFile }
 
             val targetIndex = if (isFolder) {
               val folderIndex = folderItems.indexOf(matchedItem)
@@ -272,7 +268,7 @@ fun <T> UnifiedExplorerContent(
     val contentBlock: @Composable BoxScope.() -> Unit = {
       if (showSections) {
         val folderItems = items.filter { it is VideoFolder || it is FileSystemItem.Folder }
-        val videoItems = items.filter { it is Video || it is VideoWithPlaybackInfo || it is FileSystemItem.VideoFile || it is RecentlyPlayedItem.VideoItem }
+        val videoItems = items.filter { it is Video || it is VideoWithPlaybackInfo || it is FileSystemItem.VideoFile }
 
         val folderGridColumns = if (isLandscape) folderGridColumnsLandscape else folderGridColumnsPortrait
         val videoGridColumns = if (isLandscape) videoGridColumnsLandscape else videoGridColumnsPortrait
@@ -694,8 +690,6 @@ private fun <T> getItemId(item: T): String {
     is Video -> item.path
     is VideoWithPlaybackInfo -> item.video.path
     is PlaylistWithCount -> item.playlist.id.toString()
-    is RecentlyPlayedItem.VideoItem -> item.video.path
-    is RecentlyPlayedItem.PlaylistItem -> item.playlist.id.toString()
     is FileSystemItem.Folder -> item.path
     is FileSystemItem.VideoFile -> item.path
     is PlaylistVideoItem -> item.playlistItem.id.toString()
@@ -804,37 +798,7 @@ private fun <T> ExplorerItemCard(
         gridColumns = columns,
       )
     }
-    is RecentlyPlayedItem.VideoItem -> {
-      val isRecentlyPlayed = item.video.path in lastPlayedVideoPathsInFolder
 
-      VideoCard(
-        video = item.video,
-        uiSettings = uiSettings,
-        isSelected = isSelected,
-        onClick = onClick,
-        onLongClick = onLongClick,
-        onThumbClick = onThumbClick,
-        isGridMode = isGridMode,
-        gridColumns = columns,
-        showSubtitleIndicator = showSubtitleIndicator,
-        progressPercentage = item.progress,
-        isWatched = item.isWatched,
-        isRecentlyPlayed = isRecentlyPlayed
-      )
-    }
-    is RecentlyPlayedItem.PlaylistItem -> {
-      PlaylistCard(
-        playlist = item.playlist,
-        itemCount = item.videoCount,
-        uiSettings = uiSettings,
-        isSelected = isSelected,
-        onClick = onClick,
-        onLongClick = onLongClick,
-        onThumbClick = onThumbClick,
-        isGridMode = isGridMode,
-        gridColumns = columns,
-      )
-    }
     is FileSystemItem.Folder -> {
       val folderModel = VideoFolder(
         bucketId = item.path,

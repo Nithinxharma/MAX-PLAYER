@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for integrating missing CloudStream SDK features into MaxStream: complete episode watch progress & batch tools, glassmorphic subtitle engine, and multi-tab library with cast cards and random title picker.",
-  "updatedAt":  "2026-10-10T12:55:02.683285513Z",
+  "summary":  "Implementation plan for removing unused screens (Shorts, Blocked Shorts, Ytdl Settings, Recently Played, MaxStreamSeeAllSheet, CineDetailScreen), consolidating Extension & Repository management into tabs within InstalledExtensionsScreen, and optimizing SplashScreen and CineHubUnifiedMediaScreen.",
+  "updatedAt":  "2026-10-10T15:40:11.031308346Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

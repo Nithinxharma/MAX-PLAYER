@@ -239,7 +239,7 @@ object DeveloperOptionsScreen : Screen {
                                     )
                                 },
                                 onClick = {
-                                    backstack.add(RepositoryPresetsScreenRoute)
+                                    backstack.add(InstalledExtensionsScreenRoute)
                                 }
                             )
                         }

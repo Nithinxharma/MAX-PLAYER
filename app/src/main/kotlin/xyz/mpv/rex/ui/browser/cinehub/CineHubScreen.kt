@@ -18,6 +18,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -479,6 +482,7 @@ object CineHubScreen : Screen {
     var seeAllSheetData by remember { mutableStateOf<Pair<String, List<xyz.mpv.rex.cinehub.extension.api.CineHubSearchItem>>?>(null) }
 
     var selectedDetailItem by remember { mutableStateOf<Any?>(null) }
+    var activeSheetItem by remember { mutableStateOf<Any?>(null) }
 
     var pendingStreamTitle by remember { mutableStateOf("") }
     var pendingStreamLinks by remember { mutableStateOf<List<com.lagradost.cloudstream3.utils.ExtractorLink>>(emptyList()) }
@@ -1628,36 +1632,95 @@ object CineHubScreen : Screen {
           }
         }
 
-        // Navigate to full-screen movie/tv show details
+        // Open movie/tv show details in CineDetailBottomSheet
         LaunchedEffect(selectedDetailItem) {
           val item = selectedDetailItem
           if (item != null) {
+            activeSheetItem = item
             selectedDetailItem = null
-            CineDetailStateHolder.open(backstack, item)
           }
+        }
+
+        activeSheetItem?.let { item ->
+          CineDetailBottomSheet(
+            item = item,
+            onDismiss = { activeSheetItem = null }
+          )
         }
 
         // See All Provider Row Sheet
         seeAllSheetData?.let { (title, items) ->
-          xyz.mpv.rex.ui.browser.cinehub.components.MaxStreamSeeAllSheet(
-            title = title,
-            items = items,
+          ModalBottomSheet(
             onDismissRequest = { seeAllSheetData = null },
-            onItemClick = { item ->
-              loadExtensionItemDetails(
-                providerId = item.providerId,
-                providerName = item.providerName,
-                url = item.url,
-                scope = scope,
-                fallbackTitle = item.title,
-                fallbackPoster = item.posterUrl,
-                fallbackYear = item.year,
-                fallbackType = if (item.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
-              ) { details ->
-                selectedDetailItem = details
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+          ) {
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+              verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+              Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+              )
+              LazyVerticalGrid(
+                columns = GridCells.Adaptive(110.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .heightIn(max = 450.dp)
+              ) {
+                items(items) { item ->
+                  Card(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .clickable {
+                        seeAllSheetData = null
+                        loadExtensionItemDetails(
+                          providerId = item.providerId,
+                          providerName = item.providerName,
+                          url = item.url,
+                          scope = scope,
+                          fallbackTitle = item.title,
+                          fallbackPoster = item.posterUrl,
+                          fallbackYear = item.year,
+                          fallbackType = if (item.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries) TvType.TvSeries else TvType.Movie
+                        ) { details ->
+                          selectedDetailItem = details
+                        }
+                      },
+                    shape = RoundedCornerShape(12.dp)
+                  ) {
+                    Column(
+                      modifier = Modifier.padding(6.dp),
+                      horizontalAlignment = Alignment.CenterHorizontally,
+                      verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                      AsyncImage(
+                        model = item.posterUrl,
+                        contentDescription = item.title,
+                        modifier = Modifier
+                          .fillMaxWidth()
+                          .height(130.dp)
+                          .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                      )
+                      Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                      )
+                    }
+                  }
+                }
               }
             }
-          )
+          }
         }
 
         // 1-Click Extension Repository Installer Dialog

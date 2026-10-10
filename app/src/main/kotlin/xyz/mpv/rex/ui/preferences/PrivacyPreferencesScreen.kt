@@ -51,7 +51,6 @@ import xyz.mpv.rex.domain.recentlyplayed.repository.RecentlyPlayedRepository
 import xyz.mpv.rex.preferences.PrivacyPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
-import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
 import xyz.mpv.rex.ui.components.glass.GlassCategoryHeader
 import xyz.mpv.rex.ui.components.glass.GlassPreferenceItem
 import xyz.mpv.rex.ui.components.glass.GlassSettingsSection
@@ -134,13 +133,7 @@ object PrivacyPreferencesScreen : Screen {
                                 showDivider = true
                             )
 
-                            GlassPreferenceItem(
-                                title = "View & Manage Watch History",
-                                subtitle = "Inspect active playback entries across video files and streams",
-                                icon = Icons.Outlined.History,
-                                showDivider = true,
-                                onClick = { backstack.add(RecentlyPlayedScreen) }
-                            )
+
 
                             GlassPreferenceItem(
                                 title = "Clear Watch History",

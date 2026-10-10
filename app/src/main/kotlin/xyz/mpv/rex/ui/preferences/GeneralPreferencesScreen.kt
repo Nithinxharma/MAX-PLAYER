@@ -212,25 +212,11 @@ object GeneralPreferencesScreen : Screen {
                                 title = "Jellyfin Server Sync",
                                 subtitle = "Connect to Jellyfin instance for external playback sync",
                                 icon = Icons.Outlined.VideoLibrary,
-                                showDivider = true,
+                                showDivider = false,
                                 onClick = { backstack.add(xyz.mpv.rex.jellyfin.ui.JellyfinSettingsScreen) }
                             )
 
-                            GlassPreferenceItem(
-                                title = "yt-dlp Engine",
-                                subtitle = "Configure MAX STREAM ytdl stream resolvers & parameters",
-                                icon = Icons.Outlined.CloudDownload,
-                                showDivider = true,
-                                onClick = { backstack.add(YtdlSettingsScreen) }
-                            )
 
-                            GlassPreferenceItem(
-                                title = "Shorts & Mini-Player",
-                                subtitle = "Manage short-form vertical feeds and compact player behavior",
-                                icon = Icons.Outlined.SmartDisplay,
-                                showDivider = false,
-                                onClick = { backstack.add(ShortsPreferencesScreen) }
-                            )
                         }
                     }
 

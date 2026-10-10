@@ -1,54 +1,43 @@
-# Implementation Plan: CloudStream SDK Integration into MaxStream
+# Implementation Plan: Screen Cleanup, Extension Consolidation, and Codebase Optimization
 
-This plan details the integration of essential CloudStream SDK features into MaxStream while maintaining the app's signature glassmorphic design system.
-
----
-
-## 1. Episode & Playback Management System
-- **Episode Watch Progress**:
-  - Track per-episode playback positions with visual progress bars on episode cards.
-  - Quick action to "Mark Watched", "Mark Unwatched", and "Mark Up To Here".
-- **Season & Range Pagination**:
-  - Horizontal range chips (e.g. `1-25`, `26-50`, `51-100`) for large anime/series with over 50 episodes.
-  - Sub/Dub audio track indicator badges on episode items.
-- **Batch Downloads & Stream Links**:
-  - Batch download queue trigger for seasons or range selection.
-  - Quick stream link extractor status chip (showing mirror count and resolution tags).
+This plan details the removal of unneeded/redundant UI screens (Shorts, Ytdl, Recently Played, MaxStreamSeeAllSheet, CineDetailScreen), consolidation of Extension & Repository management into a single tabbed view, and optimization of `SplashScreen.kt` and `CineHubUnifiedMediaScreen.kt`.
 
 ---
 
-## 2. Glassmorphic Subtitle Customization Engine
-- **In-Player Subtitle Styling Sheet**:
-  - Custom font selector (Default, Sans-Serif, Serif, Monospace, Condensed).
-  - Text color, background color, background corner radius, and edge/outline intensity sliders.
-  - Text size offset (`12sp` to `28sp`) and vertical offset controls.
-- **Track Selection & Auto-Language**:
-  - Subtitle track selector dialog with automatic language preference matching (e.g., preferred English/Japanese subtitles).
-  - External SRT/VTT file picker and sync timing adjustment (-5s to +5s offset).
+## 1. Extension & Provider Management Consolidation
+- **Unified Extension Hub (`InstalledExtensionsScreen.kt`)**:
+  - Add top scrollable/segmented tabs: **Installed Extensions**, **Repositories**, and **Preset Repositories**.
+  - Move repository URL management and repository preset installation into `InstalledExtensionsScreen.kt`.
+  - Deprecate standalone routes (`ExtensionRepositoriesScreenRoute.kt`, `RepositoryPresetsScreenRoute.kt`, `ExtensionPreferencesScreenRoute.kt`) and redirect all extension navigation directly to `InstalledExtensionsScreenRoute`.
+  - Clean up redundant standalone repository files (`ExtensionRepositoriesScreen.kt`, `RepositoryPresetsScreen.kt`).
 
 ---
 
-## 3. Multi-Tab Library & Cast Cards
-- **Multi-Category Library Screen**:
-  - Tabs for **Watching**, **Plan to Watch**, **Completed**, **Favorites**, and **Subscriptions**.
-  - Sorting options: *Rating*, *Release Date*, *Recently Updated*, and *Alphabetical*.
-- **"Pick Random Title" Feature**:
-  - Header action button that pops up a glassmorphic modal with a randomized title recommendation from user's watchlist/library.
-- **Actor & Voice-Actor Cast Cards**:
-  - Horizontal glassmorphic cast row on Media Details sheet and screen showing actor profile avatars, real names, and character roles.
+## 2. Removal of Redundant & Unused UI Screens & Navigation Entries
+- **Shorts Module Removal**:
+  - Delete `ShortsScreen.kt`, `ShortsViewModel.kt`, `ShortsPreferencesScreen.kt`, and `BlockedShortsScreen.kt`.
+  - Remove Shorts tab from `MainScreen.kt` bottom navigation bar and navigation graph.
+  - Remove Shorts & Blocked Shorts preferences entries from `PreferencesScreen.kt`.
+- **Ytdl Settings & Recently Played Removal**:
+  - Delete `YtdlSettingsScreen.kt` and remove Ytdl configuration entries from `PreferencesScreen.kt`.
+  - Delete `RecentlyPlayedScreen.kt` and `RecentlyPlayedViewModel.kt`, and remove Recently Played options from MainScreen/Library navigation.
+- **Redundant Details & Sheet Removal**:
+  - Delete `CineDetailScreen.kt` (since `CineHubScreen.kt` contains the unified `CineDetailView` with inline stream resolution, episode ranges, and watch status).
+  - Delete `MaxStreamSeeAllSheet.kt` and route "See All" actions to `CineHubSearchScreen` or inline section grids.
 
 ---
 
-## 4. Architectural Integration Plan
-1. **Data Layer**:
-   - Update `WatchProgressManager` and `UserLibraryRepository` to persist episode watch state and subtitle customization preferences.
-2. **UI Layer**:
-   - Enhance `CineHubDetailBottomSheet.kt` with cast cards, range pagination, and episode action popups.
-   - Update `LibraryScreen.kt` with multi-category tabs, sorting popups, and random picker modal.
-   - Create `SubtitleCustomizationSheet.kt` and integrate into player view.
+## 3. Screen Optimization
+- **`SplashScreen.kt` Optimization**:
+  - Streamline initial boot logic, remove unnecessary delays/animations, and ensure fast transition directly to `MainScreen`.
+- **`CineHubUnifiedMediaScreen.kt` Optimization**:
+  - Clean up unused imports, dead layout state, and streamline the library grid rendering logic.
+- **Preferences & Main Navigation Cleanup**:
+  - Remove all broken or removed screen references from `PreferencesScreen.kt` menu items and `MainScreen.kt` routes.
 
 ---
 
-## User Review Required
-
-Please review the plan above. Click **Proceed** to start the implementation.
+## Verification & Build Plan
+1. Execute file removals and code modifications across all affected packages.
+2. Verify with `compile_applet` to ensure zero compilation errors or broken route references.
+3. Verify that navigation remains clean, fluid, and responsive.

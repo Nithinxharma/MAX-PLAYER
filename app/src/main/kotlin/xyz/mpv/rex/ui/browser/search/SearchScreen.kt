@@ -975,12 +975,11 @@ data class SearchScreen(
       )
     }
 
-    LaunchedEffect(selectedExtensionItem) {
-      val item = selectedExtensionItem
-      if (item != null) {
-        selectedExtensionItem = null
-        xyz.mpv.rex.ui.browser.cinehub.CineDetailStateHolder.open(backstack, item)
-      }
+    selectedExtensionItem?.let { item ->
+      xyz.mpv.rex.ui.browser.cinehub.CineDetailBottomSheet(
+        item = item,
+        onDismiss = { selectedExtensionItem = null }
+      )
     }
   }
 }
