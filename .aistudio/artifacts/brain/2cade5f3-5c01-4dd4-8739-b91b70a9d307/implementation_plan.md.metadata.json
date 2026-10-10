@@ -1,6 +1,6 @@
 {
-  "summary":  "Revised plan: Retain preset extension repositories while purging all hardcoded CastleTV/dummy providers, and enforce strict plan-matching so extensions are not auto-installed without plan authorization.",
-  "updatedAt":  "2026-10-10T17:07:11.985517804Z",
+  "summary":  "Implementation plan to completely redesign CineDetailBottomSheet with a unified season/episode loading engine and modern hero backdrop layout.",
+  "updatedAt":  "2026-10-10T17:20:59.659508754Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

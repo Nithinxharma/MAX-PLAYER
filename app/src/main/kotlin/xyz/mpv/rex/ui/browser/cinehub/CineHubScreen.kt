@@ -3540,7 +3540,7 @@ fun CineDetailView(
               }
             }
           }
-        } else if (item is TvShowItem) {
+        } else if (!isMovie) {
           val context = LocalContext.current
           val scope = rememberCoroutineScope()
           var selectedSeason by remember { mutableIntStateOf(1) }
@@ -3549,17 +3549,24 @@ fun CineDetailView(
           var seasonEpisodes by remember { mutableStateOf<List<EpisodeItem>>(emptyList()) }
           var isLoadingEpisodes by remember { mutableStateOf(true) }
           var resolvedShowFolder by remember { mutableStateOf<File?>(null) }
-          var resolvedTmdbId by remember { mutableStateOf<String?>(item.tmdbId.takeIf { it.isNotBlank() && it.all { c -> c.isDigit() } }) }
+          var resolvedTmdbId by remember {
+            mutableStateOf<String?>(
+              (item as? TvShowItem)?.tmdbId?.takeIf { it.isNotBlank() && it.all { c -> c.isDigit() } }
+                ?: (item as? TMDBTvNode)?.id?.toString()
+                ?: tmdbId.takeIf { it.isNotBlank() && it.all { c -> c.isDigit() } }
+            )
+          }
 
           // Initial scan and season detection
-          LaunchedEffect(item) {
+          LaunchedEffect(item, title) {
             isLoadingEpisodes = true
             withContext(Dispatchers.IO) {
               // 1. Resolve local folder for this TV show
-              val localFolder: File? = if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
-                File(item.folderPath)
+              val showPath = (item as? TvShowItem)?.folderPath ?: ""
+              val localFolder: File? = if (showPath.isNotBlank() && File(showPath).exists()) {
+                File(showPath)
               } else {
-                CineFolderMetadataManager.findLocalShowFolder(context, item.title)
+                CineFolderMetadataManager.findLocalShowFolder(context, title)
               }
               resolvedShowFolder = localFolder
 
@@ -3572,17 +3579,17 @@ fun CineDetailView(
               val localSeasons = localScanned.map { it.season }.filter { it > 0 }.distinct().sorted()
 
               // 2. Resolve TMDB ID and online season count
-              var tmdbId = resolvedTmdbId
-              if (tmdbId.isNullOrBlank()) {
-                val searched = CineOnlineScraper.getOrFetchTvShow(context, item.title)
+              var activeTmdbId = resolvedTmdbId
+              if (activeTmdbId.isNullOrBlank()) {
+                val searched = CineOnlineScraper.getOrFetchTvShow(context, title)
                 if (searched != null && searched.tmdbId.isNotBlank() && searched.tmdbId.all { it.isDigit() }) {
-                  tmdbId = searched.tmdbId
-                  resolvedTmdbId = tmdbId
+                  activeTmdbId = searched.tmdbId
+                  resolvedTmdbId = activeTmdbId
                 }
               }
 
-              val onlineDetails = if (!tmdbId.isNullOrBlank()) {
-                CineOnlineScraper.fetchTvShowDetails(tmdbId, item.title)
+              val onlineDetails = if (!activeTmdbId.isNullOrBlank()) {
+                CineOnlineScraper.fetchTvShowDetails(activeTmdbId, title)
               } else null
 
               val onlineSeasons = onlineDetails?.seasons?.map { it.season_number }?.filter { it > 0 }?.distinct()?.sorted().orEmpty()
@@ -3599,18 +3606,18 @@ fun CineDetailView(
           }
 
           // Fetch or filter episodes whenever selectedSeason changes
-          LaunchedEffect(item, selectedSeason, resolvedTmdbId, allLocalEpisodes) {
+          LaunchedEffect(item, title, selectedSeason, resolvedTmdbId, allLocalEpisodes) {
             isLoadingEpisodes = true
             val loaded = withContext(Dispatchers.IO) {
               val localForSeason = allLocalEpisodes.filter { it.season == selectedSeason }
 
               // Fetch online episodes for metadata enrichment or fallback
-              val tmdbId = resolvedTmdbId ?: item.tmdbId
+              val activeTmdbId = resolvedTmdbId ?: (item as? TvShowItem)?.tmdbId ?: (item as? TMDBTvNode)?.id?.toString() ?: tmdbId
               val onlineList = CineOnlineScraper.fetchTvShowEpisodes(
                 context,
-                tmdbId.ifBlank { item.title },
+                activeTmdbId.ifBlank { title },
                 selectedSeason,
-                item.title
+                title
               )
 
               if (localForSeason.isNotEmpty()) {
@@ -3619,7 +3626,7 @@ fun CineDetailView(
                   val match = onlineList.firstOrNull { it.episode == localEp.episode }
                   if (match != null) {
                     localEp.copy(
-                      title = if (localEp.title.startsWith("Episode ") || localEp.title.equals(item.title, ignoreCase = true)) {
+                      title = if (localEp.title.startsWith("Episode ") || localEp.title.equals(title, ignoreCase = true)) {
                         match.title
                       } else localEp.title,
                       plot = if (localEp.plot.isBlank() || localEp.plot == "Local Media File.") match.plot else localEp.plot,
@@ -3656,7 +3663,7 @@ fun CineDetailView(
                     withContext(Dispatchers.Main) {
                       onDismiss()
                       if (playUri.isNotBlank()) {
-                        Toast.makeText(context, "Playing ${item.title} - ${nextEpisodeToPlay.title}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Playing $title - ${nextEpisodeToPlay.title}", Toast.LENGTH_SHORT).show()
                         MediaUtils.playFile(playUri, context, "cinehub")
                       }
                     }
@@ -3685,23 +3692,18 @@ fun CineDetailView(
 
             OutlinedButton(
               onClick = {
-                if (item.folderPath.isNotBlank() && File(item.folderPath).exists()) {
+                val showPath = (item as? TvShowItem)?.folderPath ?: ""
+                if (showPath.isNotBlank() && File(showPath).exists()) {
                   isScrapingTv = true
                   scope.launch(Dispatchers.IO) {
                     val enriched = KodiMediaScraper.scrapeTvShow(
                       context = context,
-                      showFolder = File(item.folderPath),
+                      showFolder = File(showPath),
                       downloadArtworkAndNfo = true,
                     )
-                    val freshEps = NfoScanner.scanTvShowEpisodes(File(item.folderPath))
+                    val freshEps = NfoScanner.scanTvShowEpisodes(File(showPath))
                     withContext(Dispatchers.Main) {
                       isScrapingTv = false
-                      item.title = enriched.title
-                      item.plot = enriched.plot
-                      item.posterPath = enriched.posterPath
-                      item.backdropPath = enriched.backdropPath
-                      item.userRating = enriched.userRating
-                      item.genre = enriched.genre
                       allLocalEpisodes = freshEps
                       val detected = freshEps.map { it.season }.filter { it > 0 }.distinct().sorted()
                       availableSeasons = if (detected.isNotEmpty()) detected else listOf(1)
