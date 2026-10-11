@@ -87,7 +87,8 @@ class Score(var score: Double, var max: Int = 100) {
 
 data class NextAiring(
     val episode: Int,
-    val unixTime: Long
+    val unixTime: Long,
+    val season: Int? = null
 )
 
 data class TrailerData(
@@ -261,6 +262,10 @@ interface LoadResponse {
     var logoUrl: String?
     var contentRating: String?
     var uniqueUrl: String
+
+    var nextAiring: NextAiring?
+        get() = null
+        set(value) {}
 
     var rating: Int?
         get() = score?.toInt(100)
@@ -445,7 +450,8 @@ data class TvSeriesLoadResponse(
     override var backgroundPosterUrl: String? = null,
     override var logoUrl: String? = null,
     override var contentRating: String? = null,
-    override var uniqueUrl: String = ""
+    override var uniqueUrl: String = "",
+    override var nextAiring: NextAiring? = null
 ) : LoadResponse
 
 data class AnimeLoadResponse(
@@ -472,7 +478,8 @@ data class AnimeLoadResponse(
     override var contentRating: String? = null,
     override var uniqueUrl: String = "",
     var engName: String? = null,
-    var jpnName: String? = null
+    var jpnName: String? = null,
+    override var nextAiring: NextAiring? = null
 ) : LoadResponse
 
 data class TorrentLoadResponse(
@@ -632,7 +639,50 @@ data class SettingsJson(val enableAdult: Boolean = false)
 abstract class MainAPI {
     companion object {
         val settingsForProvider: SettingsJson = SettingsJson()
+
+        suspend fun getCaptchaToken(url: String, key: String, referer: String? = null): String? {
+            try {
+                val _url = java.net.URI(url)
+                val domain = base64Encode(
+                    ((_url.scheme ?: "https") + "://" + (_url.host ?: "") + ":443").encodeToByteArray(),
+                ).replace("\n", "").replace("=", ".")
+                val vToken =
+                    app.get(
+                        "https://www.google.com/recaptcha/api.js?render=$key",
+                        referer = referer,
+                        cacheTime = 0
+                    )
+                        .text
+                        .substringAfter("releases/")
+                        .substringBefore("/")
+                val recapToken =
+                    app.get("https://www.google.com/recaptcha/api2/anchor?ar=1&hl=en&size=invisible&cb=cs3&k=$key&co=$domain&v=$vToken")
+                        .document
+                        .selectFirst("#recaptcha-token")?.attr("value")
+                if (recapToken != null) {
+                    return app.post(
+                        "https://www.google.com/recaptcha/api2/reload?k=$key",
+                        data = mapOf(
+                            "v" to vToken,
+                            "k" to key,
+                            "c" to recapToken,
+                            "co" to domain,
+                            "sa" to "",
+                            "reason" to "q"
+                        ), cacheTime = 0
+                    ).text
+                        .substringAfter("rresp\",\"")
+                        .substringBefore("\"")
+                }
+            } catch (e: Exception) {
+                com.lagradost.cloudstream3.mvvm.logError(e)
+            }
+            return null
+        }
     }
+
+    open suspend fun getCaptchaToken(url: String, key: String, referer: String? = null): String? =
+        Companion.getCaptchaToken(url, key, referer)
     open var name: String = "Unknown Provider"
     open var mainUrl: String = ""
     open var lang: String = "en"
@@ -816,50 +866,20 @@ suspend fun MainAPI.newMovieLoadResponse(
     url: String,
     type: TvType,
     dataUrl: String,
-    initializer: suspend MovieLoadResponse.() -> Unit
+    initializer: suspend MovieLoadResponse.() -> Unit = {}
 ): MovieLoadResponse {
     val res = MovieLoadResponse(name, url, this.name, type, dataUrl)
     res.initializer()
     return res
 }
 
-fun MainAPI.newMovieLoadResponse(
-    name: String,
-    url: String,
-    type: TvType,
-    dataUrl: Any,
-    initializer: MovieLoadResponse.() -> Unit = {}
-): MovieLoadResponse {
-    val dataStr = if (dataUrl is String) dataUrl else dataUrl.toJson()
-    return MovieLoadResponse(name, url, this.name, type, dataStr).apply(initializer)
-}
-
-fun MainAPI.newMovieLoadResponse(
-    name: String,
-    url: String,
-    type: TvType,
-    dataUrl: String,
-    initializer: MovieLoadResponse.() -> Unit = {}
-): MovieLoadResponse {
-    return MovieLoadResponse(name, url, this.name, type, dataUrl).apply(initializer)
-}
-
 suspend fun MainAPI.newMovieLoadResponse(
     name: String,
     url: String,
     type: TvType = TvType.Movie,
-    initializer: suspend MovieLoadResponse.() -> Unit
+    initializer: suspend MovieLoadResponse.() -> Unit = {}
 ): MovieLoadResponse {
-    return newMovieLoadResponse(name, url, type, url as Any, initializer)
-}
-
-fun MainAPI.newMovieLoadResponse(
-    name: String,
-    url: String,
-    type: TvType = TvType.Movie,
-    initializer: MovieLoadResponse.() -> Unit = {}
-): MovieLoadResponse {
-    return newMovieLoadResponse(name, url, type, url as Any, initializer)
+    return newMovieLoadResponse(name, url, type, url, initializer)
 }
 
 suspend fun MainAPI.newTvSeriesLoadResponse(
@@ -867,31 +887,25 @@ suspend fun MainAPI.newTvSeriesLoadResponse(
     url: String,
     type: TvType,
     episodes: List<Episode>,
-    initializer: suspend TvSeriesLoadResponse.() -> Unit
+    initializer: suspend TvSeriesLoadResponse.() -> Unit = {}
 ): TvSeriesLoadResponse {
-    val res = TvSeriesLoadResponse(name, url, this.name, type, episodes)
+    val res = TvSeriesLoadResponse(
+        name = name,
+        url = url,
+        apiName = this.name,
+        type = type,
+        episodes = episodes,
+        comingSoon = episodes.isEmpty()
+    )
     res.initializer()
     return res
-}
-
-fun MainAPI.newTvSeriesLoadResponse(name: String, url: String, type: TvType, episodes: List<Episode>, initializer: TvSeriesLoadResponse.() -> Unit = {}): TvSeriesLoadResponse {
-    return TvSeriesLoadResponse(name, url, this.name, type, episodes).apply(initializer)
 }
 
 suspend fun MainAPI.newTvSeriesLoadResponse(
     name: String,
     url: String,
     type: TvType = TvType.TvSeries,
-    initializer: suspend TvSeriesLoadResponse.() -> Unit
-): TvSeriesLoadResponse {
-    return newTvSeriesLoadResponse(name, url, type, emptyList(), initializer)
-}
-
-fun MainAPI.newTvSeriesLoadResponse(
-    name: String,
-    url: String,
-    type: TvType = TvType.TvSeries,
-    initializer: TvSeriesLoadResponse.() -> Unit = {}
+    initializer: suspend TvSeriesLoadResponse.() -> Unit = {}
 ): TvSeriesLoadResponse {
     return newTvSeriesLoadResponse(name, url, type, emptyList(), initializer)
 }
@@ -928,9 +942,6 @@ fun MainAPI.newHomePageResponse(items: List<HomePageList>, hasNext: Boolean? = f
 }
 fun MainAPI.fixUrlNull(url: String?): String? {
     return url?.let { fixUrl(it) }
-}
-fun newSearchResponseList(items: List<SearchResponse>, hasNext: Boolean? = false): SearchResponseList {
-    return SearchResponseList(items, hasNext ?: false)
 }
 
 fun getQualityFromString(string: String?): SearchQuality? {
@@ -1113,7 +1124,7 @@ fun capitalizeStringNullable(str: String?): String? {
 // --- Missing Extension Functions for Web Scraper Extensions Compatibility ---
 
 fun List<SearchResponse>.toNewSearchResponseList(hasNext: Boolean? = null): SearchResponseList {
-    return newSearchResponseList(this, hasNext)
+    return newSearchResponseList(this, hasNext ?: false)
 }
 
 fun Episode.addDate(date: java.util.Date?) {
@@ -1252,6 +1263,16 @@ fun MainAPI.newAnimeLoadResponse(
     initializer: AnimeLoadResponse.() -> Unit = {}
 ): AnimeLoadResponse {
     return AnimeLoadResponse(name, url, this.name, type).apply(initializer)
+}
+
+fun isUpcoming(dateString: String?): Boolean {
+    if (dateString.isNullOrBlank()) return false
+    return runCatching {
+        val cleanDate = dateString.take(10)
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val parsed = sdf.parse(cleanDate)
+        parsed != null && parsed.time > System.currentTimeMillis()
+    }.getOrElse { false }
 }
 
 

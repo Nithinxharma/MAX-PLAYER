@@ -1,73 +1,91 @@
-# Architectural Plan: Fix Cine Details Screen (Seasons & Episodes) and Clean CineHub Top Bar
+# Implementation Plan: Audit and Integrate Combined CloudStream Reference Files
 
-## Problem Diagnosis
-
-1. **Missing Seasons & Episodes in Details View**:
-   - In `CineHubScreen.kt` (`loadExtensionItemDetails`), when an extension API does not return a direct response and falls back to fallback metadata, or returns generic results, it defaulted to `MovieLoadResponse` regardless of whether `fallbackType` was `TvType.TvSeries` or if the item was identified as a TV show.
-   - When users click on TV show posters in search results or discovery cards, `fallbackType` was not propagated through all fallback paths, resulting in `isMovie = true` and completely hiding the Seasons & Episodes UI.
-   - In `CineDetailView`, the Seasons & Episodes loading logic only activated under specific sub-branches (`item is TvShowItem` with local folders, or `item is ExtensionMediaDetails && loadResp is TvSeriesLoadResponse`). Other TV show types or items without pre-populated episodes showed no seasons or fallback episode queries.
-   - When a TV show has 0 pre-populated episodes in the provider load response, it did not dynamically query `CineOnlineScraper.fetchTvShowDetails` and `CineOnlineScraper.fetchTvShowEpisodes`, leaving the episode section blank.
-
-2. **Top Bar Clutter & Overcrowding**:
-   - The CineHub `TopAppBar` had 5 crowded elements crammed into a small action row: a large `MaxStreamActiveProviderSelector` chip, Manage Extensions button, My Media Hub button, and Account Profile button.
-   - On standard mobile viewports, this crushed the title or spilled over, creating an unsightly, misaligned top bar.
+## Context & Objectives
+The local `Reffer/` directory contains an unorganized merge of CloudStream's upstream `library/` (headless plugin, extractor, and provider runtime) and `shared/` (multiplatform Compose UI and Mihon preferences). The objective is to:
+1. Reconstruct the original module boundaries across all 278 reference files.
+2. Integrate missing core extractors, metaproviders, and utilities into the production app (`app/src/main/kotlin/com/lagradost/cloudstream3/`).
+3. Resolve syntax, import, and architecture compatibility issues (e.g. replacing Ktor references with Java/Android standards, fixing regex escapes, adding `getCaptchaToken` to `MainAPI` and `APIHolder`).
+4. Register all compatible extractors into `DefaultExtractors`.
+5. Verify build integrity via Gradle compilation.
+6. Safely remove `Reffer/` and deliver the final audit report.
 
 ---
 
-## User Direction & Alignment
+## Phase 1: Reconstruct Original Structure (Manifest & Classification)
 
-Based on user feedback:
-- **Top Bar**: Clean compact title with a combined overflow menu for secondary actions, and cleaner provider selector placement.
-- **Cine Details Screen**: Full-screen modal overlay with a dedicated back button, displaying movies as movies and TV shows as TV shows with interactive season tabs, episode list, episode thumbnails/plots, and direct stream links.
+All 278 files in `Reffer/` have been audited and classified with zero ambiguity:
+- **`library/` (185 files)**:
+  - Configuration & ABI: `library/build.gradle.kts` (Buildkonfig, Dokka, Maven Publish), `library/README.md`, `library/lint.xml`, `library/api/jvm/library.api`.
+  - Core API & Engine: `com.lagradost.cloudstream3.*` (MainAPI, APIHolder, plugin loading, video models, extractors, metaproviders, syncproviders, subtitles, utils).
+  - Logging & Multiplatform Stubs: `com.lagradost.api.*` (`ContextHelper`, `Log`).
+  - Unit tests: `commonTest`, `jvmTest`, `webTest`.
+- **`shared/` (93 files)**:
+  - Configuration & Docs: `shared/build.gradle.kts` (Compose Multiplatform, Android library with namespace `com.lagradost.cloudstream4`), `shared/readme.md` (QuickNovel sister project architecture), `shared/lint.xml`.
+  - UI & Theming: `com.lagradost.cloudstream4.*` (Compose screens, color pickers, theme palettes, M3 dialogs, fragments).
+  - Preferences Engine: `com.mihon.*` (Mihon preferences and settings widgets).
+  - Assets: `composeResources/` (Product Sans fonts, vector drawables, UI strings).
 
----
-
-## Proposed Changes
-
-### 1. `CineHubScreen.kt` - Fix Fallback & Media Type Resolution in `loadExtensionItemDetails`
-- Ensure that if `fallbackType == TvType.TvSeries` or `fallbackType == TvType.Anime`, the fallback creates a `TvSeriesLoadResponse` with an empty episode list rather than falling back to `MovieLoadResponse`.
-- Preserve show/movie identity so `isMovie` correctly evaluates to `false` for TV shows.
-
-### 2. `CineHubScreen.kt` - Clean Compact TopAppBar with Overflow Menu
-- Redesign the `TopAppBar` in `CineHubScreen`:
-  - **Title Area**: Sleek MaxStream icon + "CineHub" title in a compact, well-spaced format.
-  - **Action Area**: 
-    - Active Provider badge/chip (compacted).
-    - User Profile avatar / account button.
-    - Combined overflow menu (`IconButton` with `Icons.Default.MoreVert`) containing:
-      - "Manage Extensions" (with `Icons.Default.Extension`)
-      - "My Media Hub" (with `Icons.Rounded.Bookmark`)
-      - "Scrape Online Metadata" (Kodi scraper dialog)
-
-### 3. `CineHubScreen.kt` - Full-Screen Modal Overlay & Dedicated Back Button for `CineDetailView`
-- Add a dedicated circular glass Back / Close button (`Icons.AutoMirrored.Filled.ArrowBack` or `Icons.Default.Close`) in the top-left of the detail view with `statusBarsPadding()` and generous touch target.
-- Add `BackHandler` so system back gestures naturally dismiss the detail sheet overlay.
-- Display a dedicated full-screen presentation that covers the top bar cleanly without messy z-index overlaps.
-
-### 4. `CineHubScreen.kt` - Unified TV Show Seasons & Episodes Resolution Engine
-- For **any TV Show** item (`TvShowItem`, `TMDBTvNode`, `TvSeriesLoadResponse`, `CineHubSearchItem` with TV type, `ExtensionMediaDetails` with TV type, or any item where `isMovie == false`):
-  - Automatically query seasons from `CineOnlineScraper.fetchTvShowDetails(tmdbId, showTitle, context)`.
-  - Fetch season episodes using `CineOnlineScraper.fetchTvShowEpisodes(context, tmdbId, selectedSeason, showTitle)`.
-  - If the provider already supplied episodes (e.g., from an extension), combine/enrich them with TMDB episode stills, air dates, and overviews.
-  - If the provider supplied 0 episodes, render the TMDB episodes with stream scraper resolution when clicked.
-  - Provide season filter tabs (`Season 1`, `Season 2`, ...) in a horizontal scrollable row.
-  - Render modern episode cards showing:
-    - Episode thumbnail / still image.
-    - Episode number and title.
-    - Air date and overview snippet.
-    - Play button to stream that specific episode.
+Per user preference, the `shared/` multiplatform UI and Mihon widgets will be omitted from the production app, preserving Rex's existing native Material 3 architecture while integrating all core functionality from `library/`.
 
 ---
 
-## Verification Plan
+## Phase 2: Audit Existing Production Project & Gap Analysis
 
-### Automated Verification
-- Run `compile_applet` to ensure full Kotlin compilation and zero syntax/type errors.
+1. **Existing Implementations**:
+   - Production already contains 114 extractors, Core `APIHolder`, `MainAPI`, video models, subtitle parsers, and CineHub bridge.
+2. **Missing Core Extractors from `library`**:
+   - `Hexload.kt`
+   - `HubuCloud.kt`
+   - `Playmate.kt`
+   - `Streamcash.kt`
+   - `Vidara.kt`
+   - `Vids.kt`
+   - `YoutubeExtractor.kt`
+   - `Firestream.kt`
+3. **Missing Metaproviders & Serializers**:
+   - Metaproviders: `CrossTmdbProvider.kt`, `MyDramaList.kt`, `SyncRedirector.kt`, `TraktProvider.kt`
+   - Utilities: `HlsPlaylistParser.kt`, `AtomicList.kt`, `AppDebug.kt`, `SubtitleHelperPlatform.kt`
+   - Serializers: `FloatAsIntSerializer.kt`, `FloatAsLongSerializer.kt`, `JsonTransformSerializer.kt`, `NullableStringSerializer.kt`, `WriteOnlySerializer.kt`
+4. **Compatibility & Syntax Bottlenecks**:
+   - `UnshortenUrl.kt`: Replace Ktor `Url(currentUrl).host` with Android/Java `URI`.
+   - `JsHunter.kt`: Fix regex string escaping and `hunter` function invocation.
+   - `VstreamhubHelper.kt`: Restore uncorrupted quotes and clean substring calls.
+   - `Streamplay.kt`: Replace Ktor `Url` with `URI` and link to `getCaptchaToken`.
+   - `Vinovo.kt`: Clean regex pattern and connect `getCaptchaToken`.
+   - `GogoHelper.kt`: Replace Ktor `Url` with `URI`.
+   - `Streamhub.kt` vs `Zplayer.kt`: Rename `Streamhub2` in `Streamhub.kt` to `StreamhubInk` to resolve duplicate class declaration with `Zplayer.Streamhub2`.
+   - `MainAPI.kt` & `APIHolder.kt`: Implement missing `getCaptchaToken` helper required by CloudStream extractors.
 
-### Manual / CUJ Verification
-1. Click a TV show poster from search results (e.g. from extensions or discovery).
-2. Confirm the details screen opens as a full-screen overlay with a clear Back button.
-3. Confirm Season selector tabs appear (`Season 1`, `Season 2`, etc.).
-4. Confirm Episodes list appears with episode title, preview thumbnail, and play action.
-5. Click a Movie poster and confirm it opens in movie mode with Instant Play and movie details.
-6. Check the CineHub home screen top bar: confirm it is clean, uncrowded, with compact title and overflow menu.
+---
+
+## Phase 3: Integration & Adaptation
+
+1. **Core Runtime & Compatibility Fixes**:
+   - Update `MainAPI.kt` and `APIHolder.kt` with `getCaptchaToken`.
+   - Update `UnshortenUrl.kt`, `JsHunter.kt`, `VstreamhubHelper.kt`, `Streamplay.kt`, `Vinovo.kt`, `GogoHelper.kt`.
+   - Resolve `StreamhubInk` vs `Streamhub2` in `Streamhub.kt` and `DefaultExtractors.kt`.
+2. **Integrate Missing Extractors**:
+   - Copy `Firestream.kt`, `Hexload.kt`, `HubuCloud.kt`, `Playmate.kt`, `Streamcash.kt`, `Vidara.kt`, `Vids.kt`, and `YoutubeExtractor.kt` into `app/src/main/kotlin/com/lagradost/cloudstream3/extractors/`.
+   - Ensure imports match the Android target (replace any multiplatform Ktor/Cryptography references with Android native equivalents).
+3. **Integrate Missing Metaproviders & Utilities**:
+   - Copy metaproviders into `app/src/main/kotlin/com/lagradost/cloudstream3/metaproviders/`.
+   - Copy missing serializers into `app/src/main/kotlin/com/lagradost/cloudstream3/utils/serializers/`.
+   - Copy missing utilities (`HlsPlaylistParser.kt`, `AtomicList.kt`, `AppDebug.kt`, `SubtitleHelperPlatform.kt`) into `app/src/main/kotlin/com/lagradost/cloudstream3/utils/`.
+4. **Extractor Registration**:
+   - Register all compatible extractors in `DefaultExtractors.kt`.
+
+---
+
+## Phase 4: Verification Before Cleanup
+
+1. Verify that no production source file references `Reffer/`.
+2. Run `gradle compileDebugKotlin` to verify full compilation.
+3. Fix any residual type mismatches, missing imports, or runtime signatures.
+
+---
+
+## Phase 5: Removal of Temporary Reference Material & Final Report
+
+1. Delete `Reffer/` completely.
+2. Re-run `gradle compileDebugKotlin` to verify the build remains completely green without `Reffer/`.
+3. Provide the final report with full reconstruction audit, integrated files, and verification proof.

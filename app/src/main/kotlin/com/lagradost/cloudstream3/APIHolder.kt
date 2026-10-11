@@ -117,6 +117,9 @@ object APIHolder {
         extractorApis.removeAll { it.sourcePlugin == sourceFilename }
     }
 
+    suspend fun getCaptchaToken(url: String, key: String, referer: String? = null): String? =
+        MainAPI.getCaptchaToken(url, key, referer)
+
     fun clear() {
         apis.clear()
         allProviders.clear()

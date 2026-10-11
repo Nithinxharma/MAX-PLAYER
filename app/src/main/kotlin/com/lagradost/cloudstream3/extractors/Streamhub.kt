@@ -6,7 +6,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.JsUnpacker
 import com.lagradost.cloudstream3.utils.newExtractorLink
 
-class Streamhub2 : Streamhub() {
+class StreamhubInk : Streamhub() {
     override var mainUrl = "https://streamhub.ink"
 }
 

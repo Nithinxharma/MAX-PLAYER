@@ -3,6 +3,8 @@ package com.lagradost.cloudstream3.utils
 import android.util.Log
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.USER_AGENT
+import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.CancellationException
 
 val INFER_TYPE: ExtractorLinkType = ExtractorLinkType.VIDEO
@@ -303,6 +305,40 @@ abstract class ExtractorApi {
     companion object {
         fun getExtractorForUrl(url: String): ExtractorApi? = com.lagradost.cloudstream3.utils.getExtractorForUrl(url)
     }
+}
+
+suspend fun getPostForm(requestUrl: String, html: String): String? {
+    val document = org.jsoup.Jsoup.parse(html)
+    val inputs = document.select("Form > input")
+    if (inputs.size < 4) return null
+    var op: String? = null
+    var id: String? = null
+    var mode: String? = null
+    var hash: String? = null
+    for (input in inputs) {
+        val value = input.attr("value")
+        when (input.attr("name")) {
+            "op" -> op = value
+            "id" -> id = value
+            "mode" -> mode = value
+            "hash" -> hash = value
+            else -> Unit
+        }
+    }
+    if (op == null || id == null || mode == null || hash == null) {
+        return null
+    }
+    kotlinx.coroutines.delay(5000)
+    return app.post(
+        requestUrl,
+        headers = mapOf(
+            "content-type" to "application/x-www-form-urlencoded",
+            "referer" to requestUrl,
+            "user-agent" to USER_AGENT,
+            "accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
+        ),
+        data = mapOf("op" to op, "id" to id, "mode" to mode, "hash" to hash)
+    ).text
 }
 
 
