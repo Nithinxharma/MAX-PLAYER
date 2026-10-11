@@ -215,16 +215,30 @@ fun loadExtensionItemDetails(
           )
         }
       } else if (fallbackTitle.isNotBlank() || url.isNotBlank()) {
-        MovieLoadResponse(
-          name = fallbackTitle.ifBlank { url },
-          url = url,
-          apiName = providerName,
-          type = fallbackType,
-          dataUrl = url,
-          posterUrl = fallbackPoster,
-          year = fallbackYear,
-          backgroundPosterUrl = fallbackPoster
-        )
+        val isTvFallback = fallbackType == TvType.TvSeries || fallbackType == TvType.Anime
+        if (isTvFallback) {
+          TvSeriesLoadResponse(
+            name = fallbackTitle.ifBlank { url },
+            url = url,
+            apiName = providerName,
+            type = fallbackType,
+            episodes = emptyList(),
+            posterUrl = fallbackPoster,
+            year = fallbackYear,
+            backgroundPosterUrl = fallbackPoster
+          )
+        } else {
+          MovieLoadResponse(
+            name = fallbackTitle.ifBlank { url },
+            url = url,
+            apiName = providerName,
+            type = fallbackType,
+            dataUrl = url,
+            posterUrl = fallbackPoster,
+            year = fallbackYear,
+            backgroundPosterUrl = fallbackPoster
+          )
+        }
       } else null
     }
 
@@ -732,6 +746,8 @@ object CineHubScreen : Screen {
     val loadedProvidersCount by syncService.loadedProvidersCount.collectAsState()
     val photoUrl = userProfile?.photoUrl ?: authUser?.photoUrl?.toString()
 
+    var showCineOverflowMenu by remember { mutableStateOf(false) }
+
     Scaffold(
       topBar = {
         TopAppBar(
@@ -743,12 +759,12 @@ object CineHubScreen : Screen {
               androidx.compose.foundation.Image(
                 painter = painterResource(id = R.drawable.ic_max_stream_mark),
                 contentDescription = "MaxStream Logo",
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(24.dp)
               )
               Text(
                 text = stringResource(R.string.cinehub),
-                fontWeight = FontWeight.ExtraBold,
-                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
               )
             }
@@ -760,21 +776,8 @@ object CineHubScreen : Screen {
               onProviderSelect = { providerName ->
                 selectedActiveProvider = providerName
               },
-              modifier = Modifier.padding(end = 4.dp)
+              modifier = Modifier.padding(end = 2.dp)
             )
-            IconButton(
-              onClick = {
-                backstack.add(xyz.mpv.rex.ui.preferences.InstalledExtensionsScreenRoute)
-              },
-              modifier = Modifier.testTag("cinehub_install_repo_button")
-            ) {
-              Icon(
-                imageVector = Icons.Default.Extension,
-                contentDescription = "Manage Extensions",
-                tint = MaxStreamTheme.CrimsonAccent,
-                modifier = Modifier.size(24.dp)
-              )
-            }
             IconButton(
               onClick = {
                 xyz.mpv.rex.ui.browser.MainScreen.requestTab(1)
@@ -785,30 +788,63 @@ object CineHubScreen : Screen {
                 imageVector = Icons.Rounded.Bookmark,
                 contentDescription = "My Media Hub",
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(22.dp)
               )
             }
-            IconButton(
-              onClick = {
-                backstack.add(ProfileScreen)
-              },
-              modifier = Modifier.testTag("cinehub_profile_button"),
-            ) {
-              if (!photoUrl.isNullOrBlank()) {
-                AsyncImage(
-                  model = photoUrl,
-                  contentDescription = "Profile",
-                  modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .border(1.5.dp, MaxStreamTheme.CrimsonAccent, CircleShape)
+            Box {
+              IconButton(
+                onClick = { showCineOverflowMenu = true },
+                modifier = Modifier.testTag("cinehub_overflow_menu_button")
+              ) {
+                if (!photoUrl.isNullOrBlank()) {
+                  AsyncImage(
+                    model = photoUrl,
+                    contentDescription = "More Options",
+                    modifier = Modifier
+                      .size(26.dp)
+                      .clip(CircleShape)
+                      .border(1.5.dp, MaxStreamTheme.CrimsonAccent, CircleShape)
+                  )
+                } else {
+                  Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More Options",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(24.dp)
+                  )
+                }
+              }
+              DropdownMenu(
+                expanded = showCineOverflowMenu,
+                onDismissRequest = { showCineOverflowMenu = false }
+              ) {
+                DropdownMenuItem(
+                  text = { Text("Manage Extensions") },
+                  leadingIcon = {
+                    Icon(
+                      imageVector = Icons.Default.Extension,
+                      contentDescription = null,
+                      tint = MaxStreamTheme.CrimsonAccent
+                    )
+                  },
+                  onClick = {
+                    showCineOverflowMenu = false
+                    backstack.add(xyz.mpv.rex.ui.preferences.InstalledExtensionsScreenRoute)
+                  }
                 )
-              } else {
-                Icon(
-                  imageVector = Icons.Filled.AccountCircle,
-                  contentDescription = "Profile & Settings",
-                  tint = MaterialTheme.colorScheme.primary,
-                  modifier = Modifier.size(28.dp)
+                DropdownMenuItem(
+                  text = { Text("Profile & Settings") },
+                  leadingIcon = {
+                    Icon(
+                      imageVector = Icons.Filled.AccountCircle,
+                      contentDescription = null,
+                      tint = MaterialTheme.colorScheme.primary
+                    )
+                  },
+                  onClick = {
+                    showCineOverflowMenu = false
+                    backstack.add(ProfileScreen)
+                  }
                 )
               }
             }
@@ -2332,13 +2368,23 @@ fun CineDetailView(
     is MovieItem -> true
     is TMDBMovieNode -> true
     is TMDBTvNode -> false
-    is ExtensionMediaDetails -> item.loadResponse is MovieLoadResponse
+    is ExtensionMediaDetails -> {
+      val lr = item.loadResponse
+      when {
+        lr is TvSeriesLoadResponse -> false
+        lr is com.lagradost.cloudstream3.AnimeLoadResponse -> false
+        lr.type == TvType.TvSeries || lr.type == TvType.Anime -> false
+        lr is MovieLoadResponse -> true
+        else -> lr.type == TvType.Movie
+      }
+    }
     is MovieLoadResponse -> true
     is TvShowItem -> false
     is TvSeriesLoadResponse -> false
+    is com.lagradost.cloudstream3.AnimeLoadResponse -> false
     is SearchResponse -> item.type != TvType.TvSeries && item.type != TvType.Anime
-    is CineHubSearchItem -> item.type != xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries
-    is CineHubMediaDetails -> item.type != xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries
+    is CineHubSearchItem -> item.type != xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries && item.type != xyz.mpv.rex.cinehub.extension.api.TvType.Anime
+    is CineHubMediaDetails -> item.type != xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries && item.type != xyz.mpv.rex.cinehub.extension.api.TvType.Anime
     else -> true
   }
   val libraryEntry = libraryItems.find { it.url == tmdbId }
@@ -2854,6 +2900,8 @@ fun CineDetailView(
     animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
     label = "dragToMinimize"
   )
+
+  androidx.activity.compose.BackHandler(onBack = onDismiss)
 
   Box(
     modifier = Modifier
@@ -4447,16 +4495,16 @@ fun CineDetailView(
       )
     }
 
-    // Pinned floating top glass bar with YouTube-like Minimize button & swipe-down pill handle
+    // Pinned floating top glass bar with dedicated Back button and Title
     Row(
       modifier = Modifier
         .fillMaxWidth()
         .statusBarsPadding()
         .padding(horizontal = 16.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.SpaceBetween
+      horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-      // YouTube-like Minimize button
+      // Dedicated Back button
       IconButton(
         onClick = onDismiss,
         modifier = Modifier.intelligentGlassEffect(
@@ -4466,14 +4514,24 @@ fun CineDetailView(
         )
       ) {
         Icon(
-          imageVector = Icons.Rounded.KeyboardArrowDown,
-          contentDescription = "Minimize",
+          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+          contentDescription = "Back",
           tint = Color.White,
-          modifier = Modifier.size(28.dp)
+          modifier = Modifier.size(24.dp)
         )
       }
 
-      // YouTube-like Swipe-to-Minimize Pill Handle with drag gestures
+      // Title header in top bar
+      Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        color = Color.White,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f)
+      )
+
+      // Swipe-to-Dismiss Pill Handle
       Box(
         modifier = Modifier
           .pointerInput(Unit) {
@@ -4500,20 +4558,17 @@ fun CineDetailView(
             backgroundColor = Color(0x99101218),
             borderColor = Color.White.copy(alpha = 0.20f)
           )
-          .padding(horizontal = 16.dp, vertical = 6.dp),
+          .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
       ) {
         Box(
           modifier = Modifier
-            .width(36.dp)
+            .width(28.dp)
             .height(4.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.7f))
         )
       }
-
-      // Spacer to balance layout
-      Spacer(modifier = Modifier.size(40.dp))
     }
   }
 }

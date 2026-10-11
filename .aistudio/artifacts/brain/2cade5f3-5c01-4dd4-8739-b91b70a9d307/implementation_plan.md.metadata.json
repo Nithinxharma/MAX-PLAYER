@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan to completely redesign CineDetailBottomSheet with a unified season/episode loading engine and modern hero backdrop layout.",
-  "updatedAt":  "2026-10-10T17:20:59.659508754Z",
+  "summary":  "Implementation plan to fix the Cine Details screen:\n- Display seasons and episodes accurately for all TV shows (whether from Search, OTT Discovery rail, Extensions, or Local Library).\n- Fix loadExtensionItemDetails to preserve fallbackType = TvType.TvSeries so TV shows are never falsely treated as MovieLoadResponse.\n- Unify seasons and episodes fetching so TV shows query TMDB or provider seasons and episodes dynamically.\n- Modernize CineDetailView layout into a full-screen modal overlay with a prominent back button, clean top scrim, and modern episode list.\n- Clean up the CineHub top bar UI with a compact logo and title, plus an integrated overflow dropdown menu for actions, eliminating cramped icon overcrowding.",
+  "updatedAt":  "2026-10-11T00:06:22.036154998Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

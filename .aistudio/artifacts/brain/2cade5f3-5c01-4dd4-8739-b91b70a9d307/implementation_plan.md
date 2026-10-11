@@ -1,40 +1,73 @@
-# Architectural Plan: Redesign CineDetailBottomSheet (Unified Seasons, Episodes & Links)
+# Architectural Plan: Fix Cine Details Screen (Seasons & Episodes) and Clean CineHub Top Bar
 
-This plan addresses the 3 main issues in `CineDetailBottomSheet`:
-1. Missing season selector tabs across various media item types (`TMDBTvNode`, `SearchResponse`, `CineHubSearchItem`, etc.).
-2. Missing episode cards list with preview stills, titles, plots, and play/download actions.
-3. Missing stream link extraction list / quality chips.
+## Problem Diagnosis
+
+1. **Missing Seasons & Episodes in Details View**:
+   - In `CineHubScreen.kt` (`loadExtensionItemDetails`), when an extension API does not return a direct response and falls back to fallback metadata, or returns generic results, it defaulted to `MovieLoadResponse` regardless of whether `fallbackType` was `TvType.TvSeries` or if the item was identified as a TV show.
+   - When users click on TV show posters in search results or discovery cards, `fallbackType` was not propagated through all fallback paths, resulting in `isMovie = true` and completely hiding the Seasons & Episodes UI.
+   - In `CineDetailView`, the Seasons & Episodes loading logic only activated under specific sub-branches (`item is TvShowItem` with local folders, or `item is ExtensionMediaDetails && loadResp is TvSeriesLoadResponse`). Other TV show types or items without pre-populated episodes showed no seasons or fallback episode queries.
+   - When a TV show has 0 pre-populated episodes in the provider load response, it did not dynamically query `CineOnlineScraper.fetchTvShowDetails` and `CineOnlineScraper.fetchTvShowEpisodes`, leaving the episode section blank.
+
+2. **Top Bar Clutter & Overcrowding**:
+   - The CineHub `TopAppBar` had 5 crowded elements crammed into a small action row: a large `MaxStreamActiveProviderSelector` chip, Manage Extensions button, My Media Hub button, and Account Profile button.
+   - On standard mobile viewports, this crushed the title or spilled over, creating an unsightly, misaligned top bar.
+
+---
+
+## User Direction & Alignment
+
+Based on user feedback:
+- **Top Bar**: Clean compact title with a combined overflow menu for secondary actions, and cleaner provider selector placement.
+- **Cine Details Screen**: Full-screen modal overlay with a dedicated back button, displaying movies as movies and TV shows as TV shows with interactive season tabs, episode list, episode thumbnails/plots, and direct stream links.
 
 ---
 
 ## Proposed Changes
 
-### `CineHubScreen.kt` / `CineDetailView`
+### 1. `CineHubScreen.kt` - Fix Fallback & Media Type Resolution in `loadExtensionItemDetails`
+- Ensure that if `fallbackType == TvType.TvSeries` or `fallbackType == TvType.Anime`, the fallback creates a `TvSeriesLoadResponse` with an empty episode list rather than falling back to `MovieLoadResponse`.
+- Preserve show/movie identity so `isMovie` correctly evaluates to `false` for TV shows.
 
-#### 1. Unified Media Resolver Engine
-- Create a unified `CineDetailState` that normalizes any incoming item type (`TMDBTvNode`, `TMDBMovieNode`, `TvShowItem`, `MovieItem`, `SearchResponse`, `CineHubSearchItem`, `ExtensionMediaDetails`, `LoadResponse`).
-- For any TV Show item type, automatically query TMDB or Provider details in background to resolve all available seasons (`Season 1, Season 2, ...`).
-- Automatically fetch and display episodes for the selected season with fallback to local scanned episodes or TMDB episode enrichment.
+### 2. `CineHubScreen.kt` - Clean Compact TopAppBar with Overflow Menu
+- Redesign the `TopAppBar` in `CineHubScreen`:
+  - **Title Area**: Sleek MaxStream icon + "CineHub" title in a compact, well-spaced format.
+  - **Action Area**: 
+    - Active Provider badge/chip (compacted).
+    - User Profile avatar / account button.
+    - Combined overflow menu (`IconButton` with `Icons.Default.MoreVert`) containing:
+      - "Manage Extensions" (with `Icons.Default.Extension`)
+      - "My Media Hub" (with `Icons.Rounded.Bookmark`)
+      - "Scrape Online Metadata" (Kodi scraper dialog)
 
-#### 2. Redesigned Modern Hero Sheet Layout
-- **Hero Backdrop Header**: Full-width backdrop poster with dark gradient scrim, title, release year, rating badge, genres, and primary Play / Download buttons.
-- **Season Selection Chips**: Horizontal `LazyRow` of frosted glass chips allowing smooth switching between `Season 1`, `Season 2`, etc.
-- **Episode List Cards**: Clean card list showing:
-  - Episode still image / thumbnail with play icon overlay.
-  - Episode label (`S1 • E1`) and title.
-  - Overview / plot summary.
-  - Quick Play and Download action buttons per episode.
-- **Stream Link Chips**: Interactive stream extraction chips when links are fetched, allowing direct playback or quality selection.
+### 3. `CineHubScreen.kt` - Full-Screen Modal Overlay & Dedicated Back Button for `CineDetailView`
+- Add a dedicated circular glass Back / Close button (`Icons.AutoMirrored.Filled.ArrowBack` or `Icons.Default.Close`) in the top-left of the detail view with `statusBarsPadding()` and generous touch target.
+- Add `BackHandler` so system back gestures naturally dismiss the detail sheet overlay.
+- Display a dedicated full-screen presentation that covers the top bar cleanly without messy z-index overlaps.
+
+### 4. `CineHubScreen.kt` - Unified TV Show Seasons & Episodes Resolution Engine
+- For **any TV Show** item (`TvShowItem`, `TMDBTvNode`, `TvSeriesLoadResponse`, `CineHubSearchItem` with TV type, `ExtensionMediaDetails` with TV type, or any item where `isMovie == false`):
+  - Automatically query seasons from `CineOnlineScraper.fetchTvShowDetails(tmdbId, showTitle, context)`.
+  - Fetch season episodes using `CineOnlineScraper.fetchTvShowEpisodes(context, tmdbId, selectedSeason, showTitle)`.
+  - If the provider already supplied episodes (e.g., from an extension), combine/enrich them with TMDB episode stills, air dates, and overviews.
+  - If the provider supplied 0 episodes, render the TMDB episodes with stream scraper resolution when clicked.
+  - Provide season filter tabs (`Season 1`, `Season 2`, ...) in a horizontal scrollable row.
+  - Render modern episode cards showing:
+    - Episode thumbnail / still image.
+    - Episode number and title.
+    - Air date and overview snippet.
+    - Play button to stream that specific episode.
 
 ---
 
 ## Verification Plan
 
-### Automated Build
-- Run `compile_applet` to confirm clean compilation with Jetpack Compose.
+### Automated Verification
+- Run `compile_applet` to ensure full Kotlin compilation and zero syntax/type errors.
 
-### Behavior Verification
-1. Open a TV show from TMDB, Search, or Extension Providers in `CineDetailBottomSheet`.
-2. Confirm season tabs appear (`Season 1`, `Season 2`, etc.).
-3. Confirm episode cards load with thumbnails, titles, plots, and play buttons.
-4. Click Play on an episode to extract and display stream links / launch video player.
+### Manual / CUJ Verification
+1. Click a TV show poster from search results (e.g. from extensions or discovery).
+2. Confirm the details screen opens as a full-screen overlay with a clear Back button.
+3. Confirm Season selector tabs appear (`Season 1`, `Season 2`, etc.).
+4. Confirm Episodes list appears with episode title, preview thumbnail, and play action.
+5. Click a Movie poster and confirm it opens in movie mode with Instant Play and movie details.
+6. Check the CineHub home screen top bar: confirm it is clean, uncrowded, with compact title and overflow menu.
