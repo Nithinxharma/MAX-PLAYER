@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
@@ -57,8 +58,11 @@ object CloudStreamBridgeResolver {
 
     /**
      * Resolves high-level media metadata for any clicked item.
+     * Guarantees a fallback ResolvedMediaDetails object even if online resolution fails.
      */
-    suspend fun resolveDetails(item: Any): ResolvedMediaDetails? = withContext(Dispatchers.IO) {
+    suspend fun resolveDetails(item: Any?): ResolvedMediaDetails? = withContext(Dispatchers.IO) {
+        if (item == null) return@withContext null
+
         try {
             when (item) {
                 is LoadResponse -> {
@@ -160,13 +164,14 @@ object CloudStreamBridgeResolver {
                 }
 
                 is TMDBMovieNode -> {
-                    // Search active CloudStream providers for this movie
+                    // Search active CloudStream providers for this movie in parallel
                     val searchTitle = item.title ?: ""
                     val matchedItem = findProviderItemForTitle(searchTitle, isMovie = true)
                     if (matchedItem != null) {
                         val details = resolveDetails(matchedItem)
                         if (details != null) {
                             return@withContext details.copy(
+                                title = details.title.ifBlank { searchTitle },
                                 overview = details.overview ?: item.overview,
                                 posterUrl = details.posterUrl ?: item.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
                                 backdropUrl = details.backdropUrl ?: item.backdrop_path?.let { "https://image.tmdb.org/t/p/w1280$it" },
@@ -176,7 +181,7 @@ object CloudStreamBridgeResolver {
                     }
 
                     ResolvedMediaDetails(
-                        title = item.title ?: "",
+                        title = item.title ?: "Untitled Movie",
                         overview = item.overview,
                         posterUrl = item.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
                         backdropUrl = item.backdrop_path?.let { "https://image.tmdb.org/t/p/w1280$it" },
@@ -200,6 +205,7 @@ object CloudStreamBridgeResolver {
                         val details = resolveDetails(matchedItem)
                         if (details != null) {
                             return@withContext details.copy(
+                                title = details.title.ifBlank { searchTitle },
                                 overview = details.overview ?: item.overview,
                                 posterUrl = details.posterUrl ?: item.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
                                 backdropUrl = details.backdropUrl ?: item.backdrop_path?.let { "https://image.tmdb.org/t/p/w1280$it" },
@@ -209,7 +215,7 @@ object CloudStreamBridgeResolver {
                     }
 
                     ResolvedMediaDetails(
-                        title = item.name ?: "",
+                        title = item.name ?: "Untitled Series",
                         overview = item.overview,
                         posterUrl = item.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
                         backdropUrl = item.backdrop_path?.let { "https://image.tmdb.org/t/p/w1280$it" },
@@ -226,31 +232,124 @@ object CloudStreamBridgeResolver {
                     )
                 }
 
-                else -> null
+                is String -> {
+                    // Direct Stream URL or Path
+                    val cleanUrl = item.trim()
+                    val fileName = cleanUrl.substringAfterLast('/').substringBefore('?')
+                    ResolvedMediaDetails(
+                        title = if (fileName.isNotBlank()) fileName else "Stream Resource",
+                        overview = "Direct stream URL or path: $cleanUrl",
+                        posterUrl = null,
+                        backdropUrl = null,
+                        rating = null,
+                        year = null,
+                        runtime = null,
+                        genres = listOf("Direct Stream"),
+                        cast = emptyList(),
+                        isMovie = true,
+                        providerName = "Direct URL",
+                        dataUrl = cleanUrl,
+                        loadResponse = null,
+                        rawItem = item
+                    )
+                }
+
+                is File -> {
+                    ResolvedMediaDetails(
+                        title = item.nameWithoutExtension.ifBlank { item.name },
+                        overview = "Local file at path: ${item.absolutePath}",
+                        posterUrl = null,
+                        backdropUrl = null,
+                        rating = null,
+                        year = null,
+                        runtime = null,
+                        genres = listOf("Local File"),
+                        cast = emptyList(),
+                        isMovie = true,
+                        providerName = "Local Device",
+                        dataUrl = item.absolutePath,
+                        loadResponse = null,
+                        rawItem = item
+                    )
+                }
+
+                else -> {
+                    // Extract fields dynamically from raw object via reflection if available
+                    val extractedTitle = try {
+                        val nameField = item.javaClass.methods.firstOrNull { it.name == "getTitle" || it.name == "getName" }
+                        nameField?.invoke(item)?.toString() ?: item.toString()
+                    } catch (_: Throwable) {
+                        item.toString()
+                    }
+
+                    val cleanTitle = extractedTitle.substringAfterLast('/').substringBefore('?').take(60)
+
+                    ResolvedMediaDetails(
+                        title = cleanTitle.ifBlank { "Media Content" },
+                        overview = "Raw object: ${item.javaClass.simpleName}",
+                        posterUrl = null,
+                        backdropUrl = null,
+                        rating = null,
+                        year = null,
+                        runtime = null,
+                        genres = listOf("Media"),
+                        cast = emptyList(),
+                        isMovie = true,
+                        providerName = "Media Object",
+                        dataUrl = item.toString(),
+                        loadResponse = null,
+                        rawItem = item
+                    )
+                }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error resolving details: ${t.message}", t)
-            null
+            // Smart fallback on exception
+            ResolvedMediaDetails(
+                title = item.toString().take(40).ifBlank { "Media Item" },
+                overview = "Error loading remote details: ${t.localizedMessage}",
+                posterUrl = null,
+                backdropUrl = null,
+                rating = null,
+                year = null,
+                runtime = null,
+                genres = listOf("Fallback"),
+                cast = emptyList(),
+                isMovie = true,
+                providerName = "Fallback",
+                dataUrl = item.toString(),
+                loadResponse = null,
+                rawItem = item
+            )
         }
     }
 
     /**
-     * Resolves working stream links and subtitles for a movie or TV episode.
+     * Resolves working stream links and subtitles for a movie or TV episode across specified or all providers.
      */
     suspend fun resolveStreamLinks(
         details: ResolvedMediaDetails,
-        episode: Episode? = null
+        episode: Episode? = null,
+        specificProviderName: String? = null
     ): Pair<List<ExtractorLink>, List<SubtitleFile>> = withContext(Dispatchers.IO) {
         val links = mutableListOf<ExtractorLink>()
         val subtitles = mutableListOf<SubtitleFile>()
 
         try {
-            var targetProvider = APIHolder.getApiFromNameNull(details.providerName)
+            var targetProvider = if (!specificProviderName.isNullOrBlank()) {
+                APIHolder.getApiFromNameNull(specificProviderName)
+            } else {
+                APIHolder.getApiFromNameNull(details.providerName)
+            }
             var targetDataUrl = if (episode != null) episode.data else details.dataUrl
 
-            // If the item came from TMDB or has no direct provider data URL, search providers
+            // If targetProvider is null or targetDataUrl is numeric/TMDB ID/blank, search active providers
             if (targetProvider == null || targetDataUrl.all { it.isDigit() } || targetDataUrl.isBlank()) {
-                val found = findProviderItemForTitle(details.title, details.isMovie)
+                val found = findProviderItemForTitle(
+                    title = details.title,
+                    isMovie = details.isMovie,
+                    preferredProvider = specificProviderName
+                )
                 if (found != null) {
                     targetProvider = APIHolder.getApiFromNameNull(found.apiName)
                     val loaded = targetProvider?.let {
@@ -268,6 +367,8 @@ object CloudStreamBridgeResolver {
                         if (matchedEp != null) {
                             targetDataUrl = matchedEp.data
                         }
+                    } else if (loaded != null) {
+                        targetDataUrl = loaded.url
                     }
                 }
             }
@@ -301,15 +402,23 @@ object CloudStreamBridgeResolver {
     /**
      * Searches across active CloudStream providers to match a title.
      */
-    private suspend fun findProviderItemForTitle(
+    suspend fun findProviderItemForTitle(
         title: String,
-        isMovie: Boolean
+        isMovie: Boolean,
+        preferredProvider: String? = null
     ): SearchResponse? = withContext(Dispatchers.IO) {
         if (title.isBlank()) return@withContext null
-        val cleanTitle = title.trim()
+        val cleanTitle = title.replace(Regex("[^a-zA-Z0-9 ]"), " ").trim()
         val apis = APIHolder.apis.toList()
 
-        val searchJobs = apis.map { provider ->
+        val orderedApis = if (!preferredProvider.isNullOrBlank()) {
+            val pref = apis.find { it.name.equals(preferredProvider, ignoreCase = true) }
+            if (pref != null) listOf(pref) + (apis - pref) else apis
+        } else {
+            apis
+        }
+
+        val searchJobs = orderedApis.map { provider ->
             async {
                 try {
                     val repo = APIRepository(provider)
@@ -317,7 +426,10 @@ object CloudStreamBridgeResolver {
                         is Resource.Success -> {
                             res.value.list.firstOrNull { item ->
                                 val itemTypeIsMovie = item.type != TvType.TvSeries && item.type != TvType.Anime
-                                itemTypeIsMovie == isMovie && item.name.contains(cleanTitle, ignoreCase = true)
+                                itemTypeIsMovie == isMovie && (
+                                    item.name.contains(cleanTitle, ignoreCase = true) ||
+                                    cleanTitle.contains(item.name, ignoreCase = true)
+                                )
                             }
                         }
                         else -> null
@@ -329,6 +441,44 @@ object CloudStreamBridgeResolver {
         }
 
         searchJobs.awaitAll().filterNotNull().firstOrNull()
+    }
+
+    /**
+     * Searches active providers with a custom query and returns all matching SearchResponses.
+     */
+    suspend fun searchProvidersWithQuery(
+        query: String,
+        providerFilter: String? = null
+    ): List<SearchResponse> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        val apis = APIHolder.apis.toList()
+        val targetApis = if (!providerFilter.isNullOrBlank()) {
+            apis.filter { it.name.equals(providerFilter, ignoreCase = true) }
+        } else {
+            apis
+        }
+
+        val jobs = targetApis.map { provider ->
+            async {
+                try {
+                    when (val res = APIRepository(provider).search(query.trim())) {
+                        is Resource.Success -> res.value.list
+                        else -> emptyList()
+                    }
+                } catch (_: Throwable) {
+                    emptyList()
+                }
+            }
+        }
+
+        jobs.awaitAll().flatten().distinctBy { it.url }
+    }
+
+    /**
+     * Get list of active provider names.
+     */
+    fun getAvailableProviders(): List<String> {
+        return APIHolder.apis.map { it.name }.distinct()
     }
 
     /**
@@ -399,3 +549,4 @@ object CloudStreamBridgeResolver {
         )
     }
 }
+

@@ -16,10 +16,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.*
@@ -33,23 +40,25 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.lagradost.cloudstream3.Episode
+import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import kotlinx.coroutines.launch
 import xyz.mpv.rex.cinehub.bridge.CloudStreamBridgeResolver
+import xyz.mpv.rex.ui.player.controls.components.intelligentGlassEffect
 import xyz.mpv.rex.ui.theme.maxstream.MaxStreamTheme
 
 /**
- * Flagship Deep AMOLED Glassmorphism Media Detail Sheet.
- * Displays backdrop, poster, cast carousel, and verified CloudStream live streams.
- * For Movies: resolves single file streams with 1-tap "Watch Now".
- * For TV Shows: displays season selector and episode cards with instant playback.
+ * Flagship Liquid Glass Media Detail Sheet.
+ * Displays backdrop, poster, provider selector, categorized quality stream table, cast carousel,
+ * and robust multi-provider search fallbacks to ensure no screen is ever blank.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,14 +69,23 @@ fun GlassmorphicMediaDetailSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var resolvedDetails by remember(item) { mutableStateOf<CloudStreamBridgeResolver.ResolvedMediaDetails?>(null) }
-    var isLoadingDetails by remember(item) { mutableStateOf(true) }
+    var activeItem by remember(item) { mutableStateOf<Any>(item) }
+    var resolvedDetails by remember(activeItem) { mutableStateOf<CloudStreamBridgeResolver.ResolvedMediaDetails?>(null) }
+    var isLoadingDetails by remember(activeItem) { mutableStateOf(true) }
 
-    // Stream extraction states
+    // Multi-Provider & Stream extraction states
+    var availableProviders by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selectedProviderName by remember { mutableStateOf<String?>(null) }
     var isExtractingStreams by remember { mutableStateOf(false) }
     var extractedLinks by remember { mutableStateOf<List<ExtractorLink>>(emptyList()) }
     var extractedSubtitles by remember { mutableStateOf<List<com.lagradost.cloudstream3.SubtitleFile>>(emptyList()) }
     var streamError by remember { mutableStateOf<String?>(null) }
+
+    // Smart Scraper Search & Fallback state
+    var isScraperSearchExpanded by remember { mutableStateOf(false) }
+    var searchQueryText by remember(activeItem) { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<SearchResponse>>(emptyList()) }
+    var isSearchingScrapers by remember { mutableStateOf(false) }
 
     // TV Series episode & season states
     var selectedSeasonIndex by remember { mutableIntStateOf(1) }
@@ -78,23 +96,41 @@ fun GlassmorphicMediaDetailSheet(
         onDismiss()
     }
 
-    // Load media details on appearance
-    LaunchedEffect(item) {
-        isLoadingDetails = true
-        val details = CloudStreamBridgeResolver.resolveDetails(item)
-        resolvedDetails = details
-        isLoadingDetails = false
+    // Load available providers once
+    LaunchedEffect(Unit) {
+        availableProviders = CloudStreamBridgeResolver.getAvailableProviders()
+    }
 
-        if (details != null && details.isMovie) {
-            // Automatically resolve streams for movies
+    // Function to trigger stream extraction for current details
+    fun extractStreamsForDetails(
+        details: CloudStreamBridgeResolver.ResolvedMediaDetails,
+        episode: Episode? = null,
+        provider: String? = selectedProviderName
+    ) {
+        scope.launch {
             isExtractingStreams = true
             streamError = null
-            val (links, subs) = CloudStreamBridgeResolver.resolveStreamLinks(details)
+            val (links, subs) = CloudStreamBridgeResolver.resolveStreamLinks(details, episode, provider)
             extractedLinks = links
             extractedSubtitles = subs
             isExtractingStreams = false
             if (links.isEmpty()) {
-                streamError = "No direct stream links found. Try an alternate provider."
+                streamError = "No direct stream links found on ${provider ?: details.providerName}. Try switching providers or refining title search."
+            }
+        }
+    }
+
+    // Load media details on item change
+    LaunchedEffect(activeItem) {
+        isLoadingDetails = true
+        val details = CloudStreamBridgeResolver.resolveDetails(activeItem)
+        resolvedDetails = details
+        isLoadingDetails = false
+
+        if (details != null) {
+            searchQueryText = details.title
+            if (details.isMovie) {
+                extractStreamsForDetails(details, provider = selectedProviderName)
             }
         }
     }
@@ -139,13 +175,180 @@ fun GlassmorphicMediaDetailSheet(
                             modifier = Modifier.size(44.dp)
                         )
                         Text(
-                            text = "Loading media details…",
+                            text = "Loading liquid media details…",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.7f)
                         )
                     }
                 }
-            } else if (resolvedDetails != null) {
+            } else if (resolvedDetails == null) {
+                // Fallback UI when details resolution fails
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Media Details Unresolved",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                            }
+                        }
+                    }
+
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .intelligentGlassEffect(
+                                    shape = RoundedCornerShape(20.dp),
+                                    backgroundColor = Color(0x441E293B),
+                                    borderColor = Color(0x44FFB300)
+                                ),
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFFB300),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Text(
+                                        text = "Online Metadata Unreachable",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = Color.White
+                                    )
+                                }
+                                Text(
+                                    text = "Unable to fetch online TMDB / provider metadata automatically for this media item. Search providers manually below:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+
+                                OutlinedTextField(
+                                    value = searchQueryText,
+                                    onValueChange = { searchQueryText = it },
+                                    label = { Text("Search Title / Scraper Query") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        IconButton(onClick = {
+                                            if (searchQueryText.isNotBlank()) {
+                                                isSearchingScrapers = true
+                                                scope.launch {
+                                                    searchResults = CloudStreamBridgeResolver.searchProvidersWithQuery(searchQueryText)
+                                                    isSearchingScrapers = false
+                                                }
+                                            }
+                                        }) {
+                                            Icon(Icons.Default.Search, contentDescription = "Search", tint = MaxStreamTheme.ElectricCyan)
+                                        }
+                                    },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaxStreamTheme.ElectricCyan,
+                                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                        focusedLabelColor = MaxStreamTheme.ElectricCyan,
+                                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White
+                                    )
+                                )
+
+                                Button(
+                                    onClick = {
+                                        if (searchQueryText.isNotBlank()) {
+                                            isSearchingScrapers = true
+                                            scope.launch {
+                                                searchResults = CloudStreamBridgeResolver.searchProvidersWithQuery(searchQueryText)
+                                                isSearchingScrapers = false
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaxStreamTheme.ElectricCyan),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    if (isSearchingScrapers) {
+                                        CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        Text("Search Active Scrapers", color = Color.Black, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (searchResults.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Search Matches (${searchResults.size})",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                        }
+
+                        items(searchResults) { result ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        activeItem = result
+                                    },
+                                colors = CardDefaults.cardColors(containerColor = Color(0x221E293B)),
+                                shape = RoundedCornerShape(14.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(50.dp, 70.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.DarkGray)
+                                    ) {
+                                        AsyncImage(
+                                            model = result.posterUrl,
+                                            contentDescription = result.name,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = result.name, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text(text = "Provider: ${result.apiName}", style = MaterialTheme.typography.labelSmall, color = MaxStreamTheme.ElectricCyan)
+                                    }
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Select", tint = MaxStreamTheme.ElectricCyan)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
                 val details = resolvedDetails!!
 
                 LazyColumn(
@@ -157,7 +360,7 @@ fun GlassmorphicMediaDetailSheet(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(260.dp)
+                                .height(250.dp)
                         ) {
                             val backdrop = details.backdropUrl ?: details.posterUrl
                             if (!backdrop.isNullOrBlank()) {
@@ -168,7 +371,7 @@ fun GlassmorphicMediaDetailSheet(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
-                            // Bottom gradient fade to solid black
+                            // Bottom gradient fade
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -203,7 +406,7 @@ fun GlassmorphicMediaDetailSheet(
                         }
                     }
 
-                    // 2. Poster, Title & Metadata Header
+                    // 2. Poster, Title & Badges
                     item {
                         Row(
                             modifier = Modifier
@@ -229,7 +432,7 @@ fun GlassmorphicMediaDetailSheet(
                                 )
                             }
 
-                            // Title & Pills
+                            // Title & Info
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
@@ -247,7 +450,7 @@ fun GlassmorphicMediaDetailSheet(
                                     overflow = TextOverflow.Ellipsis
                                 )
 
-                                // Badges Row: Year, Rating, Type, Provider
+                                // Badges Row
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -287,7 +490,6 @@ fun GlassmorphicMediaDetailSheet(
                                         }
                                     }
 
-                                    // Media Type Badge
                                     Text(
                                         text = if (details.isMovie) "MOVIE" else "SERIES",
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
@@ -298,10 +500,9 @@ fun GlassmorphicMediaDetailSheet(
                                             .padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
 
-                                    // Provider badge
                                     if (details.providerName.isNotBlank()) {
                                         Text(
-                                            text = details.providerName,
+                                            text = selectedProviderName ?: details.providerName,
                                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                             color = Color.White.copy(alpha = 0.65f),
                                             modifier = Modifier
@@ -314,22 +515,161 @@ fun GlassmorphicMediaDetailSheet(
                         }
                     }
 
-                    // 3. Movie Primary "Watch Now" & Streams Section
+                    // 3. Provider Selector & Refine Scraper Query Row
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .offset(y = (-20).dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "Select Provider / Server Source",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+
+                            // Provider Selector Chips
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Default Provider Chip
+                                val isDefaultSelected = selectedProviderName == null
+                                FilterChip(
+                                    selected = isDefaultSelected,
+                                    onClick = {
+                                        selectedProviderName = null
+                                        extractStreamsForDetails(details, provider = null)
+                                    },
+                                    label = { Text("Auto (${details.providerName})") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaxStreamTheme.ElectricCyan,
+                                        selectedLabelColor = Color.Black,
+                                        containerColor = Color(0x221E293B),
+                                        labelColor = Color.White
+                                    )
+                                )
+
+                                availableProviders.forEach { provName ->
+                                    val isSelected = selectedProviderName == provName
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            selectedProviderName = provName
+                                            extractStreamsForDetails(details, provider = provName)
+                                        },
+                                        label = { Text(provName) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaxStreamTheme.ElectricCyan,
+                                            selectedLabelColor = Color.Black,
+                                            containerColor = Color(0x221E293B),
+                                            labelColor = Color.White
+                                        )
+                                    )
+                                }
+                            }
+
+                            // Toggle Scraper Search Bar
+                            TextButton(
+                                onClick = { isScraperSearchExpanded = !isScraperSearchExpanded },
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaxStreamTheme.ElectricCyan)
+                            ) {
+                                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (isScraperSearchExpanded) "Hide Manual Title Search" else "Title Search / Refine Scraper Query")
+                            }
+
+                            if (isScraperSearchExpanded) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = searchQueryText,
+                                        onValueChange = { searchQueryText = it },
+                                        placeholder = { Text("Movie/Series Search Title") },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = MaxStreamTheme.ElectricCyan,
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White
+                                        )
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            if (searchQueryText.isNotBlank()) {
+                                                isSearchingScrapers = true
+                                                scope.launch {
+                                                    searchResults = CloudStreamBridgeResolver.searchProvidersWithQuery(
+                                                        query = searchQueryText,
+                                                        providerFilter = selectedProviderName
+                                                    )
+                                                    isSearchingScrapers = false
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.background(MaxStreamTheme.ElectricCyan, RoundedCornerShape(12.dp))
+                                    ) {
+                                        if (isSearchingScrapers) {
+                                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        } else {
+                                            Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Black)
+                                        }
+                                    }
+                                }
+
+                                if (searchResults.isNotEmpty()) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    ) {
+                                        Text("Search Results (${searchResults.size}):", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
+                                        searchResults.take(5).forEach { res ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(Color(0x331E293B))
+                                                    .clickable { activeItem = res }
+                                                    .padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(res.name, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
+                                                Text(res.apiName, style = MaterialTheme.typography.labelSmall, color = MaxStreamTheme.ElectricCyan)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Movie Primary "Watch Now" & Categorized Stream Links Table
                     if (details.isMovie) {
                         item {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 20.dp)
-                                    .offset(y = (-20).dp),
+                                    .offset(y = (-10).dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 if (isExtractingStreams) {
-                                    // Extracting state
                                     Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = Color(0x331E293B)),
-                                        shape = RoundedCornerShape(18.dp)
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .intelligentGlassEffect(
+                                                shape = RoundedCornerShape(18.dp),
+                                                backgroundColor = Color(0x331E293B),
+                                                borderColor = MaxStreamTheme.ElectricCyan.copy(alpha = 0.3f)
+                                            ),
+                                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                     ) {
                                         Row(
                                             modifier = Modifier
@@ -345,12 +685,12 @@ fun GlassmorphicMediaDetailSheet(
                                             )
                                             Column {
                                                 Text(
-                                                    text = "Resolving Live Streams…",
+                                                    text = "Extracting Live Streams…",
                                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                                     color = Color.White
                                                 )
                                                 Text(
-                                                    text = "Extracting verified mirrors via DefaultExtractors",
+                                                    text = "Resolving mirrors on ${selectedProviderName ?: details.providerName}",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = Color.White.copy(alpha = 0.6f)
                                                 )
@@ -371,7 +711,7 @@ fun GlassmorphicMediaDetailSheet(
                                                 overview = details.overview,
                                                 year = details.year,
                                                 rating = details.rating,
-                                                providerName = details.providerName,
+                                                providerName = selectedProviderName ?: details.providerName,
                                                 headers = topLink.headers,
                                                 allLinks = extractedLinks,
                                                 subtitles = extractedSubtitles
@@ -404,9 +744,9 @@ fun GlassmorphicMediaDetailSheet(
                                         }
                                     }
 
-                                    // Alternate Mirrors & Servers List
+                                    // Categorized Stream Links List
                                     Text(
-                                        text = "Available Streams & Servers (${extractedLinks.size})",
+                                        text = "Available Streams & Server Mirrors (${extractedLinks.size})",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                                         color = Color.White.copy(alpha = 0.85f),
                                         modifier = Modifier.padding(top = 4.dp)
@@ -415,6 +755,8 @@ fun GlassmorphicMediaDetailSheet(
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         extractedLinks.forEachIndexed { index, link ->
                                             val isTop = index == 0
+                                            val qualityLabel = Qualities.getStringByInt(link.quality)
+
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -434,7 +776,7 @@ fun GlassmorphicMediaDetailSheet(
                                                             overview = details.overview,
                                                             year = details.year,
                                                             rating = details.rating,
-                                                            providerName = details.providerName,
+                                                            providerName = selectedProviderName ?: details.providerName,
                                                             headers = link.headers,
                                                             allLinks = extractedLinks,
                                                             subtitles = extractedSubtitles
@@ -468,39 +810,93 @@ fun GlassmorphicMediaDetailSheet(
                                                     }
                                                 }
 
-                                                Text(
-                                                    text = Qualities.getStringByInt(link.quality),
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                    color = if (isTop) MaxStreamTheme.ElectricCyan else Color.White.copy(alpha = 0.8f),
-                                                    modifier = Modifier
-                                                        .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                                )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = qualityLabel,
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = if (isTop) MaxStreamTheme.ElectricCyan else Color.White.copy(alpha = 0.8f),
+                                                        modifier = Modifier
+                                                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 } else if (streamError != null) {
                                     Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = Color(0x33EF4444)),
-                                        shape = RoundedCornerShape(16.dp)
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .intelligentGlassEffect(
+                                                shape = RoundedCornerShape(16.dp),
+                                                backgroundColor = Color(0x33EF4444),
+                                                borderColor = Color(0x66EF4444)
+                                            ),
+                                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                     ) {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
                                         ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFF8A80))
+                                                Text(
+                                                    text = "No direct stream links found",
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = Color(0xFFFF8A80)
+                                                )
+                                            }
                                             Text(
-                                                text = "No direct stream links found",
-                                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFFFF8A80)
-                                            )
-                                            Text(
-                                                text = "The selected provider did not return working streams for this title.",
+                                                text = streamError ?: "The selected provider returned no working streams.",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = Color.White.copy(alpha = 0.7f)
+                                                color = Color.White.copy(alpha = 0.8f)
                                             )
+
+                                            // Fallback Direct Play or Retry Button
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Button(
+                                                    onClick = {
+                                                        extractStreamsForDetails(details, provider = selectedProviderName)
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x44FFFFFF)),
+                                                    shape = RoundedCornerShape(10.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Retry Extract")
+                                                }
+
+                                                if (details.dataUrl.isNotBlank() && !details.dataUrl.all { it.isDigit() }) {
+                                                    Button(
+                                                        onClick = {
+                                                            CloudStreamBridgeResolver.launchPlayer(
+                                                                context = context,
+                                                                streamUrl = details.dataUrl,
+                                                                title = details.title,
+                                                                posterUrl = details.posterUrl,
+                                                                overview = details.overview,
+                                                                year = details.year,
+                                                                rating = details.rating,
+                                                                providerName = details.providerName
+                                                            )
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = MaxStreamTheme.ElectricCyan),
+                                                        shape = RoundedCornerShape(10.dp)
+                                                    ) {
+                                                        Text("Play Direct Link", color = Color.Black, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -508,14 +904,13 @@ fun GlassmorphicMediaDetailSheet(
                         }
                     }
 
-                    // 4. TV Series Episodes Section
+                    // 5. TV Series Episodes Section
                     if (!details.isMovie) {
                         val lr = details.loadResponse
                         val episodesList = if (lr is TvSeriesLoadResponse) {
                             lr.episodes
                         } else emptyList()
 
-                        // Extract unique seasons
                         val seasons = episodesList.mapNotNull { it.season }.distinct().sorted()
 
                         item {
@@ -523,10 +918,9 @@ fun GlassmorphicMediaDetailSheet(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 20.dp)
-                                    .offset(y = (-20).dp),
+                                    .offset(y = (-10).dp),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                // Season Tabs
                                 if (seasons.size > 1) {
                                     Row(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -557,14 +951,13 @@ fun GlassmorphicMediaDetailSheet(
                                 }
 
                                 Text(
-                                    text = "Episodes",
+                                    text = "Episodes (${episodesList.size})",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = Color.White
                                 )
                             }
                         }
 
-                        // Filter episodes for selected season
                         val displayedEpisodes = if (seasons.isNotEmpty()) {
                             episodesList.filter { it.season == selectedSeasonIndex }
                         } else episodesList
@@ -580,7 +973,7 @@ fun GlassmorphicMediaDetailSheet(
                                         activeEpisodeForExtraction = ep
                                         isExtractingStreams = true
                                         scope.launch {
-                                            val (links, subs) = CloudStreamBridgeResolver.resolveStreamLinks(details, ep)
+                                            val (links, subs) = CloudStreamBridgeResolver.resolveStreamLinks(details, ep, selectedProviderName)
                                             isExtractingStreams = false
                                             if (links.isNotEmpty()) {
                                                 CloudStreamBridgeResolver.launchPlayer(
@@ -591,7 +984,7 @@ fun GlassmorphicMediaDetailSheet(
                                                     overview = details.overview,
                                                     year = details.year,
                                                     rating = details.rating,
-                                                    providerName = details.providerName,
+                                                    providerName = selectedProviderName ?: details.providerName,
                                                     headers = links.first().headers,
                                                     allLinks = links,
                                                     subtitles = subs,
@@ -613,7 +1006,6 @@ fun GlassmorphicMediaDetailSheet(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
-                                    // Thumbnail or Episode Number Box
                                     Box(
                                         modifier = Modifier
                                             .width(80.dp)
@@ -653,7 +1045,6 @@ fun GlassmorphicMediaDetailSheet(
                                         }
                                     }
 
-                                    // Episode Info
                                     Column(
                                         modifier = Modifier.weight(1f),
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -680,7 +1071,7 @@ fun GlassmorphicMediaDetailSheet(
                         }
                     }
 
-                    // 5. Synopsis & Plot
+                    // 6. Synopsis & Plot
                     if (!details.overview.isNullOrBlank()) {
                         item {
                             Column(
@@ -704,7 +1095,7 @@ fun GlassmorphicMediaDetailSheet(
                         }
                     }
 
-                    // 6. Cast Carousel
+                    // 7. Cast Carousel
                     if (details.cast.isNotEmpty()) {
                         item {
                             Column(
