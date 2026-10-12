@@ -146,12 +146,11 @@ object CineHubUnifiedMediaScreen : Screen {
             refreshData()
         }
 
-        if (selectedDetailItem != null) {
-            CineDetailView(
-                item = selectedDetailItem!!,
+        selectedDetailItem?.let { detailItem ->
+            xyz.mpv.rex.ui.browser.cinehub.components.GlassmorphicMediaDetailSheet(
+                item = detailItem,
                 onDismiss = { selectedDetailItem = null }
             )
-            return
         }
 
         val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface

@@ -127,11 +127,16 @@ fun CineHubSearchScreen(
     val isExtracting by viewModel.isExtracting.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
 
+    var activeSheetItem by remember { mutableStateOf<Any?>(null) }
     var activeEpisodeName by remember { mutableStateOf<String?>(null) }
 
-    // Intercept Back button when MediaDetailView is open to return to search results
-    androidx.activity.compose.BackHandler(enabled = selectedDetails != null) {
-        viewModel.clearSelection()
+    // Intercept Back button when MediaDetailView or Sheet is open to return to search results
+    androidx.activity.compose.BackHandler(enabled = selectedDetails != null || activeSheetItem != null) {
+        if (activeSheetItem != null) {
+            activeSheetItem = null
+        } else {
+            viewModel.clearSelection()
+        }
     }
 
     // Quick suggestion genres
@@ -233,49 +238,12 @@ fun CineHubSearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (selectedDetails != null) {
-                // Detail & Episode Selection View
-                MediaDetailView(
-                    details = selectedDetails!!,
-                    isExtracting = isExtracting,
-                    activeEpisode = activeEpisodeName,
-                    onPlayClick = { epData, epTitle ->
-                        activeEpisodeName = epTitle
-                        viewModel.getStreamLinks(
-                            providerName = selectedDetails!!.apiName,
-                            episodeData = epData
-                        ) { links ->
-                            if (links.isNotEmpty()) {
-                                val bestLink = links.maxByOrNull { it.quality } ?: links.first()
-                                Toast.makeText(
-                                    context,
-                                    "Playing ${bestLink.name} (${bestLink.quality}p)",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                RexPlayerBridge.playStream(
-                                    context = context,
-                                    link = bestLink,
-                                    title = epTitle ?: selectedDetails!!.name,
-                                    posterUrl = selectedDetails!!.posterUrl,
-                                    overview = selectedDetails!!.plot,
-                                    year = selectedDetails!!.year?.toString(),
-                                    rating = 8.0,
-                                    providerName = selectedDetails!!.apiName,
-                                    allLinks = links
-                                )
-                            } else {
-                                Toast.makeText(context, "No stream links could be extracted", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                )
-            } else {
-                // Search Bar + Filter Chips + Results Grid
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                ) {
+            // Search Bar + Filter Chips + Results Grid
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
                     Spacer(modifier = Modifier.height(6.dp))
 
                     // Unified Glass Search Bar
@@ -430,14 +398,13 @@ fun CineHubSearchScreen(
                                     qualityBadge = "4K UHD",
                                     cardWidth = 140.dp,
                                     onClick = {
-                                        viewModel.loadMediaDetails(item.apiName, item.url, item)
+                                        activeSheetItem = item
                                     }
                                 )
                             }
                         }
                     }
                 }
-            }
 
             // Global Skeleton Pill Indicator for Details
             AnimatedVisibility(
@@ -470,6 +437,20 @@ fun CineHubSearchScreen(
                         )
                     }
                 }
+            }
+
+            activeSheetItem?.let { detailItem ->
+                xyz.mpv.rex.ui.browser.cinehub.components.GlassmorphicMediaDetailSheet(
+                    item = detailItem,
+                    onDismiss = { activeSheetItem = null }
+                )
+            }
+
+            selectedDetails?.let { details ->
+                xyz.mpv.rex.ui.browser.cinehub.components.GlassmorphicMediaDetailSheet(
+                    item = details,
+                    onDismiss = { viewModel.clearSelection() }
+                )
             }
         }
     }
