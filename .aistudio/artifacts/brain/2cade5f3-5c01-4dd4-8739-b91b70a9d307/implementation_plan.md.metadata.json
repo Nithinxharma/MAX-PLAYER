@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for complete Prismal Ultra Liquid Glass remake of Max Stream UI across all screens and components.",
-  "updatedAt":  "2026-10-12T02:48:31.726155501Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Implementation plan to audit and restore the working version of CineDetailView, CineDetailBottomSheet, and associated media sheets from the attached code across CineHub.",
+  "updatedAt": "2026-10-12T15:49:57.603145124Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

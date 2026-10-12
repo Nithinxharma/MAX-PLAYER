@@ -1632,12 +1632,12 @@ object CineHubScreen : Screen {
           }
         }
 
-        // Open movie/tv show details in CineDetailBottomSheet
+        // Navigate to full-screen movie/tv show details
         LaunchedEffect(selectedDetailItem) {
           val item = selectedDetailItem
           if (item != null) {
-            activeSheetItem = item
             selectedDetailItem = null
+            CineDetailStateHolder.open(backstack, item)
           }
         }
 
@@ -4459,16 +4459,16 @@ fun CineDetailView(
       )
     }
 
-    // Pinned floating top glass bar with dedicated Back button and Title
+    // Pinned floating top glass bar with YouTube-like Minimize button & swipe-down pill handle
     Row(
       modifier = Modifier
         .fillMaxWidth()
         .statusBarsPadding()
         .padding(horizontal = 16.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(12.dp)
+      horizontalArrangement = Arrangement.SpaceBetween
     ) {
-      // Dedicated Back button
+      // YouTube-like Minimize button
       IconButton(
         onClick = onDismiss,
         modifier = Modifier.intelligentGlassEffect(
@@ -4478,24 +4478,14 @@ fun CineDetailView(
         )
       ) {
         Icon(
-          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-          contentDescription = "Back",
+          imageVector = Icons.Rounded.KeyboardArrowDown,
+          contentDescription = "Minimize",
           tint = Color.White,
-          modifier = Modifier.size(24.dp)
+          modifier = Modifier.size(28.dp)
         )
       }
 
-      // Title header in top bar
-      Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-        color = Color.White,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.weight(1f)
-      )
-
-      // Swipe-to-Dismiss Pill Handle
+      // YouTube-like Swipe-to-Minimize Pill Handle with drag gestures
       Box(
         modifier = Modifier
           .pointerInput(Unit) {
@@ -4522,17 +4512,20 @@ fun CineDetailView(
             backgroundColor = Color(0x99101218),
             borderColor = Color.White.copy(alpha = 0.20f)
           )
-          .padding(horizontal = 12.dp, vertical = 6.dp),
+          .padding(horizontal = 16.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
       ) {
         Box(
           modifier = Modifier
-            .width(28.dp)
+            .width(36.dp)
             .height(4.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.7f))
         )
       }
+
+      // Spacer to balance layout
+      Spacer(modifier = Modifier.size(40.dp))
     }
   }
 }
@@ -4545,10 +4538,7 @@ fun CineDetailBottomSheet(
   onRefreshItem: (Any) -> Unit = {},
   onLinksLoaded: ((List<com.lagradost.cloudstream3.utils.ExtractorLink>, List<com.lagradost.cloudstream3.SubtitleFile>, String?) -> Unit)? = null
 ) {
-  xyz.mpv.rex.ui.browser.cinehub.components.GlassmorphicMediaDetailSheet(
-    item = item,
-    onDismiss = onDismiss
-  )
+  CineDetailView(item, onDismiss, onPlay, onRefreshItem, onLinksLoaded)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1,95 +1,89 @@
-# Implementation Plan: Max Stream Prismal Ultra Liquid Glass UI Remake
+# Restore Working CineDetailBottomSheet & Media Details View
 
-Transform the entire **Max Stream** Android app (including **CineHub** main interface and **REX Player** playback engine) into a unified **Prismal Ultra Liquid Glass** experience. This plan covers a complete, single-batch UI remake across all components, screens, dialogs, overlays, and controls using a hybrid OpenGL ES surface layer paired with AGSL liquid glass shaders and Prismal Compose design system components.
-
----
+Restore the proven working `CineDetailView`, `CineDetailBottomSheet`, and associated media sheets (`QualitySelectorBottomSheet`, `StreamDiagnosticCard`, `KodiScraperBottomSheet`, `ProviderSelectorSheet`) from the user's provided code across all CineHub screens.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following decisions were confirmed during the Phase 1 clarification interview and govern the entire UI architecture:
+> The user provided the complete source code of the last known working `CineDetailView` / `CineDetailBottomSheet` implementation. This plan restores this exact implementation and integrates it across all screens.
 
-- **Remake Scope**: Full app remake across **all screens, dialogs, sheets, and controls** in a single complete batch (no legacy UI remnants).
-- **Prismal Architectural Model**: Hybrid integration combining an `AndroidView` OpenGL ES surface overlay/backdrop with high-performance `PrismalAGSL` Compose shaders and Prismal component tokens.
-- **Aesthetic Direction**: **Ultra Liquid** theme featuring high-contrast glass refractions, sharp chromatic dispersion edges, deep neon cyan (`#00F2FE`) and electric blue (`#4FACFE`) light sweeps, and hardware-accelerated fallbacks for high performance.
-
----
+- **Confirmed Decision**: Revert `CineDetailBottomSheet` / `CineDetailView` to the user's attached implementation containing 16:9 YouTube-style banner, TMDB/Scraper metadata, Top Cast carousel, Library dropdown menu, TV episode browser with season selector, stream quality sheet, and failure diagnostics card.
 
 ## 1. Overview & Core Concept
 
-The **Max Stream** application will be completely revamped with the **Prismal** open-source glass design language. Every screen—from the CineHub Home hero carousel, Search filters, Details sheets, Downloads, Sync, and Settings, to the REX Player HUD, transport controls, and track selection sheets—will strictly implement Prismal liquid glass physics, frosted specular highlights, and cohesive glass geometry.
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Max Stream Prismal Architecture                  │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │  Jetpack Compose Prismal UI Components (Cards, Buttons, Nav)   │   │
-│   └──────────────────────────────┬─────────────────────────────────┘   │
-│                                  │                                     │
-│   ┌──────────────────────────────▼─────────────────────────────────┐   │
-│   │   PrismalAGSL Shader Engine (Chromatic Dispersion & Refraction)  │   │
-│   └──────────────────────────────┬─────────────────────────────────┘   │
-│                                  │                                     │
-│   ┌──────────────────────────────▼─────────────────────────────────┐   │
-│   │   AndroidView OpenGL ES Prismal Backdrop Surface (Live Glow)    │   │
-│   └────────────────────────────────────────────────────────────────┘   │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
----
+- **What It Does**: When any movie, TV show, or clip poster is selected in CineHub (Home, Search, or Library/Unified Media screens), it presents the full-featured liquid glass media detail view/sheet with complete playback capabilities, episode extraction, provider selection, and stream link quality options.
+- **Key Value**: Guarantees rich, interactive metadata and 1-tap stream playback without missing controls, blank sheets, or broken episode lists.
 
 ## 2. User Experience & Visual Design
 
-### Key User Flows
-1. **Home Screen (CineHub)**: High-impact hero carousel floating over an animated liquid mesh backdrop, with Ultra Liquid glass poster cards, glass section headers, and a floating glass bottom navigation bar.
-2. **Search Screen**: Glass search bar with live refractive focus ring, liquid filter chips with active specular glow, and an aligned media poster grid.
-3. **Media Details Sheet**: Parallax media backdrop, translucent glass synopsis card, floating play/bookmark glass buttons, and a liquid season/episode selector.
-4. **REX Player Overlay**: Ultra-light liquid glass HUD that auto-hides after 3 seconds, floating glass transport controls with ripple feedback, custom glass seekbar with glowing scrubber thumb, and glass track sheets (Audio, Subtitles, Quality).
-5. **Secondary Screens (Downloads, Cloud Sync, Settings, Auth)**: Fully converted to Prismal glass cards, liquid list tiles, glass switch toggles, and frosted dialog surfaces.
+- **YouTube-Style 16:9 Banner Header**:
+  - Instant Play button with animated progress indicator during link resolution.
+  - Top right 1080p HD quality badge and status pill.
+- **Rich Media & Metadata Layout**:
+  - Poster thumbnail, title, TMDB badge, release year, genre tag, and rating stars.
+  - Expandable overview/synopsis text.
+  - Top Cast carousel with circular actor avatars and character names.
+  - "Add to Library" dropdown menu with watch statuses ("Watchlist", "Watching", "Completed", "Dropped").
+- **Movie & TV Show Actions**:
+  - Movies: Primary "Play Movie" button + "Scrape Online" metadata enrichment button.
+  - TV Shows: Dynamic Season Filter chips ("Season 1", "Season 2"), episode cards with video stills, season/episode labels, synopses, and play triggers.
+- **Stream Link Quality & Failure Diagnostics**:
+  - `QualitySelectorBottomSheet`: Select HLS (M3U8) or direct HTTP stream links sorted by resolution.
+  - `StreamDiagnosticCard`: Clear root cause diagnosis (DNS ISP blocks, Cloudflare 403, timeout) with retry and error log copy triggers.
+- **Floating Glass Top Navigation**:
+  - Minimize button (`KeyboardArrowDown`) and swipe-down drag handle.
 
-### Visual Identity & Theme Tokens
-- **Primary Refraction Tint**: `Color(0x3812131D)` (Deep Translucent Obsidian)
-- **Specular Border Accent**: `Color(0x40FFFFFF)` to `Color(0x8000F2FE)` (Gradient Cyan Glow)
-- **Primary Glow**: `#00F2FE` (Neon Cyan) & `#4FACFE` (Electric Blue)
-- **Surface Geometry**: Continuous rounded corners (`18.dp` to `28.dp`), 1.5.dp specular borders, and dynamic noise texture overlays.
+## 3. Key Product Decisions & Trade-Offs
 
----
+- **Decision 1: Restoring Attached `CineDetailView` Implementation**
+  - *Chosen Approach*: Replace the current bottom sheet logic with the attached `CineDetailView` and `CineDetailBottomSheet` composables.
+  - *Why*: Ensures 100% feature parity with the last fully-working version, restoring episode browsing, online scraping, TMDB metadata enrichment, and stream quality selection.
+- **Decision 2: Consistent Wiring Across All CineHub Entry Points**
+  - *Chosen Approach*: Wire `CineDetailBottomSheet` / `CineDetailView` in `CineHubScreen.kt`, `CineHubSearchScreen.kt`, and `CineHubUnifiedMediaScreen.kt`.
+  - *Why*: Provides uniform UX regardless of whether a user clicks a movie on the home carousel, search results grid, or library watchlist.
 
-## 3. Comprehensive Component & Screen Remake Strategy
+## 4. Technical Architecture & Component Structure
 
-### Core Reusable Prismal Component Library
-- **`PrismalAGSLShader.kt`**: AGSL RuntimeShader providing true physical chromatic dispersion, noise grain, and light sweeps on Android 13+, with 60 FPS fallback shaders for older devices.
-- **`GlassModifier.kt`**: Universal `prismalLiquidGlass()` modifier applying refractive borders, surface elevation, and background distortion to any Compose node.
-- **`MaxStreamGlassComponents.kt`**: Standardized `GlassCard`, `GlassButton`, `GlassSearchBar`, `GlassChip`, `GlassBottomNavBar`, `GlassDialog`, and `GlassTextField`.
-
-### Screen Remake Mapping
-1. **CineHub Main Browser (`CineHubScreen.kt`)**: Replaced all flat containers with `PrismalAGSL` glass surfaces, liquid poster cards (`MaxStreamPosterCard`), and a glass floating navigation rail.
-2. **Search Engine (`MaxStreamLiquidGlassSearch.kt`)**: Replaced standard input fields with refractive glass search bars and liquid category chips.
-3. **Media Details (`GlassmorphicMediaDetailSheet.kt`)**: Enhanced synopsis sheets, episode grids, and provider buttons with full Prismal glass rendering.
-4. **REX Player Controls (`PlayerControlsPortrait.kt`, `PlayerControlsLandscape.kt`, `ControlsButton.kt`, `Seekbar.kt`)**: Wrapped transport controls, time labels, and gesture overlays in ultra-light liquid glass HUD layers with 3s auto-fade.
-5. **Sheets & Panels (`PlayerSheets.kt`, `PlayerPanels.kt`, `AudioTracksSheet.kt`, `SubtitleTracksSheet.kt`)**: Fully converted modal bottom sheets and side panels to glass dialogs.
-
----
-
-## 4. Technical Architecture & Verification Plan
-
-### Architecture Diagram
 ```
-┌─────────────────┐       ┌───────────────────────┐       ┌────────────────────┐
-│ CineHub / Player│ ───>  │  prismalLiquidGlass   │ ───>  │ PrismalAGSLShader  │
-│  Compose Views  │       │       Modifier        │       │ (Android 13+ AGSL) │
-└─────────────────┘       └───────────────────────┘       └─────────┬──────────┘
-         │                                                          │
-         │                                              ┌───────────▼──────────┐
-         └────────────────────────────────────────────> │  60 FPS Fallback     │
-                                                        │ (RenderEffect / Canvas)│
-                                                        └──────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        CineHub Media Detail Flow                       │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  [ Home Carousel / Search Grid / Watchlist Card ]                      │
+│                          │                                             │
+│                          ▼ (onItemClick)                               │
+│              [ CineDetailBottomSheet / Screen ]                        │
+│                          │                                             │
+│                          ▼                                             │
+│                   [ CineDetailView ]                                   │
+│    ┌─────────────────────┼─────────────────────┐                       │
+│    │                     │                     │                       │
+│    ▼                     ▼                     ▼                       │
+│ [ 16:9 Banner ]  [ Meta / Cast ]     [ Season & Episode ]              │
+│  Instant Play      TMDB Enrichment     Online Scrape & Eps             │
+│    │                     │                     │                       │
+│    └─────────────────────┼─────────────────────┘                       │
+│                          │                                             │
+│                          ▼                                             │
+│         [ Stream Extraction / Provider Stream ]                        │
+│             /                        \                                 │
+│            ▼                          ▼                                │
+│ [ QualitySelectorSheet ]     [ StreamDiagnosticCard ]                  │
+│    (Multi-quality links)         (ISP / Cloudflare / DNS Error)        │
+│            │                          │                                │
+│            └─────────────┬────────────┘                                │
+│                          ▼                                             │
+│               [ REX MPV Player Launch ]                                │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Verification Checklist
-1. Build check via `compile_applet` after all file edits to confirm zero syntax or dependency errors.
-2. Verify edge-to-edge system insets handling and minimum 48dp touch targets across all Prismal glass buttons.
-3. Verify backward compatibility on earlier Android versions without dropping frame rates.
+## Implementation Steps
+
+1. **Audit & Restore `CineDetailView` & `CineDetailBottomSheet`**:
+   - Restore `CineDetailView`, `CineDetailBottomSheet`, `QualitySelectorBottomSheet`, `StreamDiagnosticCard`, `KodiScraperBottomSheet`, and `ProviderSelectorSheet` in `CineHubScreen.kt` using the attached code.
+2. **Restore State Holders**:
+   - Verify `CineDetailScreen` and `CineDetailStateHolder` for full-screen handoff if used.
+3. **Wire Event Handlers**:
+   - Ensure poster clicks in `CineHubScreen`, `CineHubSearchScreen`, and `CineHubUnifiedMediaScreen` open `CineDetailBottomSheet` / `CineDetailView`.
+4. **Verification**:
+   - Compile the project using `compile_applet` to confirm clean build.

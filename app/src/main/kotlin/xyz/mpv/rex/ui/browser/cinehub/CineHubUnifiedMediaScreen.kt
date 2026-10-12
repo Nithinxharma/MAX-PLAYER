@@ -147,7 +147,7 @@ object CineHubUnifiedMediaScreen : Screen {
         }
 
         selectedDetailItem?.let { detailItem ->
-            xyz.mpv.rex.ui.browser.cinehub.components.GlassmorphicMediaDetailSheet(
+            CineDetailView(
                 item = detailItem,
                 onDismiss = { selectedDetailItem = null }
             )

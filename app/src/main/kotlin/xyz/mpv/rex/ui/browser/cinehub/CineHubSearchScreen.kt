@@ -127,16 +127,11 @@ fun CineHubSearchScreen(
     val isExtracting by viewModel.isExtracting.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
 
-    var activeSheetItem by remember { mutableStateOf<Any?>(null) }
     var activeEpisodeName by remember { mutableStateOf<String?>(null) }
 
-    // Intercept Back button when MediaDetailView or Sheet is open to return to search results
-    androidx.activity.compose.BackHandler(enabled = selectedDetails != null || activeSheetItem != null) {
-        if (activeSheetItem != null) {
-            activeSheetItem = null
-        } else {
-            viewModel.clearSelection()
-        }
+    // Intercept Back button when MediaDetailView is open to return to search results
+    androidx.activity.compose.BackHandler(enabled = selectedDetails != null) {
+        viewModel.clearSelection()
     }
 
     // Quick suggestion genres
@@ -155,28 +150,6 @@ fun CineHubSearchScreen(
         }
     }
 
-    val searchProgress by viewModel.searchProgress.collectAsState()
-    var selectedTypeFilter by remember { mutableStateOf("All") }
-    val typeFilters = listOf("All", "Movies", "TV Series", "Anime", "Live TV")
-
-    // Filter search results dynamically by selected media type
-    val filteredResults = remember(searchResults, selectedTypeFilter) {
-        if (selectedTypeFilter == "All") {
-            searchResults
-        } else {
-            searchResults.filter { item ->
-                val typeName = item.type?.name?.lowercase() ?: ""
-                when (selectedTypeFilter) {
-                    "Movies" -> typeName.contains("movie") || typeName.contains("torrent")
-                    "TV Series" -> typeName.contains("tv") || typeName.contains("series") || typeName.contains("show")
-                    "Anime" -> typeName.contains("anime")
-                    "Live TV" -> typeName.contains("live")
-                    else -> true
-                }
-            }
-        }
-    }
-
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     val bgColor = if (isDark) MaxStreamTheme.AbyssBackground else MaterialTheme.colorScheme.background
     val primaryTextColor = if (isDark) MaxStreamTheme.TextPrimary else MaterialTheme.colorScheme.onSurface
@@ -191,7 +164,7 @@ fun CineHubSearchScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (selectedDetails != null) selectedDetails!!.name else "Explore Universe",
+                        text = if (selectedDetails != null) selectedDetails!!.name else "Search Max Stream",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -238,12 +211,49 @@ fun CineHubSearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Search Bar + Filter Chips + Results Grid
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-            ) {
+            if (selectedDetails != null) {
+                // Detail & Episode Selection View
+                MediaDetailView(
+                    details = selectedDetails!!,
+                    isExtracting = isExtracting,
+                    activeEpisode = activeEpisodeName,
+                    onPlayClick = { epData, epTitle ->
+                        activeEpisodeName = epTitle
+                        viewModel.getStreamLinks(
+                            providerName = selectedDetails!!.apiName,
+                            episodeData = epData
+                        ) { links ->
+                            if (links.isNotEmpty()) {
+                                val bestLink = links.maxByOrNull { it.quality } ?: links.first()
+                                Toast.makeText(
+                                    context,
+                                    "Playing ${bestLink.name} (${bestLink.quality}p)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                RexPlayerBridge.playStream(
+                                    context = context,
+                                    link = bestLink,
+                                    title = epTitle ?: selectedDetails!!.name,
+                                    posterUrl = selectedDetails!!.posterUrl,
+                                    overview = selectedDetails!!.plot,
+                                    year = selectedDetails!!.year?.toString(),
+                                    rating = 8.0,
+                                    providerName = selectedDetails!!.apiName,
+                                    allLinks = links
+                                )
+                            } else {
+                                Toast.makeText(context, "No stream links could be extracted", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                )
+            } else {
+                // Search Bar + Filter Chips + Results Grid
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
                     Spacer(modifier = Modifier.height(6.dp))
 
                     // Unified Glass Search Bar
@@ -257,64 +267,27 @@ fun CineHubSearchScreen(
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Media Type Filter Chips (All, Movies, TV Series, Anime, Live TV)
+                    // Quick Suggestion Chips using GlassFilterChip
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(typeFilters) { filterTag ->
+                        items(suggestions) { chip ->
+                            val cleanTag = chip.replace("4K ", "")
                             MaxStreamGlassFilterChip(
-                                text = filterTag,
-                                isSelected = selectedTypeFilter == filterTag,
-                                onClick = { selectedTypeFilter = filterTag }
+                                text = chip,
+                                isSelected = searchInput.equals(cleanTag, ignoreCase = true),
+                                onClick = {
+                                    searchInput = cleanTag
+                                    viewModel.searchContent(searchInput)
+                                }
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Live Multi-Provider Progress Bar Indicator
-                    if (searchProgress.second > 0 && searchProgress.first < searchProgress.second) {
-                        MaxStreamGlassCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            backgroundColor = MaxStreamTheme.MidnightSurface.copy(alpha = 0.85f),
-                            borderColor = MaxStreamTheme.ElectricCyan.copy(alpha = 0.35f)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(14.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaxStreamTheme.ElectricCyan
-                                    )
-                                    Text(
-                                        text = "Searching ${searchProgress.first}/${searchProgress.second} providers…",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-                                        color = primaryTextColor
-                                    )
-                                }
-                                Text(
-                                    text = "${searchResults.size} results",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaxStreamTheme.ElectricCyan
-                                )
-                            }
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     if (searchInput.isBlank()) {
                         // Rich OTT Search Suggestions (Recent, Trending, Popular, Filters)
@@ -333,8 +306,8 @@ fun CineHubSearchScreen(
                                 viewModel.searchContent(q)
                             }
                         )
-                    } else if (isSearching && searchResults.isEmpty()) {
-                        // High Performance Skeleton Grid (when starting search)
+                    } else if (isSearching) {
+                        // High Performance Skeleton Grid (replaces circular progress indicator)
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 130.dp),
                             contentPadding = PaddingValues(bottom = 32.dp),
@@ -352,7 +325,7 @@ fun CineHubSearchScreen(
                                 )
                             }
                         }
-                    } else if (filteredResults.isEmpty() && searchInput.isNotBlank() && !isSearching) {
+                    } else if (searchResults.isEmpty() && searchInput.isNotBlank()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -372,14 +345,14 @@ fun CineHubSearchScreen(
                                     color = primaryTextColor
                                 )
                                 Text(
-                                    text = "Try searching for a different title or filter category.",
+                                    text = "Try another title or provider.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = mutedTextColor
                                 )
                             }
                         }
                     } else {
-                        // Poster Grid of Live Filtered Search Results
+                        // Poster Grid of Search Results
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 130.dp),
                             contentPadding = PaddingValues(bottom = 32.dp),
@@ -389,7 +362,7 @@ fun CineHubSearchScreen(
                                 .fillMaxSize()
                                 .testTag("cinehub_search_results_grid")
                         ) {
-                            items(filteredResults, key = { "${it.apiName}_${it.url}" }) { item ->
+                            items(searchResults, key = { "${it.apiName}_${it.url}" }) { item ->
                                 val mediaType = item.type
                                 MaxStreamPosterCard(
                                     title = item.name,
@@ -398,13 +371,14 @@ fun CineHubSearchScreen(
                                     qualityBadge = "4K UHD",
                                     cardWidth = 140.dp,
                                     onClick = {
-                                        activeSheetItem = item
+                                        viewModel.loadMediaDetails(item.apiName, item.url, item)
                                     }
                                 )
                             }
                         }
                     }
                 }
+            }
 
             // Global Skeleton Pill Indicator for Details
             AnimatedVisibility(
@@ -437,20 +411,6 @@ fun CineHubSearchScreen(
                         )
                     }
                 }
-            }
-
-            activeSheetItem?.let { detailItem ->
-                xyz.mpv.rex.ui.browser.cinehub.components.GlassmorphicMediaDetailSheet(
-                    item = detailItem,
-                    onDismiss = { activeSheetItem = null }
-                )
-            }
-
-            selectedDetails?.let { details ->
-                xyz.mpv.rex.ui.browser.cinehub.components.GlassmorphicMediaDetailSheet(
-                    item = details,
-                    onDismiss = { viewModel.clearSelection() }
-                )
             }
         }
     }
