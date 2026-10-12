@@ -1,135 +1,95 @@
-# Implementation Plan: Max Stream Liquid Glass & Glassmorphism UI Overhaul
+# Implementation Plan: Max Stream Prismal Ultra Liquid Glass UI Remake
 
-This plan outlines the end-to-end transformation of the **Max Stream** Android app (featuring **CineHub** Compose UI and **REX Player** MPV engine) into a modern, immersive **Liquid Glass / Glassmorphic** UI powered by **PrismalAGSL** and **Prismal**.
-
----
-
-## 1. Overview & Architectural Strategy
-The objective is a 100% redesigned UI with no legacy, flat elements remaining. The liquid glass design relies on:
-- **PrismalAGSL** (`AGSL` runtime shaders) for dynamic refractive glass effects, chromatic dispersion, and fluid specular highlights across Jetpack Compose components.
-- **Prismal** (OpenGL ES shader pipeline) for hardware-accelerated video overlay rendering and HUD effects over the MPV surface in **REX Player**.
-- A unified design system with **Deep Neon Cyan / Prism Electric Blue** and **Cyberpunk Magenta** chromatic highlights on AMOLED black surfaces (`#000000`).
+Transform the entire **Max Stream** Android app (including **CineHub** main interface and **REX Player** playback engine) into a unified **Prismal Ultra Liquid Glass** experience. This plan covers a complete, single-batch UI remake across all components, screens, dialogs, overlays, and controls using a hybrid OpenGL ES surface layer paired with AGSL liquid glass shaders and Prismal Compose design system components.
 
 ---
 
-## 2. Gradle & Dependency Configuration
+## User Review & Critical Decisions
 
-### A. Repository & Library Declaration
-Add JitPack repository and the Prismal suite to `settings.gradle.kts` and `app/build.gradle.kts`.
+> [!IMPORTANT]
+> The following decisions were confirmed during the Phase 1 clarification interview and govern the entire UI architecture:
 
-1. **`settings.gradle.kts`**:
-   ```kotlin
-   dependencyResolutionManagement {
-       repositories {
-           mavenCentral()
-           google()
-           maven { url = uri("https://jitpack.io") }
-       }
-   }
-   ```
-
-2. **`gradle/libs.versions.toml`**:
-   ```toml
-   [versions]
-   prismal = "1.0.0" # Latest stable release
-
-   [libraries]
-   prismal-agsl = { module = "com.github.styropyr0:PrismalAGSL", version.ref = "prismal" }
-   prismal-core = { module = "com.github.styropyr0:Prismal", version.ref = "prismal" }
-   ```
-
-3. **`app/build.gradle.kts`**:
-   ```kotlin
-   dependencies {
-       implementation(libs.prismal.agsl)
-       implementation(libs.prismal.core)
-   }
-   ```
+- **Remake Scope**: Full app remake across **all screens, dialogs, sheets, and controls** in a single complete batch (no legacy UI remnants).
+- **Prismal Architectural Model**: Hybrid integration combining an `AndroidView` OpenGL ES surface overlay/backdrop with high-performance `PrismalAGSL` Compose shaders and Prismal component tokens.
+- **Aesthetic Direction**: **Ultra Liquid** theme featuring high-contrast glass refractions, sharp chromatic dispersion edges, deep neon cyan (`#00F2FE`) and electric blue (`#4FACFE`) light sweeps, and hardware-accelerated fallbacks for high performance.
 
 ---
 
-## 3. Design System & Reusable Liquid Glass Components
+## 1. Overview & Core Concept
 
-We will build a dedicated package `xyz.mpv.rex.ui.theme.glass` containing core liquid glass primitives:
+The **Max Stream** application will be completely revamped with the **Prismal** open-source glass design language. Every screen—from the CineHub Home hero carousel, Search filters, Details sheets, Downloads, Sync, and Settings, to the REX Player HUD, transport controls, and track selection sheets—will strictly implement Prismal liquid glass physics, frosted specular highlights, and cohesive glass geometry.
 
-### Key Components to Create:
-1. **`LiquidGlassSurface`**:
-   - Base wrapper composable leveraging AGSL runtime shaders (`PrismalAGSL`) for dynamic refraction, customizable blur radius, edge highlights, and specular light source tracking.
-   - Graceful dynamic fallback for pre-Android 13 devices using hardware layer blurs (`RenderEffect`) and semi-transparent acrylic gradients.
-
-2. **`GlassCard`**:
-   - Multi-layered card container with dynamic border stroke gradients (Cyan to Magenta), inner shadow refraction, and touch-responsive light shimmer.
-
-3. **`GlassSearchBar`**:
-   - Frosted input container with animated glow on focus, clear glass action buttons, and integrated provider filter chips.
-
-4. **`GlassBottomNavBar`**:
-   - Floating pill-shaped glass navigation bar with active tab glow indicator, fluid tab transition animations, and background backdrop blur.
-
-5. **`GlassButton`**:
-   - Primary and secondary liquid glass action buttons with ripple refraction and vibrant gradient borders.
-
-6. **`GlassChip`**:
-   - Frosted pill tags for genres, media type (Movie/TV), quality tags (4K/1080p), and provider source indicators.
-
----
-
-## 4. Screen-by-Screen Redesign Strategy
-
-### Screen 1: Home Screen (`CineHubScreen.kt`)
-- **Hero Carousel**: Full-bleed backdrop with liquid glass overlay card at the bottom containing title, description, match score, and glowing `GlassButton` ("Watch Now").
-- **Movie/TV Poster Cards**: Replaced standard cards with `GlassCard` elevation. Posters will feature translucent gradient overlays, provider badge chips, and glowing border highlights on focus/hover.
-- **Navigation Bar**: Floating `GlassBottomNavBar` centered at screen bottom, elevating off the page with frosted blur.
-
-### Screen 2: Search Screen (`CineHubSearchScreen.kt`)
-- **Glass Search Bar**: Integrated sticky header with `GlassSearchBar`, voice input icon, and multi-provider state indicators.
-- **Filter Chips**: Horizontal scrollable `GlassChip` row for quick toggling between Movie, TV Series, Anime, and active CloudStream providers.
-- **Unified Search Grid**: 3-column grid of liquid `GlassCard` items displaying search results across all scrapers simultaneously, complete with provider origin tags.
-
-### Screen 3: Details Screen (`GlassmorphicMediaDetailSheet.kt`)
-- **Backdrop & Header**: Blurred hero backdrop image with fluid parallax scrolling into a floating glass details sheet.
-- **Synopsis & Info Card**: `GlassCard` holding overview text, cast avatars, rating badges, and resolution indicators.
-- **Season/Episode Selector**: Translucent tab bar for seasons, leading into a list of episode cards with thumbnail preview, title, duration, and direct stream resolver status.
-
-### Screen 4: REX Player Screen (`PlayerActivity.kt` / MPV Overlay)
-- **Ultra-Light Liquid Glass HUD**: Auto-hiding HUD (3-second timeout) rendered with hardware-accelerated translucent glass overlays.
-- **Playback Controls**: Central floating `GlassButton` play/pause/seek controls with neon cyan/magenta halo glow.
-- **Scrubber Bar**: Custom liquid glass progress bar with glowing position handle and video preview thumbnail card.
-- **Track Sheet**: `GlassmorphicSheet` for audio stream and subtitle track selection with real-time selection feedback.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Max Stream Prismal Architecture                  │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │  Jetpack Compose Prismal UI Components (Cards, Buttons, Nav)   │   │
+│   └──────────────────────────────┬─────────────────────────────────┘   │
+│                                  │                                     │
+│   ┌──────────────────────────────▼─────────────────────────────────┐   │
+│   │   PrismalAGSL Shader Engine (Chromatic Dispersion & Refraction)  │   │
+│   └──────────────────────────────┬─────────────────────────────────┘   │
+│                                  │                                     │
+│   ┌──────────────────────────────▼─────────────────────────────────┐   │
+│   │   AndroidView OpenGL ES Prismal Backdrop Surface (Live Glow)    │   │
+│   └────────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 5. Performance & Compatibility Optimization
+## 2. User Experience & Visual Design
 
-1. **Hardware Acceleration**:
-   - AGSL shaders operate directly on GPU graphics pipelines on Android 13+ (API 33+).
-   - Pre-Android 13 devices dynamically switch to optimized `RenderEffect` / hardware layer matrix blurs to guarantee 60 FPS video playback without dropped frames.
+### Key User Flows
+1. **Home Screen (CineHub)**: High-impact hero carousel floating over an animated liquid mesh backdrop, with Ultra Liquid glass poster cards, glass section headers, and a floating glass bottom navigation bar.
+2. **Search Screen**: Glass search bar with live refractive focus ring, liquid filter chips with active specular glow, and an aligned media poster grid.
+3. **Media Details Sheet**: Parallax media backdrop, translucent glass synopsis card, floating play/bookmark glass buttons, and a liquid season/episode selector.
+4. **REX Player Overlay**: Ultra-light liquid glass HUD that auto-hides after 3 seconds, floating glass transport controls with ripple feedback, custom glass seekbar with glowing scrubber thumb, and glass track sheets (Audio, Subtitles, Quality).
+5. **Secondary Screens (Downloads, Cloud Sync, Settings, Auth)**: Fully converted to Prismal glass cards, liquid list tiles, glass switch toggles, and frosted dialog surfaces.
 
-2. **Overlay Optimization in REX Player**:
-   - HUD overlays utilize dedicated View-based OpenGL ES layers (`Prismal`) or lightweight Compose `GraphicsLayer` invalidate-on-change modifiers to avoid unnecessary recompositions during MPV video rendering.
-
-3. **Memory Management**:
-   - Reuse shader instances and cached bitmap surfaces in `LiquidGlassSurface` to prevent allocations during scroll gestures.
+### Visual Identity & Theme Tokens
+- **Primary Refraction Tint**: `Color(0x3812131D)` (Deep Translucent Obsidian)
+- **Specular Border Accent**: `Color(0x40FFFFFF)` to `Color(0x8000F2FE)` (Gradient Cyan Glow)
+- **Primary Glow**: `#00F2FE` (Neon Cyan) & `#4FACFE` (Electric Blue)
+- **Surface Geometry**: Continuous rounded corners (`18.dp` to `28.dp`), 1.5.dp specular borders, and dynamic noise texture overlays.
 
 ---
 
-## 6. Phased Implementation Roadmap
+## 3. Comprehensive Component & Screen Remake Strategy
 
-- **Phase 1: Foundation & Core Glass Design System**
-  - Configure Gradle dependencies and repository setups.
-  - Create core `xyz.mpv.rex.ui.theme.glass` component suite (`LiquidGlassSurface`, `GlassCard`, `GlassSearchBar`, `GlassBottomNavBar`, `GlassButton`).
+### Core Reusable Prismal Component Library
+- **`PrismalAGSLShader.kt`**: AGSL RuntimeShader providing true physical chromatic dispersion, noise grain, and light sweeps on Android 13+, with 60 FPS fallback shaders for older devices.
+- **`GlassModifier.kt`**: Universal `prismalLiquidGlass()` modifier applying refractive borders, surface elevation, and background distortion to any Compose node.
+- **`MaxStreamGlassComponents.kt`**: Standardized `GlassCard`, `GlassButton`, `GlassSearchBar`, `GlassChip`, `GlassBottomNavBar`, `GlassDialog`, and `GlassTextField`.
 
-- **Phase 2: Home Screen Overhaul**
-  - Implement liquid hero carousel, glass poster cards, and floating glass bottom navigation bar in `CineHubScreen.kt`.
+### Screen Remake Mapping
+1. **CineHub Main Browser (`CineHubScreen.kt`)**: Replaced all flat containers with `PrismalAGSL` glass surfaces, liquid poster cards (`MaxStreamPosterCard`), and a glass floating navigation rail.
+2. **Search Engine (`MaxStreamLiquidGlassSearch.kt`)**: Replaced standard input fields with refractive glass search bars and liquid category chips.
+3. **Media Details (`GlassmorphicMediaDetailSheet.kt`)**: Enhanced synopsis sheets, episode grids, and provider buttons with full Prismal glass rendering.
+4. **REX Player Controls (`PlayerControlsPortrait.kt`, `PlayerControlsLandscape.kt`, `ControlsButton.kt`, `Seekbar.kt`)**: Wrapped transport controls, time labels, and gesture overlays in ultra-light liquid glass HUD layers with 3s auto-fade.
+5. **Sheets & Panels (`PlayerSheets.kt`, `PlayerPanels.kt`, `AudioTracksSheet.kt`, `SubtitleTracksSheet.kt`)**: Fully converted modal bottom sheets and side panels to glass dialogs.
 
-- **Phase 3: Unified Glass Search Screen**
-  - Build `CineHubSearchScreen.kt` with glass search input, filter chips, and unified grid results.
+---
 
-- **Phase 4: Glassmorphic Details Sheet**
-  - Update `GlassmorphicMediaDetailSheet.kt` with backdrop parallax, synopsis glass cards, and season/episode selector.
+## 4. Technical Architecture & Verification Plan
 
-- **Phase 5: REX Player Liquid HUD & Controls**
-  - Refactor `PlayerActivity` controls overlay with 3-second auto-hiding glass HUD, video scrubber, and audio/subtitle track selector sheet.
+### Architecture Diagram
+```
+┌─────────────────┐       ┌───────────────────────┐       ┌────────────────────┐
+│ CineHub / Player│ ───>  │  prismalLiquidGlass   │ ───>  │ PrismalAGSLShader  │
+│  Compose Views  │       │       Modifier        │       │ (Android 13+ AGSL) │
+└─────────────────┘       └───────────────────────┘       └─────────┬──────────┘
+         │                                                          │
+         │                                              ┌───────────▼──────────┐
+         └────────────────────────────────────────────> │  60 FPS Fallback     │
+                                                        │ (RenderEffect / Canvas)│
+                                                        └──────────────────────┘
+```
 
-- **Phase 6: Compilation, Verification & Fine-Tuning**
-  - Compile applet, test smooth rendering, verify performance across screens, and confirm zero build or runtime errors.
+### Verification Checklist
+1. Build check via `compile_applet` after all file edits to confirm zero syntax or dependency errors.
+2. Verify edge-to-edge system insets handling and minimum 48dp touch targets across all Prismal glass buttons.
+3. Verify backward compatibility on earlier Android versions without dropping frame rates.
