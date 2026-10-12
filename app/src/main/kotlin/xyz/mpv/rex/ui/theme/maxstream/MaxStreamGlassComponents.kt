@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import xyz.mpv.rex.ui.theme.glass.prismalLiquidGlass
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -132,6 +133,12 @@ fun MaxStreamGlassCard(
                 clip = false
             )
             .clip(shape)
+            .prismalLiquidGlass(
+                shape = shape,
+                tint = bg,
+                borderColor = borderCol,
+                borderWidth = borderWidth
+            )
             .background(bg)
             .border(width = borderWidth, color = borderCol, shape = shape)
             .then(

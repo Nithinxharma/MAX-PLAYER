@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import xyz.mpv.rex.ui.theme.glass.prismalLiquidGlass
 
 /**
  * MaxStreamGlassCard renders an acrylic frosted glass surface
@@ -60,6 +61,11 @@ fun MaxStreamGlassCard(
         modifier = modifier
             .scale(scale)
             .clip(shape)
+            .prismalLiquidGlass(
+                shape = shape,
+                tint = tint,
+                borderWidth = borderWidth
+            )
             .background(backgroundBrush)
             .border(borderWidth, borderBrush, shape)
             .then(

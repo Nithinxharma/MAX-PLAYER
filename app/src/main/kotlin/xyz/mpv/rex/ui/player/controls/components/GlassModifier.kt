@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import xyz.mpv.rex.ui.theme.glass.prismalLiquidGlass
 
 /**
  * GPU-accelerated Glass Surface Modifier that renders directional specular highlights
@@ -109,6 +110,12 @@ fun Modifier.intelligentGlassEffect(
     borderWidth: Dp = 1.dp
 ): Modifier = this
     .clip(shape)
+    .prismalLiquidGlass(
+        shape = shape,
+        tint = backgroundColor,
+        borderColor = borderColor,
+        borderWidth = borderWidth
+    )
     .glassSurface(
         shape = shape,
         backgroundColor = backgroundColor,
