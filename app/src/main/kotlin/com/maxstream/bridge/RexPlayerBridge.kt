@@ -7,7 +7,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorManager
+import com.lagradost.cloudstream3.utils.loadExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CopyOnWriteArrayList
@@ -41,17 +41,17 @@ object RexPlayerBridge {
             provider.loadLinks(
                 data = dataToken,
                 isCasting = isCasting,
-                subtitleCallback = { sub -> extractedSubs.add(sub) },
-                callback = { link -> extractedLinks.add(link) }
+                subtitleCallback = { sub: SubtitleFile -> extractedSubs.add(sub) },
+                callback = { link: ExtractorLink -> extractedLinks.add(link) }
             )
 
             // 2. If dataToken is a direct video host URL and no links were added, try direct Extractor resolution
             if (extractedLinks.isEmpty() && (dataToken.startsWith("http://") || dataToken.startsWith("https://"))) {
-                ExtractorManager.loadExtractor(
+                loadExtractor(
                     url = dataToken,
-                    referer = null,
-                    subtitleCallback = { sub -> extractedSubs.add(sub) },
-                    callback = { link -> extractedLinks.add(link) }
+                    referer = "",
+                    subtitleCallback = { sub: SubtitleFile -> extractedSubs.add(sub) },
+                    callback = { link: ExtractorLink -> extractedLinks.add(link) }
                 )
             }
         } catch (t: Throwable) {

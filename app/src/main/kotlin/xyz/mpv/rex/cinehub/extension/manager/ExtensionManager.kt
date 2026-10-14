@@ -23,6 +23,7 @@ import xyz.mpv.rex.cinehub.extension.model.InstalledExtension
 import xyz.mpv.rex.cinehub.extension.model.PluginUpdateInfo
 import xyz.mpv.rex.cinehub.extension.util.LanguageUtils
 import xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
+import com.maxstream.bridge.*
 import xyz.mpv.rex.database.MpvExDatabase
 import java.io.File
 import java.lang.reflect.Constructor
@@ -70,16 +71,16 @@ class ExtensionManager(
     init {
         Log.i("ExtensionManager", "INSTANCE_IDENTITY: ExtensionManager initialized. identityHashCode=${System.identityHashCode(this)}, ProviderRegistry.identityHashCode=${System.identityHashCode(registry)}, APIHolder.identityHashCode=${System.identityHashCode(com.lagradost.cloudstream3.APIHolder)}")
         if (!extensionDir.exists()) extensionDir.mkdirs()
-        com.lagradost.cloudstream3.AcraApplication.init(context)
+        CloudStreamEngine.init(context)
         xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.initialize(context)
 
         // Immediate reactive bridge: when any plugin registers MainAPI, instantly register in ProviderRegistry
-        com.lagradost.cloudstream3.APIHolder.onApiAddedListener = { api ->
+        com.lagradost.cloudstream3.APIHolder.onApiAddedListener = { api: com.lagradost.cloudstream3.MainAPI ->
             val adapter = CloudstreamMainApiAdapter(api)
             registry.register(adapter, isEnabledByDefault = true)
             Log.i("ExtensionManager", "Reactively registered provider to ProviderRegistry: ${api.name}")
         }
-        com.lagradost.cloudstream3.APIHolder.onApiRemovedListener = { api ->
+        com.lagradost.cloudstream3.APIHolder.onApiRemovedListener = { api: com.lagradost.cloudstream3.MainAPI ->
             registry.unregister(api.name)
             Log.i("ExtensionManager", "Reactively unregistered provider from ProviderRegistry: ${api.name}")
         }

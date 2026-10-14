@@ -4,7 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lagradost.cloudstream3.APIHolder
-import com.lagradost.cloudstream3.searchSafe
+import com.maxstream.bridge.*
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.Episode
@@ -159,14 +159,16 @@ class CineHubViewModel : ViewModel() {
             if (provider == null) {
                 Log.e(TAG, "Provider not found: $providerName")
                 if (fallbackItem != null) {
-                    _selectedMediaDetails.value = MovieLoadResponse(
-                        name = fallbackItem.name,
-                        url = fallbackItem.url,
-                        apiName = fallbackItem.apiName.ifBlank { providerName },
-                        type = fallbackItem.type ?: TvType.Movie,
-                        dataUrl = fallbackItem.url,
-                        posterUrl = fallbackItem.posterUrl,
-                        backgroundPosterUrl = fallbackItem.posterUrl
+                    _selectedMediaDetails.value = xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createMovie(
+                        fallbackItem.name,
+                        fallbackItem.url,
+                        fallbackItem.apiName.ifBlank { providerName },
+                        fallbackItem.type ?: TvType.Movie,
+                        fallbackItem.url,
+                        fallbackItem.posterUrl,
+                        null,
+                        null,
+                        fallbackItem.posterUrl
                     )
                 }
                 _isLoadingDetails.value = false
@@ -200,14 +202,16 @@ class CineHubViewModel : ViewModel() {
                 }
                 details
             } else if (fallbackItem != null) {
-                MovieLoadResponse(
-                    name = fallbackItem.name,
-                    url = fallbackItem.url,
-                    apiName = fallbackItem.apiName.ifBlank { providerName },
-                    type = fallbackItem.type ?: TvType.Movie,
-                    dataUrl = fallbackItem.url,
-                    posterUrl = fallbackItem.posterUrl,
-                    backgroundPosterUrl = fallbackItem.posterUrl
+                xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createMovie(
+                    fallbackItem.name,
+                    fallbackItem.url,
+                    fallbackItem.apiName.ifBlank { providerName },
+                    fallbackItem.type ?: TvType.Movie,
+                    fallbackItem.url,
+                    fallbackItem.posterUrl,
+                    null,
+                    null,
+                    fallbackItem.posterUrl
                 )
             } else {
                 null

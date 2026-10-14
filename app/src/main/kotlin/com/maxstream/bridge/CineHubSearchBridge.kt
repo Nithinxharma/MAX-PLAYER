@@ -5,7 +5,6 @@ import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.searchSafe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -35,11 +34,11 @@ object CineHubSearchBridge {
      * Executes parallel search across all active providers in APIHolder.
      */
     suspend fun searchAll(query: String): List<CineHubSearchResult> = withContext(Dispatchers.IO) {
-        val providers = APIHolder.apis.toList()
+        val providers: List<MainAPI> = APIHolder.apis.toList()
         if (providers.isEmpty() || query.isBlank()) return@withContext emptyList()
 
         val tasks = providers.map { provider ->
-            async {
+            async<List<SearchResponse>> {
                 try {
                     withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
                         provider.searchSafe(query)

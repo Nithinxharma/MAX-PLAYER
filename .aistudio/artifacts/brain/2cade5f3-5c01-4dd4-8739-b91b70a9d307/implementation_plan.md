@@ -1,89 +1,108 @@
-# Restore Working CineDetailBottomSheet & Media Details View
+# Integration of CloudStream Core AAR Libraries & Legacy Cleanup
 
-Restore the proven working `CineDetailView`, `CineDetailBottomSheet`, and associated media sheets (`QualitySelectorBottomSheet`, `StreamDiagnosticCard`, `KodiScraperBottomSheet`, `ProviderSelectorSheet`) from the user's provided code across all CineHub screens.
+A comprehensive blueprint to decommission embedded and duplicated CloudStream source files and wire compiled local AAR libraries (`app-release.aar`, `library.aar`, and `shared.aar`) into Max Stream as the headless streaming and scraping engine.
 
-## User Review & Critical Decisions
+---
+
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The user provided the complete source code of the last known working `CineDetailView` / `CineDetailBottomSheet` implementation. This plan restores this exact implementation and integrates it across all screens.
+> The architectural decisions below incorporate your answers to ensure flawless build and runtime parity.
 
-- **Confirmed Decision**: Revert `CineDetailBottomSheet` / `CineDetailView` to the user's attached implementation containing 16:9 YouTube-style banner, TMDB/Scraper metadata, Top Cast carousel, Library dropdown menu, TV episode browser with season selector, stream quality sheet, and failure diagnostics card.
+- **AAR Binary Selection**: Using `app/libs/app-release.aar`, `library.aar`, and `shared.aar` for clean release-grade optimization.
+- **Application Class Entrypoint**: Retaining `xyz.mpv.rex.MaxStreamApp` which directly inherits from `com.lagradost.cloudstream3.AcraApplication`, preserving Koin dependency injection, image loading caches, crash logging, and lifecycle setup.
+- **Provider Aggregation Strategy**: Implementing dynamic multi-provider search across all installed plugins while supporting `TmdbProvider` as a foundational baseline with Cloudflare and Google DNS resolution.
 
-## 1. Overview & Core Concept
+---
 
-- **What It Does**: When any movie, TV show, or clip poster is selected in CineHub (Home, Search, or Library/Unified Media screens), it presents the full-featured liquid glass media detail view/sheet with complete playback capabilities, episode extraction, provider selection, and stream link quality options.
-- **Key Value**: Guarantees rich, interactive metadata and 1-tap stream playback without missing controls, blank sheets, or broken episode lists.
+### 1. Overview & Core Concept
 
-## 2. User Experience & Visual Design
+- **What It Does**: Replaces thousands of lines of copied and out-of-sync Kotlin sources in `com.lagradost.*` with pre-compiled, optimized Android Archive (`.aar`) binaries. This provides a headless core engine capable of executing CloudStream plugins, running HTML extractors (Rhino JS, Jsoup, Ksoup), resolving video streams, and querying providers in parallel.
+- **Target Audience / Persona**: Users seeking fast, resilient media streaming with unified search across providers without build conflicts, runtime class duplication, or crashes.
+- **Key Value**: Drastically reduces build times, prevents duplicate class collision errors, enforces stable AAR interfaces, and enables seamless plugin and extractor execution.
 
-- **YouTube-Style 16:9 Banner Header**:
-  - Instant Play button with animated progress indicator during link resolution.
-  - Top right 1080p HD quality badge and status pill.
-- **Rich Media & Metadata Layout**:
-  - Poster thumbnail, title, TMDB badge, release year, genre tag, and rating stars.
-  - Expandable overview/synopsis text.
-  - Top Cast carousel with circular actor avatars and character names.
-  - "Add to Library" dropdown menu with watch statuses ("Watchlist", "Watching", "Completed", "Dropped").
-- **Movie & TV Show Actions**:
-  - Movies: Primary "Play Movie" button + "Scrape Online" metadata enrichment button.
-  - TV Shows: Dynamic Season Filter chips ("Season 1", "Season 2"), episode cards with video stills, season/episode labels, synopses, and play triggers.
-- **Stream Link Quality & Failure Diagnostics**:
-  - `QualitySelectorBottomSheet`: Select HLS (M3U8) or direct HTTP stream links sorted by resolution.
-  - `StreamDiagnosticCard`: Clear root cause diagnosis (DNS ISP blocks, Cloudflare 403, timeout) with retry and error log copy triggers.
-- **Floating Glass Top Navigation**:
-  - Minimize button (`KeyboardArrowDown`) and swipe-down drag handle.
+---
 
-## 3. Key Product Decisions & Trade-Offs
+### 2. User Experience & Visual Design
 
-- **Decision 1: Restoring Attached `CineDetailView` Implementation**
-  - *Chosen Approach*: Replace the current bottom sheet logic with the attached `CineDetailView` and `CineDetailBottomSheet` composables.
-  - *Why*: Ensures 100% feature parity with the last fully-working version, restoring episode browsing, online scraping, TMDB metadata enrichment, and stream quality selection.
-- **Decision 2: Consistent Wiring Across All CineHub Entry Points**
-  - *Chosen Approach*: Wire `CineDetailBottomSheet` / `CineDetailView` in `CineHubScreen.kt`, `CineHubSearchScreen.kt`, and `CineHubUnifiedMediaScreen.kt`.
-  - *Why*: Provides uniform UX regardless of whether a user clicks a movie on the home carousel, search results grid, or library watchlist.
+- **Key User Flows**:
+  - **Search & Discovery**: User enters a query into CineHub search; parallel queries dispatch across registered providers (including TMDB and active plugins) with unified result cards and failure isolation.
+  - **Details & Episode Selection**: Selecting media loads seasons, episode lists, plot descriptions, and poster artwork directly mapped from provider models into Compose cards.
+  - **Stream Resolution & Playback**: Clicking an episode initiates extractor resolution (`loadExtractor`) to fetch direct video streams (`.m3u8`, `.mp4`) and subtitle tracks, directly handing off playback to the REX MPV player.
+- **Visual & UI Polish**: Existing Material 3 theme, dark-mode styling, responsive episode grids, and error state toasts are preserved without regressions.
 
-## 4. Technical Architecture & Component Structure
+---
+
+### 3. Key Product Decisions & Trade-Offs
+
+- **Decision 1: Complete Removal of `app/src/main/kotlin/com/lagradost`**
+  - *Chosen Approach*: Fully delete the local `com.lagradost.cloudstream3.*` and `com.lagradost.api.*` source directories.
+  - *Why*: The compiled classes in `app-release.aar`, `library.aar`, and `shared.aar` provide the complete implementation. Retaining source files creates `Duplicate class com.lagradost... found in modules` fatal DEX errors.
+  - *Alternatives Considered*: Retaining selective source overrides was rejected because it introduces ABI mismatches with the compiled AAR bytecode.
+
+- **Decision 2: Gradle Repository & Desugaring Alignment**
+  - *Chosen Approach*: Enable Java 8+ core library desugaring (`isCoreLibraryDesugaringEnabled = true` with `desugar_jdk_libs:2.1.4`) and configure JitPack in `settings.gradle.kts` to allow `com.github.Bliss23`.
+  - *Why*: The AARs and NiceHttp require Java 8+ time/stream APIs on devices below API 34 and rely on Bliss23's NiceHttp client on JitPack.
+  - *Alternatives Considered*: Shimming HTTP calls manually was rejected as NiceHttp is internally bound inside CloudStream's network layer.
+
+- **Decision 3: Retaining MaxStreamApp with AcraApplication Inheritance**
+  - *Chosen Approach*: Keep `MaxStreamApp : AcraApplication()` in `AndroidManifest.xml`.
+  - *Why*: MaxStreamApp provides Koin DI, Coil image caching, locale switching, and crash management while initializing `AcraApplication` as its base class.
+
+---
+
+### 4. Technical Architecture & Data Strategy
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        CineHub Media Detail Flow                       │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  [ Home Carousel / Search Grid / Watchlist Card ]                      │
-│                          │                                             │
-│                          ▼ (onItemClick)                               │
-│              [ CineDetailBottomSheet / Screen ]                        │
-│                          │                                             │
-│                          ▼                                             │
-│                   [ CineDetailView ]                                   │
-│    ┌─────────────────────┼─────────────────────┐                       │
-│    │                     │                     │                       │
-│    ▼                     ▼                     ▼                       │
-│ [ 16:9 Banner ]  [ Meta / Cast ]     [ Season & Episode ]              │
-│  Instant Play      TMDB Enrichment     Online Scrape & Eps             │
-│    │                     │                     │                       │
-│    └─────────────────────┼─────────────────────┘                       │
-│                          │                                             │
-│                          ▼                                             │
-│         [ Stream Extraction / Provider Stream ]                        │
-│             /                        \                                 │
-│            ▼                          ▼                                │
-│ [ QualitySelectorSheet ]     [ StreamDiagnosticCard ]                  │
-│    (Multi-quality links)         (ISP / Cloudflare / DNS Error)        │
-│            │                          │                                │
-│            └─────────────┬────────────┘                                │
-│                          ▼                                             │
-│               [ REX MPV Player Launch ]                                │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Max Stream Presentation                   │
+│   (Jetpack Compose UI: CineHubScreen, SearchScreen, Player)  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Bridge Layer (com.maxstream.bridge)         │
+│  ┌─────────────────────────┐   ┌──────────────────────────┐ │
+│  │   CloudStreamEngine     │   │   CineHubSearchBridge    │ │
+│  │   (Init, DNS, Plugins)  │   │   (Multi-Provider Flow)  │ │
+│  └─────────────────────────┘   └──────────────────────────┘ │
+│  ┌─────────────────────────┐   ┌──────────────────────────┐ │
+│  │   CineHubDetailsBridge  │   │   RexPlayerBridge        │ │
+│  │   (Metadata & Episodes) │   │   (Stream Link Extractor)│ │
+│  └─────────────────────────┘   └──────────────────────────┘ │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Headless AAR Core Engine                    │
+│  ┌──────────────────────────┐  ┌──────────────────────────┐ │
+│  │ app-release.aar          │  │ library.aar & shared.aar │ │
+│  │ (CloudStream core/engine)│  │ (Base models, utils, API)│ │
+│  └──────────────────────────┘  └──────────────────────────┘ │
+│  Transitive: NiceHttp, Jsoup, Ksoup, Rhino, Kotlinx.Serial  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Steps
+#### Detailed Execution Phases:
 
-1. **Audit & Restore `CineDetailView` & `CineDetailBottomSheet`**:
-   - Restore `CineDetailView`, `CineDetailBottomSheet`, `QualitySelectorBottomSheet`, `StreamDiagnosticCard`, `KodiScraperBottomSheet`, and `ProviderSelectorSheet` in `CineHubScreen.kt` using the attached code.
-2. **Restore State Holders**:
-   - Verify `CineDetailScreen` and `CineDetailStateHolder` for full-screen handoff if used.
-3. **Wire Event Handlers**:
-   - Ensure poster clicks in `CineHubScreen`, `CineHubSearchScreen`, and `CineHubUnifiedMediaScreen` open `CineDetailBottomSheet` / `CineDetailView`.
-4. **Verification**:
-   - Compile the project using `compile_applet` to confirm clean build.
+1. **Phase 1: Source Cleanup**
+   - Delete legacy source tree `app/src/main/kotlin/com/lagradost`.
+   - Audit and confirm no conflicting duplicate extractors or provider models remain.
+
+2. **Phase 2: Gradle & Repository Configuration**
+   - Update `settings.gradle.kts` to permit `com.github.Bliss23` in JitPack repository filters.
+   - Update `app/build.gradle.kts`:
+     - Set Java 17 compatibility and `isCoreLibraryDesugaringEnabled = true`.
+     - Link `files("libs/app-release.aar")`, `files("libs/library.aar")`, and `files("libs/shared.aar")`.
+     - Add transitive dependencies: `com.github.Bliss23:nicehttp:0.4.11`, `org.jsoup:jsoup:1.18.1`, `com.fleeksoft.ksoup:ksoup:0.2.2`, `org.mozilla:rhino:1.7.15`, and `desugar_jdk_libs:2.1.4`.
+
+3. **Phase 3: Manifest & Proguard Configuration**
+   - Verify `AndroidManifest.xml` has required permissions (`INTERNET`, `ACCESS_NETWORK_STATE`) and `android:name=".MaxStreamApp"`.
+   - Update `app/proguard-rules.pro` with explicit rules for Rhino, Ksoup, Jsoup, and KotlinX serialization annotations.
+
+4. **Phase 4: Bridge & Engine Validation**
+   - Validate `CloudStreamEngine`, `CineHubSearchBridge`, `CineHubDetailsBridge`, and `RexPlayerBridge` against the AAR classes.
+   - Ensure DNS setup (`addCloudFlareDns`, `addGoogleDns`) and dynamic multi-provider search with fallback work seamlessly.
+
+5. **Phase 5: Build Verification**
+   - Run `compile_applet` to confirm clean compilation and zero duplicate class errors.

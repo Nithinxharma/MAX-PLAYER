@@ -134,8 +134,14 @@ object MaxStreamMetadataHelper {
                 if (item.audioTracks.size > 1) {
                     "MULTI AUDIO"
                 } else if (item.audioTracks.isNotEmpty()) {
-                    val lang = item.audioTracks.first().lang.uppercase()
-                    if (lang.isNotBlank() && lang != "UND") "DUB ($lang)" else "DUB"
+                    val track = item.audioTracks.first()
+                    val langStr = try {
+                        val method = track.javaClass.methods.firstOrNull { it.name == "getLang" || it.name == "getLanguage" }
+                        (method?.invoke(track) as? String) ?: track.toString()
+                    } catch (t: Throwable) {
+                        track.toString()
+                    }.uppercase()
+                    if (langStr.isNotBlank() && langStr != "UND") "DUB ($langStr)" else "DUB"
                 } else {
                     extractDubSubFromText(item.name)
                 }

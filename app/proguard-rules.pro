@@ -247,3 +247,16 @@
 -keep interface com.lagradost.nicehttp.** { *; }
 -keepclassmembers class com.lagradost.nicehttp.** { *; }
 
+# AAR Engine Rules
+-keep class com.lagradost.cloudstream3.** { *; }
+-keep interface com.lagradost.cloudstream3.** { *; }
+
+-keepattributes *Annotation*,Signature,InnerClasses
+-keepclassmembers class * {
+    @kotlinx.serialization.SerialName <fields>;
+    @kotlinx.serialization.Serializable <fields>;
+}
+
+-keep class org.mozilla.javascript.** { *; }
+-keep class org.jsoup.** { *; }
+-keep class com.fleeksoft.ksoup.** { *; }

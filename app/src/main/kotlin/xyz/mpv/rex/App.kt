@@ -38,10 +38,9 @@ import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.annotation.KoinExperimentalAPI
-import com.lagradost.cloudstream3.AcraApplication
 
 @OptIn(KoinExperimentalAPI::class, kotlinx.coroutines.FlowPreview::class)
-class App : AcraApplication(), ImageLoaderFactory {
+class App : Application(), ImageLoaderFactory {
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
   private val metadataCache: VideoMetadataCacheRepository by inject()
   private val hybridMediaIndex: HybridMediaIndexRepository by inject()
@@ -55,6 +54,12 @@ class App : AcraApplication(), ImageLoaderFactory {
 
   override fun attachBaseContext(base: Context) {
     super.attachBaseContext(xyz.mpv.rex.utils.locale.LocaleHelper.wrapContext(base))
+    runCatching {
+      val companion = com.lagradost.cloudstream3.CloudStreamApp.Companion
+      val method = companion::class.java.getDeclaredMethod("setContext", Context::class.java)
+      method.isAccessible = true
+      method.invoke(companion, this)
+    }
   }
 
   override fun newImageLoader(): ImageLoader {

@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
+
 package xyz.mpv.rex.ui.browser.search
 
 import android.app.Application

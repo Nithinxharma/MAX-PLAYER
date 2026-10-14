@@ -15,7 +15,6 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
-import com.lagradost.cloudstream3.AcraApplication
 import `is`.xyz.mpv.FastThumbnails
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,13 +34,15 @@ import xyz.mpv.rex.di.PreferencesModule
 import xyz.mpv.rex.presentation.crash.CrashActivity
 import xyz.mpv.rex.presentation.crash.GlobalExceptionHandler
 
+import android.app.Application
+
 /**
  * MaxStreamApp is the unified application entrypoint for Max Stream (CineHub + REX Player).
- * Inherits directly from CloudStream's AcraApplication, ensuring all CloudStream 3 singletons,
- * context references, NiceHttp network stacks, and plugin runtime environments are cleanly initialized.
+ * Initializes all CloudStream 3 singletons, context references, NiceHttp network stacks,
+ * and plugin runtime environments cleanly.
  */
 @OptIn(KoinExperimentalAPI::class, kotlinx.coroutines.FlowPreview::class)
-class MaxStreamApp : AcraApplication(), ImageLoaderFactory {
+class MaxStreamApp : Application(), ImageLoaderFactory {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val metadataCache: VideoMetadataCacheRepository by inject()
     private val hybridMediaIndex: HybridMediaIndexRepository by inject()
@@ -55,6 +56,12 @@ class MaxStreamApp : AcraApplication(), ImageLoaderFactory {
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(xyz.mpv.rex.utils.locale.LocaleHelper.wrapContext(base))
+        runCatching {
+            val companion = com.lagradost.cloudstream3.CloudStreamApp.Companion
+            val method = companion::class.java.getDeclaredMethod("setContext", Context::class.java)
+            method.isAccessible = true
+            method.invoke(companion, this)
+        }
     }
 
     override fun newImageLoader(): ImageLoader {

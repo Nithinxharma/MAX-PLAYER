@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.maxstream.bridge
 
 import android.util.Log
@@ -76,7 +77,7 @@ object CineHubDetailsBridge {
                         episode = 1,
                         posterUrl = response.posterUrl,
                         plot = response.plot,
-                        rating = response.rating
+                        rating = response.score?.toInt()
                     )
                 )
             }
@@ -120,7 +121,7 @@ object CineHubDetailsBridge {
             plot = response.plot,
             year = response.year,
             tags = response.tags ?: emptyList(),
-            rating = response.rating,
+            rating = response.score?.toInt(),
             duration = response.duration,
             episodes = episodesList,
             streamDataUrl = streamDataUrl
@@ -135,7 +136,7 @@ object CineHubDetailsBridge {
             episode = ep.episode,
             posterUrl = ep.posterUrl,
             plot = ep.description,
-            rating = ep.rating
+            rating = ep.score?.toInt()
         )
     }
 }

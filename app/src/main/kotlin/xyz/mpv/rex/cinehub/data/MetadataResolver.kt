@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
+
 package xyz.mpv.rex.cinehub.data
 
 import com.lagradost.cloudstream3.LoadResponse
@@ -141,9 +143,9 @@ object MetadataResolver {
             is TvShowItem -> item.userRating
             is TMDBMovieNode -> item.vote_average
             is TMDBTvNode -> item.vote_average
-            is ExtensionMediaDetails -> item.loadResponse.score?.score ?: 0.0
-            is LoadResponse -> item.score?.score ?: 0.0
-            is SearchResponse -> item.score?.score ?: 0.0
+            is ExtensionMediaDetails -> (item.loadResponse.rating as? Number)?.toDouble() ?: 0.0
+            is LoadResponse -> (item.rating as? Number)?.toDouble() ?: 0.0
+            is SearchResponse -> 0.0
             else -> 0.0
         }
 

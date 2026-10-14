@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import xyz.mpv.rex.cinehub.extension.api.CloudstreamMainApiAdapter
+import com.maxstream.bridge.*
 import java.io.File
 import java.lang.reflect.Constructor
 import java.util.concurrent.ConcurrentHashMap

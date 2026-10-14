@@ -2,7 +2,7 @@ package xyz.mpv.rex.cinehub.extension.api
 
 import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
-import com.lagradost.cloudstream3.searchSafe
+import com.maxstream.bridge.*
 import com.lagradost.cloudstream3.MainAPI as CsMainAPI
 import com.lagradost.cloudstream3.TvType as CsTvType
 
@@ -284,5 +284,6 @@ class CloudstreamMainApiAdapter(private val api: CsMainAPI) : CineHubProvider {
         CsTvType.Live -> TvType.LiveTv
         CsTvType.NSFW -> TvType.Others
         CsTvType.Others -> TvType.Others
+        else -> TvType.Others
     }
 }

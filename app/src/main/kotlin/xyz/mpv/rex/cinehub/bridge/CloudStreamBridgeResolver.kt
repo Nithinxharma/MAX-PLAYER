@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
+
 package xyz.mpv.rex.cinehub.bridge
 
 import android.content.Context
@@ -71,7 +73,7 @@ object CloudStreamBridgeResolver {
                         overview = item.plot,
                         posterUrl = item.posterUrl,
                         backdropUrl = item.backgroundPosterUrl ?: item.posterUrl,
-                        rating = item.score?.score,
+                        rating = (item.rating as? Number)?.toDouble(),
                         year = item.year?.toString(),
                         runtime = item.duration?.let { "$it mins" },
                         genres = item.tags ?: emptyList(),
@@ -89,10 +91,7 @@ object CloudStreamBridgeResolver {
                     val provider = APIHolder.getApiFromNameNull(item.apiName)
                     val loaded = if (provider != null) {
                         try {
-                            when (val res = APIRepository(provider).load(item.url)) {
-                                is Resource.Success -> res.value
-                                else -> null
-                            }
+                            provider.load(item.url)
                         } catch (t: Throwable) {
                             Log.w(TAG, "Failed loading details for ${item.name}: ${t.message}")
                             null
@@ -110,7 +109,7 @@ object CloudStreamBridgeResolver {
                             overview = null,
                             posterUrl = item.posterUrl,
                             backdropUrl = item.posterUrl,
-                            rating = item.score?.score,
+                            rating = item.score?.toDouble(10),
                             year = itemYear,
                             runtime = null,
                             genres = item.type?.name?.let { listOf(it) } ?: emptyList(),
@@ -129,10 +128,7 @@ object CloudStreamBridgeResolver {
                         ?: APIHolder.getApiFromNameNull(item.providerId)
                     val loaded = if (provider != null) {
                         try {
-                            when (val res = APIRepository(provider).load(item.url)) {
-                                is Resource.Success -> res.value
-                                else -> null
-                            }
+                            provider.load(item.url)
                         } catch (t: Throwable) {
                             Log.w(TAG, "Failed loading CineHubSearchItem details: ${t.message}")
                             null
@@ -353,9 +349,10 @@ object CloudStreamBridgeResolver {
                 if (found != null) {
                     targetProvider = APIHolder.getApiFromNameNull(found.apiName)
                     val loaded = targetProvider?.let {
-                        when (val r = APIRepository(it).load(found.url)) {
-                            is Resource.Success -> r.value
-                            else -> null
+                        try {
+                            it.load(found.url)
+                        } catch (_: Throwable) {
+                            null
                         }
                     }
                     if (loaded is MovieLoadResponse) {
@@ -374,9 +371,8 @@ object CloudStreamBridgeResolver {
             }
 
             if (targetProvider != null && targetDataUrl.isNotBlank()) {
-                val repo = APIRepository(targetProvider)
                 try {
-                    repo.loadLinks(
+                    targetProvider.loadLinks(
                         data = targetDataUrl,
                         isCasting = false,
                         subtitleCallback = { sub ->
@@ -421,18 +417,13 @@ object CloudStreamBridgeResolver {
         val searchJobs = orderedApis.map { provider ->
             async {
                 try {
-                    val repo = APIRepository(provider)
-                    when (val res = repo.search(cleanTitle)) {
-                        is Resource.Success -> {
-                            res.value.list.firstOrNull { item ->
-                                val itemTypeIsMovie = item.type != TvType.TvSeries && item.type != TvType.Anime
-                                itemTypeIsMovie == isMovie && (
-                                    item.name.contains(cleanTitle, ignoreCase = true) ||
-                                    cleanTitle.contains(item.name, ignoreCase = true)
-                                )
-                            }
-                        }
-                        else -> null
+                    val list = provider.search(cleanTitle) ?: emptyList()
+                    list.firstOrNull { item ->
+                        val itemTypeIsMovie = item.type != TvType.TvSeries && item.type != TvType.Anime
+                        itemTypeIsMovie == isMovie && (
+                            item.name.contains(cleanTitle, ignoreCase = true) ||
+                            cleanTitle.contains(item.name, ignoreCase = true)
+                        )
                     }
                 } catch (_: Throwable) {
                     null
@@ -461,10 +452,7 @@ object CloudStreamBridgeResolver {
         val jobs = targetApis.map { provider ->
             async {
                 try {
-                    when (val res = APIRepository(provider).search(query.trim())) {
-                        is Resource.Success -> res.value.list
-                        else -> emptyList()
-                    }
+                    provider.search(query.trim()) ?: emptyList()
                 } catch (_: Throwable) {
                     emptyList()
                 }

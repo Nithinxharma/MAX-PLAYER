@@ -249,6 +249,7 @@ android {
   }
 
   compileOptions {
+    isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
@@ -312,15 +313,24 @@ configurations.all {
 }
 
 dependencies {
-  // CloudStream SDK & CSX Runtime Compatibility
-  implementation("org.mozilla:rhino:1.8.1")
-  implementation("androidx.browser:browser:1.8.0")
-  implementation("org.jsoup:jsoup:1.17.2")
-  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
-  implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
-  implementation("com.github.Blatzar:NiceHttp:0.4.18") {
+  // 1. Core AAR Binaries
+  implementation(files("libs/app-release.aar"))
+  implementation(files("libs/library.aar"))
+  implementation(files("libs/shared.aar"))
+
+  // 2. Transitive Libraries required by the AARs
+  implementation("com.github.Blatzar:NiceHttp:0.4.11") {
     exclude(group = "org.json", module = "json")
   }
+  implementation("org.jsoup:jsoup:1.18.1")
+  implementation("com.fleeksoft.ksoup:ksoup:0.2.2")
+  implementation("org.mozilla:rhino:1.7.15")
+  implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+  implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
+  implementation("androidx.browser:browser:1.8.0")
+
+  // 4. Java 8+ Desugaring
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
   implementation("io.coil-kt:coil-compose:2.6.0")
   implementation(libs.splashScreen)
@@ -494,5 +504,6 @@ tasks.matching { it.name.startsWith("assemble") }.configureEach {
   finalizedBy("ensureStandardApkFiles")
 }
 
-
-
+tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+  enabled = false
+}

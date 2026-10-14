@@ -3,6 +3,7 @@ package xyz.mpv.rex.ui.browser.cinehub
 import android.os.Environment
 import android.util.Log
 import android.widget.Toast
+import com.maxstream.bridge.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -146,16 +147,16 @@ fun loadExtensionItemDetails(
     val finalResponse: LoadResponse? = if (loadedResponse != null) {
       if (loadedResponse is com.lagradost.cloudstream3.AnimeLoadResponse) {
         val flattenedEps = loadedResponse.episodes.values.flatten().distinctBy { it.data }
-        TvSeriesLoadResponse(
-          name = loadedResponse.name.ifBlank { fallbackTitle.ifBlank { url } },
-          url = loadedResponse.url,
-          apiName = loadedResponse.apiName.ifBlank { providerName },
-          type = TvType.Anime,
-          episodes = flattenedEps,
-          posterUrl = loadedResponse.posterUrl ?: fallbackPoster,
-          year = loadedResponse.year ?: fallbackYear,
-          plot = loadedResponse.plot,
-          backgroundPosterUrl = loadedResponse.backgroundPosterUrl ?: loadedResponse.posterUrl ?: fallbackPoster
+        xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createTvSeries(
+          loadedResponse.name.ifBlank { fallbackTitle.ifBlank { url } },
+          loadedResponse.url,
+          loadedResponse.apiName.ifBlank { providerName },
+          TvType.Anime,
+          flattenedEps,
+          loadedResponse.posterUrl ?: fallbackPoster,
+          loadedResponse.year ?: fallbackYear,
+          loadedResponse.plot,
+          loadedResponse.backgroundPosterUrl ?: loadedResponse.posterUrl ?: fallbackPoster
         )
       } else {
         if (loadedResponse.name.isBlank() && fallbackTitle.isNotBlank()) {
@@ -181,62 +182,64 @@ fun loadExtensionItemDetails(
       }
       if (details != null) {
         if (details.type == xyz.mpv.rex.cinehub.extension.api.TvType.TvSeries || details.episodes.isNotEmpty()) {
-          TvSeriesLoadResponse(
-            name = details.title.ifBlank { fallbackTitle.ifBlank { url } },
-            url = details.url,
-            apiName = details.providerName.ifBlank { providerName },
-            type = TvType.TvSeries,
-            episodes = details.episodes.map { ep ->
-              Episode(
-                data = ep.data,
-                name = ep.name,
-                season = ep.season,
-                episode = ep.episode,
-                posterUrl = ep.posterUrl,
-                description = ep.description
+          xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createTvSeries(
+            details.title.ifBlank { fallbackTitle.ifBlank { url } },
+            details.url,
+            details.providerName.ifBlank { providerName },
+            TvType.TvSeries,
+            details.episodes.map { ep ->
+              xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createEpisode(
+                ep.data,
+                ep.name,
+                ep.season,
+                ep.episode,
+                ep.posterUrl,
+                ep.description
               )
             },
-            posterUrl = details.posterUrl ?: fallbackPoster,
-            year = details.year ?: fallbackYear,
-            plot = details.overview,
-            backgroundPosterUrl = details.backdropUrl ?: details.posterUrl ?: fallbackPoster
+            details.posterUrl ?: fallbackPoster,
+            details.year ?: fallbackYear,
+            details.overview,
+            details.backdropUrl ?: details.posterUrl ?: fallbackPoster
           )
         } else {
-          MovieLoadResponse(
-            name = details.title.ifBlank { fallbackTitle.ifBlank { url } },
-            url = details.url,
-            apiName = details.providerName.ifBlank { providerName },
-            type = TvType.Movie,
-            dataUrl = details.url,
-            posterUrl = details.posterUrl ?: fallbackPoster,
-            year = details.year ?: fallbackYear,
-            plot = details.overview,
-            backgroundPosterUrl = details.backdropUrl ?: details.posterUrl ?: fallbackPoster
+          xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createMovie(
+            details.title.ifBlank { fallbackTitle.ifBlank { url } },
+            details.url,
+            details.providerName.ifBlank { providerName },
+            TvType.Movie,
+            details.url,
+            details.posterUrl ?: fallbackPoster,
+            details.year ?: fallbackYear,
+            details.overview,
+            details.backdropUrl ?: details.posterUrl ?: fallbackPoster
           )
         }
       } else if (fallbackTitle.isNotBlank() || url.isNotBlank()) {
         val isTvFallback = fallbackType == TvType.TvSeries || fallbackType == TvType.Anime
         if (isTvFallback) {
-          TvSeriesLoadResponse(
-            name = fallbackTitle.ifBlank { url },
-            url = url,
-            apiName = providerName,
-            type = fallbackType,
-            episodes = emptyList(),
-            posterUrl = fallbackPoster,
-            year = fallbackYear,
-            backgroundPosterUrl = fallbackPoster
+          xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createTvSeries(
+            fallbackTitle.ifBlank { url },
+            url,
+            providerName,
+            fallbackType,
+            emptyList(),
+            fallbackPoster,
+            fallbackYear,
+            null,
+            fallbackPoster
           )
         } else {
-          MovieLoadResponse(
-            name = fallbackTitle.ifBlank { url },
-            url = url,
-            apiName = providerName,
-            type = fallbackType,
-            dataUrl = url,
-            posterUrl = fallbackPoster,
-            year = fallbackYear,
-            backgroundPosterUrl = fallbackPoster
+          xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createMovie(
+            fallbackTitle.ifBlank { url },
+            url,
+            providerName,
+            fallbackType,
+            url,
+            fallbackPoster,
+            fallbackYear,
+            null,
+            fallbackPoster
           )
         }
       } else null
@@ -329,14 +332,14 @@ fun extractAndPlayMovie(
         val streams = provider?.loadStreams(dataUrl) ?: emptyList()
         for (st in streams) {
           links.add(
-            com.lagradost.cloudstream3.utils.ExtractorLink(
-              source = provider?.name ?: "Extension",
-              name = st.name,
-              url = st.url,
-              referer = st.headers["Referer"] ?: "",
-              quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
-              isM3u8 = st.isM3u8,
-              headers = st.headers
+            xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createExtractorLink(
+              provider?.name ?: "Extension",
+              st.name,
+              st.url,
+              st.headers["Referer"] ?: "",
+              st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
+              if (st.isM3u8) com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8 else com.lagradost.cloudstream3.utils.ExtractorLinkType.VIDEO,
+              st.headers
             )
           )
         }
@@ -396,14 +399,14 @@ fun extractAndPlayEpisode(
         val streams = provider?.loadStreams(data) ?: emptyList()
         for (st in streams) {
           links.add(
-            com.lagradost.cloudstream3.utils.ExtractorLink(
-              source = provider?.name ?: "Extension",
-              name = st.name,
-              url = st.url,
-              referer = st.headers["Referer"] ?: "",
-              quality = st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
-              isM3u8 = st.isM3u8,
-              headers = st.headers
+            xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createExtractorLink(
+              provider?.name ?: "Extension",
+              st.name,
+              st.url,
+              st.headers["Referer"] ?: "",
+              st.quality.filter { it.isDigit() }.toIntOrNull() ?: 1080,
+              if (st.isM3u8) com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8 else com.lagradost.cloudstream3.utils.ExtractorLinkType.VIDEO,
+              st.headers
             )
           )
         }
@@ -1843,13 +1846,14 @@ object CineHubScreen : Screen {
             val streams = provider?.loadStreams(dataUrl) ?: emptyList()
             val stream = streams.firstOrNull()
             val extractorLinks = streams.map { s ->
-              com.lagradost.cloudstream3.utils.ExtractorLink(
-                source = provider?.name ?: "Extension",
-                name = s.name.ifBlank { s.quality ?: "Auto" },
-                url = s.url,
-                referer = s.headers["Referer"] ?: "",
-                quality = com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
-                headers = s.headers
+              xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createExtractorLink(
+                provider?.name ?: "Extension",
+                s.name.ifBlank { s.quality ?: "Auto" },
+                s.url,
+                s.headers["Referer"] ?: "",
+                com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
+                com.lagradost.cloudstream3.utils.ExtractorLinkType.VIDEO,
+                s.headers
               )
             }
             withContext(Dispatchers.Main) {
@@ -2538,13 +2542,14 @@ fun CineDetailView(
               emptyList()
             }
             val extractorLinks = streams.map { s ->
-              com.lagradost.cloudstream3.utils.ExtractorLink(
-                source = provider?.name ?: "Extension",
-                name = s.name.ifBlank { s.quality ?: "Auto" },
-                url = s.url,
-                referer = s.headers["Referer"] ?: "",
-                quality = s.quality.filter { it.isDigit() }.toIntOrNull() ?: com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
-                headers = s.headers
+              xyz.mpv.rex.cinehub.bridge.CloudStreamModelFactory.createExtractorLink(
+                provider?.name ?: "Extension",
+                s.name.ifBlank { s.quality ?: "Auto" },
+                s.url,
+                s.headers["Referer"] ?: "",
+                s.quality.filter { it.isDigit() }.toIntOrNull() ?: com.lagradost.cloudstream3.utils.Qualities.Unknown.value,
+                com.lagradost.cloudstream3.utils.ExtractorLinkType.VIDEO,
+                s.headers
               )
             }.sortedByDescending { it.quality }
             val fail = diagnoseFailure(provider?.name ?: providerId, dataUrl, caughtEx, streams.size)
@@ -3466,15 +3471,26 @@ fun CineDetailView(
                         3 -> com.lagradost.cloudstream3.ui.WatchType.DROPPED
                         else -> com.lagradost.cloudstream3.ui.WatchType.NONE
                       }
+                      val bData = com.lagradost.cloudstream3.utils.DataStoreHelper.BookmarkedData(
+                        bookmarkedTime = System.currentTimeMillis(),
+                        id = tmdbId.hashCode(),
+                        latestUpdatedTime = System.currentTimeMillis(),
+                        name = title,
+                        url = tmdbId,
+                        apiName = "tmdb",
+                        type = com.lagradost.cloudstream3.TvType.Movie,
+                        posterUrl = posterPath,
+                        year = null,
+                        syncData = emptyMap(),
+                        quality = null,
+                        posterHeaders = emptyMap(),
+                        plot = plot,
+                        score = null,
+                        tags = emptyList()
+                      )
                       com.lagradost.cloudstream3.utils.DataStoreHelper.setBookmarkedData(
-                        com.lagradost.cloudstream3.utils.DataStoreHelper.BookmarkedData(
-                          name = title,
-                          url = tmdbId,
-                          apiName = "tmdb",
-                          posterUrl = posterPath,
-                          plot = plot
-                        ),
-                        watchType
+                        tmdbId.hashCode(),
+                        bData
                       )
                     }
                   }
@@ -3488,7 +3504,7 @@ fun CineDetailView(
                     showLibraryMenu = false
                     scope.launch(Dispatchers.IO) {
                       libraryEntry?.let { libraryDao.deleteLibraryItem(it) }
-                      com.lagradost.cloudstream3.utils.DataStoreHelper.removeBookmark(tmdbId)
+                      com.lagradost.cloudstream3.utils.DataStoreHelper.deleteBookmarkedData(tmdbId.hashCode())
                     }
                   }
                 )

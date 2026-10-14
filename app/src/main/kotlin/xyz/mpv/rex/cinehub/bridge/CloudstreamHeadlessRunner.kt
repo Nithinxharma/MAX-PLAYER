@@ -4,20 +4,17 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import com.lagradost.cloudstream3.searchSafe
+import com.maxstream.bridge.searchSafe
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.APIHolder
-import com.lagradost.cloudstream3.AcraApplication
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MovieLoadResponse
-import com.lagradost.cloudstream3.PluginManager
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
-import com.lagradost.cloudstream3.network.initClient
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -29,34 +26,29 @@ import java.io.File
 
 object CloudstreamHeadlessRunner {
     private const val TAG = "CSHeadlessRunner"
-    private var pluginManager: PluginManager? = null
+    private var appContext: Context? = null
 
     /**
      * 1. Initialize Headless Environment
      */
     fun init(context: Context) {
-        AcraApplication.init(context)
-        try {
-            com.lagradost.cloudstream3.app.initClient(context, ignoreSSL = false)
-            com.lagradost.cloudstream3.insecureApp.initClient(context, ignoreSSL = true)
-        } catch (e: Throwable) {
-            Log.e(TAG, "Error initializing CloudstreamHttp clients", e)
-        }
-        try {
-            com.lagradost.cloudstream3.extractors.DefaultExtractors.registerAll()
-        } catch (e: Throwable) {
-            Log.e(TAG, "Error registering default extractors", e)
-        }
-        pluginManager = PluginManager(context)
-        Log.i(TAG, "Cloudstream Headless Engine initialized with OkHttp clients.")
+        appContext = context.applicationContext
+        com.maxstream.bridge.CloudStreamEngine.init(context)
+        Log.i(TAG, "Cloudstream Headless Engine initialized via CloudStreamEngine.")
     }
 
     /**
      * Load an external .cs3 plugin from local storage into the runtime.
      */
     fun loadPlugin(file: File): List<MainAPI> {
-        val manager = pluginManager ?: return emptyList()
-        return manager.loadPluginFile(file)
+        return runCatching {
+            val ctx = appContext ?: return emptyList()
+            val method = com.lagradost.cloudstream3.plugins.PluginManager::class.java.methods.firstOrNull {
+                it.name == "loadSinglePlugin"
+            }
+            method?.invoke(com.lagradost.cloudstream3.plugins.PluginManager, ctx, file.absolutePath)
+            APIHolder.apis.toList()
+        }.getOrDefault(emptyList())
     }
 
     /**
@@ -64,11 +56,11 @@ object CloudstreamHeadlessRunner {
      */
     suspend fun searchAll(query: String): Map<MainAPI, List<SearchResponse>> =
         withContext(Dispatchers.IO) {
-            val apis = APIHolder.apis.toList()
+            val apis: List<MainAPI> = APIHolder.apis.toList()
             val tasks = apis.map { api ->
-                async {
+                async<Pair<MainAPI, List<SearchResponse>>> {
                     try {
-                        val results = api.searchSafe(query)
+                        val results: List<SearchResponse> = api.searchSafe(query)
                         api to results
                     } catch (t: Throwable) {
                         Log.w(TAG, "Search failed for provider: ${api.name}", t)
