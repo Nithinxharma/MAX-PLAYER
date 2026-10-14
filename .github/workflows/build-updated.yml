@@ -1,0 +1,354 @@
+name: CI/CD Build
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate short SHA
+        id: set-short-sha
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+          cache: 'gradle'
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Setup Google Services
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "Restoring google-services.json from secret..."
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > app/google-services.json
+          elif [ -f "app/google-services.json" ]; then
+            echo "app/google-services.json exists."
+          else
+            echo "Warning: google-services.json missing, relying on Gradle fallback generator."
+          fi
+
+      - name: Restore Release Keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Restoring release keystore from KEYSTORE_BASE64..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/maxstream-release.jks 2>/dev/null || base64 --decode > app/maxstream-release.jks 2>/dev/null || true
+          elif [ -n "${{ secrets.SIGNING_KEYSTORE }}" ]; then
+            echo "Restoring release keystore from SIGNING_KEYSTORE..."
+            echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > app/maxstream-release.jks 2>/dev/null || base64 --decode > app/maxstream-release.jks 2>/dev/null || true
+          fi
+
+      - name: Verify Keystore
+        run: ls -la app/
+
+      - name: Restore & Ensure Static Keystore
+        run: |
+          if [ -f "debug.keystore.base64" ] && [ ! -s "debug.keystore" ]; then
+            echo "Restoring static debug.keystore from base64..."
+            base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || base64 --decode debug.keystore.base64 > debug.keystore 2>/dev/null || openssl base64 -d -in debug.keystore.base64 -out debug.keystore 2>/dev/null || true
+          fi
+
+          if [ ! -s "debug.keystore" ] && [ -f "$HOME/.android/debug.keystore" ]; then
+            echo "Copying from ~/.android/debug.keystore..."
+            cp "$HOME/.android/debug.keystore" debug.keystore
+          fi
+
+          if [ ! -s "debug.keystore" ]; then
+            echo "Generating static debug.keystore with keytool..."
+            keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          mkdir -p "$HOME/.android"
+          cp debug.keystore "$HOME/.android/debug.keystore" 2>/dev/null || true
+          ls -lh debug.keystore
+
+      - name: Build with Gradle (capture full log)
+        id: build_release
+        continue-on-error: true
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=\"-Xmx6g -XX:MaxMetaspaceSize=1536m -XX:+UseG1GC\" -Dfile.encoding=UTF-8"
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew verifyReleaseSigning firebaseReleaseReadinessCheck assembleRelease \
+            --stacktrace --info --warning-mode all 2>&1 | tee build-full.log
+
+      - name: Sign & Verify APKs
+        if: steps.build_release.outcome == 'success'
+        run: |
+          set -e
+          RELEASE_DIR="app/build/outputs/apk/release"
+
+          if [ -n "${{ secrets.SIGNING_KEYSTORE }}" ]; then
+            echo "Using repository SIGNING_KEYSTORE secret..."
+            echo "${{ secrets.SIGNING_KEYSTORE }}" | base64 -d > release.keystore 2>/dev/null || base64 --decode > release.keystore
+            KEY_ALIAS="${{ secrets.SIGNING_KEY_ALIAS }}"
+            STORE_PASS="${{ secrets.SIGNING_STORE_PASSWORD }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          else
+            echo "Using static constant repository debug.keystore..."
+            if [ -s "debug.keystore" ]; then
+              cp debug.keystore release.keystore
+            elif [ -f "debug.keystore.base64" ]; then
+              base64 -d debug.keystore.base64 > release.keystore 2>/dev/null || base64 --decode debug.keystore.base64 > release.keystore 2>/dev/null || true
+            fi
+
+            if [ ! -s "release.keystore" ] && [ -f "$HOME/.android/debug.keystore" ]; then
+              cp "$HOME/.android/debug.keystore" release.keystore
+            fi
+
+            if [ ! -s "release.keystore" ]; then
+              echo "Generating fallback keystore with keytool..."
+              keytool -genkeypair -v -keystore release.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            fi
+
+            KEY_ALIAS="androiddebugkey"
+            STORE_PASS="android"
+            KEY_PASS="android"
+          fi
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          echo "Using apksigner: $APKSIGNER"
+
+          # Sign any unsigned APKs
+          find "$RELEASE_DIR" -name "app-*-release-unsigned.apk" | while read -r apk; do
+            signed_apk="${apk/-unsigned/}"
+            echo "Signing $apk -> $signed_apk with static keystore"
+            "$APKSIGNER" sign \
+              --ks release.keystore \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$STORE_PASS" \
+              --key-pass "pass:$KEY_PASS" \
+              --out "$signed_apk" \
+              "$apk"
+            rm -f "$apk"
+          done
+
+          # Verify all signed APKs
+          find "$RELEASE_DIR" -name "app-*-release.apk" | while read -r apk; do
+            echo "Verifying $apk..."
+            "$APKSIGNER" verify --print-certs "$apk" || true
+          done
+
+          rm -f release.keystore
+          ls -lh "$RELEASE_DIR"/*.apk
+
+      - name: Upload All Release APKs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-STREAM-all-apks-${{ env.SHORT_SHA }}
+          path: |
+            app/build/outputs/apk/release/*.apk
+            CHANGELOG.md
+          if-no-files-found: warn
+
+      - name: Upload app-arm64-v8a Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-STREAM-arm64-v8a-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          if-no-files-found: ignore
+
+      - name: Upload app-armeabi-v7a Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-STREAM-armeabi-v7a-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-armeabi-v7a-release.apk
+          if-no-files-found: ignore
+
+      - name: Upload app-universal Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-STREAM-universal-release-${{ env.SHORT_SHA }}
+          path: |
+            app/build/outputs/apk/release/app-universal-release.apk
+            app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: ignore
+
+      - name: Upload app-x86 Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-STREAM-x86-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-x86-release.apk
+          if-no-files-found: ignore
+
+      - name: Upload app-x86_64 Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAX-STREAM-x86_64-release-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/release/app-x86_64-release.apk
+          if-no-files-found: ignore
+
+      # Always collect diagnostics, including when Gradle or signing fails.
+      - name: Collect Build Diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p diagnostics/gradle-reports diagnostics/test-results build-context
+
+          if [ -d "app/build/reports" ]; then
+            cp -a app/build/reports/. diagnostics/gradle-reports/
+          fi
+          if [ -d "build/reports" ]; then
+            cp -a build/reports/. diagnostics/gradle-reports/root-project/
+          fi
+          if [ -d "app/build/test-results" ]; then
+            cp -a app/build/test-results/. diagnostics/test-results/
+          fi
+          if [ -d "build/test-results" ]; then
+            cp -a build/test-results/. diagnostics/test-results/root-project/
+          fi
+
+          {
+            echo "=== UTC TIME ==="
+            date -u
+            echo
+            echo "=== REPOSITORY ==="
+            git remote get-url origin 2>/dev/null | sed -E 's#(https?://)[^/@]+:[^/@]+@#\1[REDACTED]@#' || true
+            echo "Commit: $(git rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "Branch/ref: $GITHUB_REF"
+            echo "Workflow: $GITHUB_WORKFLOW"
+            echo "Run ID: $GITHUB_RUN_ID"
+            echo
+            echo "=== RUNNER ==="
+            uname -a
+            echo
+            echo "=== JAVA ==="
+            java -version 2>&1
+            echo
+            echo "=== GRADLE ==="
+            ./gradlew --version 2>&1
+            echo
+            echo "=== BUILD STEP OUTCOME ==="
+            echo "Gradle build outcome: ${{ steps.build_release.outcome }}"
+            echo
+            echo "=== FAILURE SUMMARY ==="
+            if [ -f build-full.log ]; then
+              grep -nE 'FAILURE:|BUILD FAILED|What went wrong:|Execution failed for task|Could not resolve|Could not find|Unresolved reference|e: file:|error:|Exception|Caused by:' build-full.log || true
+            else
+              echo "build-full.log was not created."
+            fi
+          } > build-context/build-environment-and-failure-summary.txt
+
+          # Include runner-level context without dumping environment variables,
+          # which can contain secrets.
+          {
+            echo "Build command: ./gradlew verifyReleaseSigning firebaseReleaseReadinessCheck assembleRelease --stacktrace --info --warning-mode all"
+            echo "Build outcome: ${{ steps.build_release.outcome }}"
+            echo "Runner OS: $RUNNER_OS"
+            echo "Runner architecture: $RUNNER_ARCH"
+          } > build-context/build-command.txt
+
+      - name: Upload Full Gradle Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1-full-build-log-${{ env.SHORT_SHA }}
+          path: build-full.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Gradle Reports and Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2-gradle-diagnostics-${{ env.SHORT_SHA }}
+          path: |
+            diagnostics/gradle-reports/
+            diagnostics/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Build Context and Failure Summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3-build-context-${{ env.SHORT_SHA }}
+          path: build-context/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Extract Latest Changelog
+        id: extract_latest_changelog
+        run: |
+          LATEST_LOG=""
+          if [ -f "CHANGELOG.md" ]; then
+            LATEST_LOG=$(awk '
+              /^## \[/ { if (count++ == 0) { found=1; next } else { found=0; exit } }
+              found { print }
+            ' CHANGELOG.md)
+          fi
+          if [ -z "$LATEST_LOG" ]; then
+            LATEST_LOG="Continuous build for commit ${{ env.SHORT_SHA }}."
+          fi
+          {
+            echo "CI_CHANGELOG<<EOF"
+            echo "$LATEST_LOG"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Publish to GitHub Releases
+        if: steps.build_release.outcome == 'success' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.SHORT_SHA }}"
+          name: "MAX STREAM Continuous Build ${{ env.SHORT_SHA }}"
+          body: |
+            ### 🚀 MAX STREAM Continuous Build `${{ env.SHORT_SHA }}`
+            
+            **Commit:** `${{ github.sha }}`
+            **Branch:** `${{ github.ref_name }}`
+            
+            ---
+            ### 📋 Recent Changes & Features
+            ${{ env.CI_CHANGELOG }}
+
+            ---
+            ### 🔐 Static Certificate Fingerprints
+            - **SHA-1:** `8C:C3:72:DB:63:C1:6B:13:0C:3A:6E:3F:05:2A:5E:78:1D:EE:51:7D`
+            - **SHA-256:** `71:FC:3C:FC:82:34:CB:A6:A4:66:28:C8:C0:75:75:1C:8E:57:D3:BE:28:6A:B3:F2:A3:FA:09:32:A1:BA:04:20`
+          files: |
+            app/build/outputs/apk/release/*.apk
+            CHANGELOG.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Re-fail the workflow after uploads so the run remains visibly failed.
+      - name: Mark workflow failed if Gradle build failed
+        if: always() && steps.build_release.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "Gradle build failed. Download the three diagnostic artifacts from this workflow run."
+          exit 1
