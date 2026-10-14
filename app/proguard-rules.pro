@@ -247,3 +247,15 @@
 -keep interface com.lagradost.nicehttp.** { *; }
 -keepclassmembers class com.lagradost.nicehttp.** { *; }
 
+
+# Suppress R8 missing class errors
+-dontwarn coil3.**
+-dontwarn javax.swing.**
+-dontwarn java.awt.**
+-dontwarn org.mozilla.javascript.tools.debugger.**
+-dontwarn org.schabi.newpipe.extractor.**
+-dontwarn kotlinx.datetime.**
+-dontwarn kotlinx.io.**
+-dontwarn io.ktor.**
+-dontwarn dev.whyoleg.**
+-dontwarn com.lagradost.**
