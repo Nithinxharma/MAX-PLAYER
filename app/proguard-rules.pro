@@ -260,3 +260,19 @@
 -keep class org.mozilla.javascript.** { *; }
 -keep class org.jsoup.** { *; }
 -keep class com.fleeksoft.ksoup.** { *; }
+
+# Suppress R8 missing classes warnings
+-dontwarn coil3.**
+-dontwarn javax.swing.**
+-dontwarn java.awt.**
+-dontwarn org.mozilla.javascript.tools.debugger.**
+-dontwarn org.schabi.newpipe.extractor.**
+-dontwarn kotlinx.datetime.**
+-dontwarn kotlinx.io.**
+-dontwarn io.ktor.**
+-dontwarn dev.whyoleg.**
+-dontwarn com.lagradost.**
+-dontwarn okhttp3.**
+
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keep class com.lagradost.cloudstream3.** { *; }
