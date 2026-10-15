@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
 package xyz.mpv.rex.cinehub
 
 import android.content.Context
@@ -5,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.extractors.*
 import com.lagradost.cloudstream3.utils.*
+import com.maxstream.bridge.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -25,7 +27,7 @@ class ComprehensiveRuntimeValidationAuditTest {
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext<Context>()
-        AcraApplication.init(context)
+        CloudStreamEngine.init(context)
         APIHolder.clear()
         DefaultExtractors.registerAll()
     }
@@ -390,9 +392,9 @@ class ComprehensiveRuntimeValidationAuditTest {
             var searchUrl = ""
             try {
                 val searchRes = provider.search("Iron Man")
-                searchPassed = searchRes.isNotEmpty()
-                searchUrl = searchRes.firstOrNull()?.url ?: ""
-                println("  [Search]      : ${if (searchPassed) "PASS" else "FAIL"} -> Items: ${searchRes.size}, First: \"${searchRes.firstOrNull()?.name}\"")
+                searchPassed = searchRes?.isNotEmpty() == true
+                searchUrl = searchRes?.firstOrNull()?.url ?: ""
+                println("  [Search]      : ${if (searchPassed) "PASS" else "FAIL"} -> Items: ${searchRes?.size ?: 0}, First: \"${searchRes?.firstOrNull()?.name}\"")
             } catch (t: Throwable) {
                 println("  [Search]      : FAIL -> Exception: ${t.javaClass.simpleName}: ${t.message}")
             }
@@ -473,7 +475,7 @@ class ComprehensiveRuntimeValidationAuditTest {
             // Verify domain matching
             val firstDomain = ext.mainUrl.split(",").firstOrNull()?.trim() ?: "https://example.com"
             val testUrl = if (firstDomain.startsWith("http")) "$firstDomain/embed-test12345.html" else "https://$firstDomain/test"
-            val matchedExtractor = ExtractorApi.getExtractorForUrl(testUrl)
+            val matchedExtractor = getExtractorForUrl(testUrl)
             val isDomainMatch = matchedExtractor != null
 
             // Verify execution and link generation
@@ -536,7 +538,7 @@ class ComprehensiveRuntimeValidationAuditTest {
         println("-".repeat(120))
 
         for ((host, url) in problemHosts) {
-            val selected = ExtractorApi.getExtractorForUrl(url)
+            val selected = getExtractorForUrl(url)
             assertNotNull("Extractor must be found for $host at $url", selected)
 
             val links = mutableListOf<ExtractorLink>()

@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.lagradost.cloudstream3.APIHolder
-import com.lagradost.cloudstream3.AcraApplication
+import com.maxstream.bridge.CloudStreamEngine
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.junit.Test
@@ -31,7 +31,7 @@ class ExtensionAuditExecutionTest {
     fun executeAuditOnFiveTargetExtensions() = runBlocking {
         stopKoin()
         val context = ApplicationProvider.getApplicationContext<Context>()
-        AcraApplication.init(context)
+        CloudStreamEngine.init(context)
 
         println("\n================================================================================")
         println("=== 13-STEP AUDIT EXECUTION FOR TARGET EXTENSIONS ===")

@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.lagradost.cloudstream3.APIHolder
-import com.lagradost.cloudstream3.AcraApplication
 import com.lagradost.cloudstream3.MainAPI
+import com.maxstream.bridge.*
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.junit.Test
@@ -30,7 +30,7 @@ class InstanceIdentityProofTest {
     fun testInstanceIdentityAcrossKoinAndStaticSingletons() = runBlocking {
         stopKoin()
         val context = ApplicationProvider.getApplicationContext<Context>()
-        AcraApplication.init(context)
+        CloudStreamEngine.init(context)
 
         println("\n==================================================")
         println("INSTANCE IDENTITY & RUNTIME FLOW PROOF TEST")

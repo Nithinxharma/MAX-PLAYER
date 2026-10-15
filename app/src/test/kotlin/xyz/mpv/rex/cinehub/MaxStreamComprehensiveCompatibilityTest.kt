@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
 package xyz.mpv.rex.cinehub
 
 import com.lagradost.cloudstream3.AnimeSearchResponse

@@ -5,62 +5,68 @@ import com.lagradost.cloudstream3.AudioFile
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
-import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
-import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.utils.DataStoreHelper
 import com.lagradost.cloudstream3.utils.ExtractorApi
-import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.PlayListItem
-import java.util.Collections
-import java.util.WeakHashMap
 
-// --- Extension Properties & Helpers ---
+import xyz.mpv.rex.maxstream.engine.searchSafe as engineSearchSafe
+import xyz.mpv.rex.maxstream.engine.fixUrl as engineFixUrl
+import xyz.mpv.rex.maxstream.engine.loadMainPage as engineLoadMainPage
+import xyz.mpv.rex.maxstream.engine.addTMDbId as engineAddTMDbId
+import xyz.mpv.rex.maxstream.engine.addImdbId as engineAddImdbId
+import xyz.mpv.rex.maxstream.engine.addPlugin as engineAddPlugin
+import xyz.mpv.rex.maxstream.engine.addExtractor as engineAddExtractor
+import xyz.mpv.rex.maxstream.engine.getExtractorForUrl as engineGetExtractorForUrl
+import xyz.mpv.rex.maxstream.engine.clear as engineClear
+import xyz.mpv.rex.maxstream.engine.removePluginsBySource as engineRemovePluginsBySource
+import xyz.mpv.rex.maxstream.engine.removeBookmark as engineRemoveBookmark
+import xyz.mpv.rex.maxstream.engine.score as engineScore
+import xyz.mpv.rex.maxstream.engine.toOld as engineToOld
+import xyz.mpv.rex.maxstream.engine.lang as engineLang
+import xyz.mpv.rex.maxstream.engine.isM3u8 as engineIsM3u8
+import xyz.mpv.rex.maxstream.engine.url as engineUrl
+import xyz.mpv.rex.maxstream.engine.sourcePlugin as engineSourcePlugin
 
-val Score.score: Double get() = this.toDouble()
-val Score.toOld: Int get() = this.toInt()
+typealias DefaultExtractors = xyz.mpv.rex.maxstream.engine.DefaultExtractors
 
-val AudioFile.lang: String get() = headers?.get("lang") ?: "und"
+val Score.score: Double get() = this.engineScore
+val Score.toOld: Int get() = this.engineToOld
 
-val PlayListItem.isM3u8: Boolean get() = this.url.contains(".m3u8", ignoreCase = true)
+val AudioFile.lang: String get() = this.engineLang
 
-private val extractorSourceMap = Collections.synchronizedMap(WeakHashMap<ExtractorApi, String>())
+val PlayListItem.isM3u8: Boolean get() = this.engineIsM3u8
+
+val com.lagradost.cloudstream3.TrailerData.url: String get() = this.engineUrl
+
 var ExtractorApi.sourcePlugin: String?
-    get() = extractorSourceMap[this]
+    get() = this.engineSourcePlugin
     set(value) {
-        if (value != null) extractorSourceMap[this] = value else extractorSourceMap.remove(this)
+        this.engineSourcePlugin = value
     }
 
-// --- MainAPI Extensions ---
+suspend fun MainAPI.searchSafe(query: String): List<SearchResponse> =
+    this.engineSearchSafe(query)
 
-suspend fun MainAPI.searchSafe(query: String): List<SearchResponse> {
-    return try {
-        search(query) ?: emptyList()
-    } catch (_: Throwable) {
-        emptyList()
-    }
-}
+fun MainAPI.fixUrl(url: String): String =
+    this.engineFixUrl(url)
 
-fun MainAPI.fixUrl(url: String): String {
-    return if (url.startsWith("http://") || url.startsWith("https://")) {
-        url
-    } else {
-        mainUrl.trimEnd('/') + "/" + url.trimStart('/')
-    }
-}
+suspend fun MainAPI.loadMainPage(page: Int = 1, name: String? = null): HomePageResponse? =
+    this.engineLoadMainPage(page, name)
 
-suspend fun MainAPI.loadMainPage(page: Int = 1, name: String? = null): HomePageResponse? {
-    return try {
-        val request = MainPageRequest(name ?: this.name, name ?: this.mainUrl, false)
-        getMainPage(page, request)
-    } catch (_: Throwable) {
-        null
-    }
-}
+fun LoadResponse.addTMDbId(id: String?) =
+    this.engineAddTMDbId(id)
 
-// --- APIHolder Extensions ---
+fun LoadResponse.addTMDbId(id: Int?) =
+    this.engineAddTMDbId(id)
+
+fun LoadResponse.addImdbId(id: String?) =
+    this.engineAddImdbId(id)
+
+fun LoadResponse.addImdbId(id: Int?) =
+    this.engineAddImdbId(id)
 
 fun APIHolder.getApi(name: String): MainAPI? = getApiFromNameNull(name)
 fun APIHolder.getApiFromName(name: String): MainAPI? = getApiFromNameNull(name)
@@ -68,22 +74,20 @@ fun APIHolder.getApiFromName(name: String): MainAPI? = getApiFromNameNull(name)
 val APIHolder.extractorApis: com.lagradost.cloudstream3.utils.AtomicMutableList<ExtractorApi>
     get() = com.lagradost.cloudstream3.utils.extractorApis
 
-fun APIHolder.addPlugin(api: MainAPI) {
-    addPluginMapping(api)
-    if (!allProviders.contains(api)) {
-        allProviders.add(api)
-    }
-}
+fun APIHolder.addPlugin(api: MainAPI) =
+    this.engineAddPlugin(api)
 
-fun APIHolder.addExtractor(extractor: ExtractorApi) {
-    if (!com.lagradost.cloudstream3.utils.extractorApis.contains(extractor)) {
-        com.lagradost.cloudstream3.utils.extractorApis.add(extractor)
-    }
-}
+fun APIHolder.addExtractor(extractor: ExtractorApi) =
+    this.engineAddExtractor(extractor)
 
-fun APIHolder.removePluginsBySource(sourcePath: String) {
-    allProviders.removeAll { (it as? Any)?.let { true } ?: false }
-}
+fun getExtractorForUrl(url: String): ExtractorApi? =
+    engineGetExtractorForUrl(url)
+
+fun APIHolder.clear() =
+    this.engineClear()
+
+fun APIHolder.removePluginsBySource(sourcePath: String) =
+    this.engineRemovePluginsBySource(sourcePath)
 
 var APIHolder.onApiAddedListener: ((MainAPI) -> Unit)?
     get() = null
@@ -95,8 +99,8 @@ var APIHolder.onApiRemovedListener: ((MainAPI) -> Unit)?
 
 fun BasePlugin.afterPluginsLoaded() {}
 
-// --- DataStoreHelper Extensions ---
+fun DataStoreHelper.removeBookmark(idStr: String?) =
+    this.engineRemoveBookmark(idStr)
 
-fun DataStoreHelper.removeBookmark(idStr: String?) {
-    deleteBookmarkedData(idStr?.hashCode())
-}
+
+
