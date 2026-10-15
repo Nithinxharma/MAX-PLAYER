@@ -113,37 +113,12 @@ class ExtensionManager(
             }
         }
 
-        // Also enumerate any .cs3 files on disk that might not be recorded in database or were placed manually
-        val searchDirs = listOfNotNull(
-            extensionDir,
-            File(context.filesDir, "cloudstream_plugins"),
-            File(context.filesDir, "Extensions"),
-            context.filesDir,
-            context.getExternalFilesDir(null)?.let { File(it, "plugins") },
-            File(android.os.Environment.getExternalStorageDirectory(), "Cloudstream3/plugins")
-        )
+        // Also enumerate any .cs3, .aar, .jar, .zip, .dex files on disk that might not be recorded in database or were placed manually
+        val discoveredFiles = getCandidatePluginFiles()
         val loadedFilePaths = loadedPluginInstances.mapNotNull { 
             if (it is com.lagradost.cloudstream3.plugins.BasePlugin) it.filename 
             else runCatching { it.javaClass.getMethod("getFilename").invoke(it) as? String }.getOrNull() 
         }.toSet()
-        
-        fun collectPluginFiles(dir: File, dest: MutableList<File>) {
-            if (!dir.exists()) return
-            if (dir.isDirectory) {
-                dir.listFiles()?.forEach { file ->
-                    if (file.isDirectory) {
-                        collectPluginFiles(file, dest)
-                    } else if (file.extension.equals("cs3", ignoreCase = true) || file.extension.equals("zip", ignoreCase = true) || file.extension.equals("dex", ignoreCase = true)) {
-                        dest.add(file)
-                    }
-                }
-            }
-        }
-
-        val discoveredFiles = mutableListOf<File>()
-        for (dir in searchDirs) {
-            collectPluginFiles(dir, discoveredFiles)
-        }
 
         for (file in discoveredFiles.distinctBy { it.absolutePath }) {
             try {
@@ -287,14 +262,35 @@ class ExtensionManager(
 
         return try {
             val execDir = File(context.codeCacheDir, "plugin_exec").apply { mkdirs() }
-            val execFile = File(execDir, "${sourceFile.nameWithoutExtension}_exec.cs3")
+            val extName = if (sourceFile.extension.equals("aar", ignoreCase = true)) "jar" else sourceFile.extension.ifBlank { "cs3" }
+            val execFile = File(execDir, "${sourceFile.nameWithoutExtension}_exec.$extName")
             if (execFile.exists()) {
                 execFile.setWritable(true)
                 execFile.delete()
             }
-            sourceFile.inputStream().use { input ->
-                execFile.outputStream().use { output ->
-                    input.copyTo(output)
+
+            var extractedJar = false
+            if (sourceFile.extension.equals("aar", ignoreCase = true) || sourceFile.extension.equals("zip", ignoreCase = true)) {
+                runCatching {
+                    ZipFile(sourceFile).use { zip ->
+                        val jarEntry = zip.getEntry("classes.jar")
+                        if (jarEntry != null) {
+                            zip.getInputStream(jarEntry).use { input ->
+                                execFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            extractedJar = true
+                        }
+                    }
+                }
+            }
+
+            if (!extractedJar) {
+                sourceFile.inputStream().use { input ->
+                    execFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
             }
             execFile.setReadOnly() // Strictly read-only for Android ART ClassLoaders
@@ -304,6 +300,42 @@ class ExtensionManager(
             runCatching { sourceFile.setReadOnly() }
             sourceFile
         }
+    }
+
+    private fun extractClassNamesFromJarOrZip(file: File): List<String> {
+        val classNames = mutableListOf<String>()
+        runCatching {
+            val targetFile = if (file.extension.equals("aar", ignoreCase = true)) {
+                prepareExecutablePluginFile(file, file.nameWithoutExtension)
+            } else {
+                file
+            }
+
+            ZipFile(targetFile).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    val entryName = entry.name
+                    if (entryName.endsWith(".class") &&
+                        !entryName.contains("$") &&
+                        !entryName.startsWith("kotlin/") &&
+                        !entryName.startsWith("kotlinx/") &&
+                        !entryName.startsWith("java/") &&
+                        !entryName.startsWith("android/") &&
+                        !entryName.startsWith("androidx/") &&
+                        !entryName.endsWith("R.class") &&
+                        !entryName.contains("/R$") &&
+                        !entryName.endsWith("BuildConfig.class")
+                    ) {
+                        val className = entryName.removeSuffix(".class").replace('/', '.')
+                        classNames.add(className)
+                    }
+                }
+            }
+        }.onFailure {
+            Log.d("ExtensionManager", "extractClassNamesFromJarOrZip failed for ${file.name}: ${it.message}")
+        }
+        return classNames
     }
 
     private fun extractClassesFromDex(file: File, optDir: File): List<String> {
@@ -579,12 +611,18 @@ class ExtensionManager(
             // 1. Inspect manifest.json / make.json / plugin.json from zip archive (Steps 6 & 7 executed inside)
             classNames.addAll(extractClassNamesFromZip(file))
 
-            // 2. Also check classesFile recorded during install
+            // 2. Extract class names from JAR / AAR archive entries
+            val discoveredJarClasses = extractClassNamesFromJarOrZip(file)
+            for (jarC in discoveredJarClasses) {
+                if (!classNames.contains(jarC)) classNames.add(jarC)
+            }
+
+            // 3. Also check classesFile recorded during install
             ext.classesFile?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() && it.contains(".") }?.forEach {
                 if (!classNames.contains(it)) classNames.add(it)
             }
 
-            // 3. Extract and print every class discovered in classes.dex (Step 8)
+            // 4. Extract and print every class discovered in classes.dex (Step 8)
             val discoveredDexClasses = extractClassesFromDex(file, optDir)
             Log.i("ExtensionManager", "DEX_LOAD: DexFile entries count: ${discoveredDexClasses.size}")
             Log.i("ExtensionManager", "EXTENSION_AUDIT: Step 8: Discovered ${discoveredDexClasses.size} classes in classes.dex for ${ext.pkgName}: $discoveredDexClasses")
@@ -751,18 +789,30 @@ class ExtensionManager(
 
     fun getCandidatePluginFiles(): List<File> {
         val searchDirs = listOfNotNull(
+            File("app/libs"),
+            File("/app/applet/app/libs"),
             extensionDir,
             File(context.filesDir, "cloudstream_plugins"),
             File(context.filesDir, "Extensions"),
+            File(context.filesDir, "libs"),
             context.filesDir,
+            context.codeCacheDir,
             context.getExternalFilesDir(null)?.let { File(it, "plugins") },
+            context.getExternalFilesDir(null)?.let { File(it, "libs") },
             File(android.os.Environment.getExternalStorageDirectory(), "Cloudstream3/plugins")
         )
         val files = mutableListOf<File>()
         for (dir in searchDirs) {
             if (dir.exists() && dir.isDirectory) {
-                dir.walkTopDown().maxDepth(2).forEach { f ->
-                    if (f.isFile && (f.extension.equals("cs3", ignoreCase = true) || f.extension.equals("zip", ignoreCase = true) || f.extension.equals("dex", ignoreCase = true))) {
+                dir.walkTopDown().maxDepth(3).forEach { f ->
+                    if (f.isFile && (
+                        f.extension.equals("cs3", ignoreCase = true) ||
+                        f.extension.equals("zip", ignoreCase = true) ||
+                        f.extension.equals("dex", ignoreCase = true) ||
+                        f.extension.equals("aar", ignoreCase = true) ||
+                        f.extension.equals("apk", ignoreCase = true) ||
+                        f.extension.equals("jar", ignoreCase = true)
+                    )) {
                         files.add(f)
                     }
                 }

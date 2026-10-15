@@ -60,6 +60,9 @@ object CloudStreamEngine {
     /**
      * Auto-loads and registers default providers into APIHolder.
      */
+    /**
+     * Auto-loads and registers default providers into APIHolder.
+     */
     fun autoLoadDefaultProviders(context: Context) {
         try {
             val tmdb = TmdbProvider()
@@ -67,8 +70,9 @@ object CloudStreamEngine {
                 APIHolder.addPlugin(tmdb)
                 Log.i(TAG, "Default TMDB provider auto-registered into APIHolder.")
             }
+            xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.scanAndRegisterDexFiles(context)
         } catch (t: Throwable) {
-            Log.w(TAG, "Could not auto-register TMDB provider: ${t.message}")
+            Log.w(TAG, "Could not auto-register default providers: ${t.message}")
         }
     }
 
@@ -137,12 +141,22 @@ object CloudStreamEngine {
     }
 
     /**
-     * Stream Link Extraction using the AAR's loadExtractor.
+     * Stream Link Extraction using the AAR's loadExtractor with dynamic fallback.
      */
     suspend fun resolveStream(url: String, callback: (ExtractorLink) -> Unit) {
         try {
+            var extractedAny = false
             loadExtractor(url, referer = "", subtitleCallback = {}) { link ->
+                extractedAny = true
                 callback(link)
+            }
+            if (!extractedAny) {
+                xyz.mpv.rex.cinehub.extension.registry.DynamicPluginRegistry.discoverAndResolveExtractor(
+                    url = url,
+                    referer = "",
+                    subtitleCallback = {},
+                    callback = callback
+                )
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error resolving stream extractor for url: $url", t)

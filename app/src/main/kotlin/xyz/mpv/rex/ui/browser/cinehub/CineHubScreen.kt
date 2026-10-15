@@ -432,7 +432,7 @@ private suspend fun performMultiProviderSearch(
   context: android.content.Context,
   providerRegistry: xyz.mpv.rex.cinehub.extension.registry.ProviderRegistry
 ): List<CineHubSearchItem> = withContext(Dispatchers.IO) {
-  val cloudStreamApis = APIHolder.apis.toList()
+  val cloudStreamApis = (APIHolder.allProviders.toList() + APIHolder.apis.toList()).distinctBy { it.name }
   val csDeferreds = cloudStreamApis.map { provider ->
     async<List<CineHubSearchItem>> {
       try {

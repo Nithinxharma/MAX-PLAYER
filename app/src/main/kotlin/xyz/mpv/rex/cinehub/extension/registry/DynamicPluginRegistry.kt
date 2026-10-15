@@ -176,11 +176,15 @@ object DynamicPluginRegistry {
     fun scanAndRegisterDexFiles(context: Context) {
         try {
             val searchDirs = listOfNotNull(
+                File("app/libs"),
+                File("/app/applet/app/libs"),
                 File(context.filesDir, "plugins"),
                 File(context.filesDir, "cloudstream_plugins"),
                 File(context.filesDir, "Extensions"),
                 File(context.filesDir, "extractors"),
+                File(context.filesDir, "libs"),
                 context.filesDir,
+                context.codeCacheDir,
                 context.getExternalFilesDir(null)?.let { File(it, "plugins") },
                 context.getExternalFilesDir(null)?.let { File(it, "extractors") },
                 File(android.os.Environment.getExternalStorageDirectory(), "Cloudstream3/plugins"),
@@ -188,19 +192,24 @@ object DynamicPluginRegistry {
                 File(android.os.Environment.getExternalStorageDirectory(), "Download/Cloudstream3")
             )
 
-            val dexFiles = mutableListOf<File>()
+            val pluginFilesList = mutableListOf<File>()
             for (dir in searchDirs) {
                 if (dir.exists() && dir.isDirectory) {
                     dir.walkTopDown().maxDepth(3).forEach { f ->
-                        if (f.isFile && f.extension.equals("dex", ignoreCase = true)) {
-                            dexFiles.add(f)
+                        if (f.isFile && (
+                            f.extension.equals("dex", ignoreCase = true) ||
+                            f.extension.equals("aar", ignoreCase = true) ||
+                            f.extension.equals("jar", ignoreCase = true) ||
+                            f.extension.equals("cs3", ignoreCase = true)
+                        )) {
+                            pluginFilesList.add(f)
                         }
                     }
                 }
             }
 
-            for (dexFile in dexFiles.distinctBy { it.absolutePath }) {
-                loadExtractorsFromDexFile(context, dexFile)
+            for (pluginFile in pluginFilesList.distinctBy { it.absolutePath }) {
+                loadExtractorsFromDexFile(context, pluginFile)
             }
         } catch (t: Throwable) {
             Log.w(TAG, "scanAndRegisterDexFiles error: ${t.message}")

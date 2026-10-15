@@ -35,7 +35,7 @@ object CineHubSearchBridge {
      * Executes parallel search across all active providers in APIHolder.
      */
     suspend fun searchAll(query: String): List<CineHubSearchResult> = withContext(Dispatchers.IO) {
-        val providers: List<MainAPI> = APIHolder.apis.toList()
+        val providers: List<MainAPI> = (APIHolder.allProviders.toList() + APIHolder.apis.toList()).distinctBy { it.name }
         if (providers.isEmpty() || query.isBlank()) return@withContext emptyList()
 
         val tasks = providers.map { provider ->
